@@ -1,7 +1,6 @@
 package br.gov.go.saude.hubsaude.simulador.client;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMKeyPair;
@@ -119,13 +118,13 @@ public class SmartTokenClient {
     String buildClientAssertion() {
         final Instant now = Instant.now();
         return Jwts.builder()
-                .setIssuer(clientId)
-                .setSubject(clientId)
-                .setAudience(tokenEndpoint)
-                .setIssuedAt(Date.from(now))
-                .setExpiration(Date.from(now.plusSeconds(ASSERTION_TTL_SECONDS)))
-                .setId(UUID.randomUUID().toString())
-                .signWith(privateKey, SignatureAlgorithm.RS384)
+                .issuer(clientId)
+                .subject(clientId)
+                .audience().add(tokenEndpoint).and()
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(ASSERTION_TTL_SECONDS)))
+                .id(UUID.randomUUID().toString())
+                .signWith(privateKey, Jwts.SIG.RS384)
                 .compact();
     }
 
@@ -158,8 +157,9 @@ public class SmartTokenClient {
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
             final Object obj = parser.readObject();
             if (obj instanceof PEMKeyPair pemKeyPair) {
-                final KeyPair keyPair = new JcaPEMKeyConverter().getKeyPair(pemKeyPair);
-                return keyPair.getPrivate();
+                return new JcaPEMKeyConverter().getKeyPair(pemKeyPair).getPrivate();
+            } else if (obj instanceof org.bouncycastle.asn1.pkcs.PrivateKeyInfo pki) {
+                return new JcaPEMKeyConverter().getPrivateKey(pki);
             }
             throw new SmartTokenException("Arquivo PEM não contém chave privada válida: " + path);
         }
