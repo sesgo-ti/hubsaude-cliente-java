@@ -66,7 +66,7 @@ class SmartTokenClientTest {
 
                 assertThat(claims.getSubject()).isEqualTo(CLIENT_ID);
                 assertThat(claims.getIssuer()).isEqualTo(CLIENT_ID);
-                assertThat(claims.getAudience()).isEqualTo(TOKEN_ENDPOINT);
+                assertThat(claims.getAudience()).containsExactly(TOKEN_ENDPOINT);
                 assertThat(claims.getId()).isNotBlank();
                 assertThat(claims.getExpiration()).isAfter(claims.getIssuedAt());
         }
