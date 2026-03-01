@@ -28,6 +28,13 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 
 /**
  * Classe de conveniência para obtenção de access tokens SMART Backend Services.
@@ -149,7 +156,7 @@ public class SmartTokenClient {
     }
 
     private String extractAccessToken(final String jsonBody) throws IOException {
-        final var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        final var mapper = new ObjectMapper();
         final var node = mapper.readTree(jsonBody);
         if (!node.has("access_token")) {
             throw new SmartTokenException("Resposta não contém 'access_token': " + jsonBody);
@@ -163,7 +170,7 @@ public class SmartTokenClient {
             final Object obj = parser.readObject();
             if (obj instanceof PEMKeyPair pemKeyPair) {
                 return new JcaPEMKeyConverter().getKeyPair(pemKeyPair).getPrivate();
-            } else if (obj instanceof org.bouncycastle.asn1.pkcs.PrivateKeyInfo pki) {
+            } else if (obj instanceof PrivateKeyInfo pki) {
                 return new JcaPEMKeyConverter().getPrivateKey(pki);
             }
             throw new SmartTokenException("Arquivo PEM não contém chave privada válida: " + path);
@@ -182,7 +189,7 @@ public class SmartTokenClient {
                 return;
             }
             throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
-        } catch (java.security.cert.CertificateException ex) {
+        } catch (CertificateException ex) {
             throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage());
         }
     }
@@ -195,25 +202,25 @@ public class SmartTokenClient {
      * Nunca utilizar em ambiente de produção.
      * </p>
      */
-    private static javax.net.ssl.SSLContext buildTrustAllSslContext() {
+    private static SSLContext buildTrustAllSslContext() {
         try {
-            final javax.net.ssl.TrustManager[] trustAll = {
-                    new javax.net.ssl.X509TrustManager() {
-                        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                            return new java.security.cert.X509Certificate[0];
+            final TrustManager[] trustAll = {
+                    new X509TrustManager() {
+                        public X509Certificate[] getAcceptedIssuers() {
+                            return new X509Certificate[0];
                         }
 
                         public void checkClientTrusted(
-                                final java.security.cert.X509Certificate[] c, final String a) {
+                                final X509Certificate[] c, final String a) {
                         }
 
                         public void checkServerTrusted(
-                                final java.security.cert.X509Certificate[] c, final String a) {
+                                final X509Certificate[] c, final String a) {
                         }
                     }
             };
-            final javax.net.ssl.SSLContext ctx = javax.net.ssl.SSLContext.getInstance("TLS");
-            ctx.init(null, trustAll, new java.security.SecureRandom());
+            final SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(null, trustAll, new SecureRandom());
             return ctx;
         } catch (Exception ex) {
             throw new IllegalStateException("Falha ao criar SSLContext trust-all", ex);
