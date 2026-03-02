@@ -95,6 +95,9 @@ class SmartTokenClientIT {
     private static Path certFile;
     private static String certificatePem;
 
+    // Porta fixa no host para evitar problemas de audience no JWT
+    private static final int HOST_PORT = 18443;
+
     @SuppressWarnings("resource")
     private static GenericContainer<?> createSimulatorContainer() {
         final Path jarPath = resolveSimulatorJar();
@@ -113,9 +116,17 @@ class SmartTokenClientIT {
                                 .entryPoint("java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar")
                                 .build()))
                 .withExposedPorts(SIMULATOR_PORT)
+                // Usa porta fixa para que a audience do JWT seja consistente
+                .withCreateContainerCmdModifier(cmd ->
+                        cmd.withHostConfig(cmd.getHostConfig()
+                                .withPortBindings(new com.github.dockerjava.api.model.PortBinding(
+                                        com.github.dockerjava.api.model.Ports.Binding.bindPort(HOST_PORT),
+                                        new com.github.dockerjava.api.model.ExposedPort(SIMULATOR_PORT)))))
                 .withEnv("LOG_LEVEL", "DEBUG")
-                .waitingFor(Wait.forHttps("/actuator/health")
+                .withEnv("SERVER_BASE_URL", "https://localhost:" + HOST_PORT)
+                .waitingFor(Wait.forHttps("/.well-known/smart-configuration")
                         .forPort(SIMULATOR_PORT)
+                        .forStatusCode(200)
                         .allowInsecure()
                         .withStartupTimeout(Duration.ofMinutes(2)))
                 .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("simulador"));
@@ -165,7 +176,7 @@ class SmartTokenClientIT {
     private static String getSimulatorBaseUrl() {
         return String.format("https://%s:%d",
                 SIMULATOR.getHost(),
-                SIMULATOR.getMappedPort(SIMULATOR_PORT));
+                HOST_PORT);
     }
 
     private static String getTokenEndpoint() {
