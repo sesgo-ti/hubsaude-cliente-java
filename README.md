@@ -96,14 +96,26 @@ mvn test
 
 ### Testes de Integração
 
-Os testes de integração requerem o **simulador** (hubsaude-simulador) em execução:
+Os testes de integração utilizam **Testcontainers** para iniciar automaticamente o simulador 
+(hubsaude-simulador) como um container Docker. Isso garante que os testes sejam:
+
+- **Autocontidos:** Não requerem serviços externos iniciados manualmente
+- **Reproduzíveis:** Funcionam em qualquer ambiente com Docker
+- **Isolados:** Cada execução usa um container limpo
+
+**Pré-requisitos:**
+
+1. Docker instalado e em execução
+2. Projeto hubsaude-simulador compilado
+
+**Execução:**
 
 ```bash
-# Terminal 1: Iniciar o simulador
+# Compilar o simulador primeiro (apenas uma vez)
 cd ../hubsaude-simulador
-mvn spring-boot:run
+mvn package -DskipTests
 
-# Terminal 2: Executar testes de integração
+# Executar todos os testes (unitários + integração)
 cd ../hubsaude-cliente-java
 mvn verify
 ```
@@ -114,7 +126,8 @@ Para executar apenas os testes de integração:
 mvn failsafe:integration-test failsafe:verify
 ```
 
-> **Nota:** Os testes de integração são automaticamente ignorados quando o simulador não está acessível.
+> **Nota:** Na primeira execução, a imagem Docker do simulador será construída automaticamente 
+> a partir do Dockerfile. Execuções subsequentes reutilizam a imagem em cache.
 
 ## Licença
 

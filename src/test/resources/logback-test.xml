@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Silencia logs verbosos do Testcontainers e Docker client durante build de imagem -->
+    <logger name="com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.wire" level="OFF"/>
+    <logger name="com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.headers" level="WARN"/>
+    <logger name="org.testcontainers.shaded.org.apache.commons.compress" level="WARN"/>
+    <logger name="org.testcontainers.utility.ResourceReaper" level="WARN"/>
+    
+    <!-- Testcontainers: apenas info e acima -->
+    <logger name="org.testcontainers" level="INFO"/>
+    <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="docker.dockerjava" level="WARN"/>
+    
+    <!-- Logs do cliente HubSaúde -->
+    <logger name="br.gov.go.saude.hubsaude.client" level="DEBUG"/>
+    
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+    
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+</configuration>

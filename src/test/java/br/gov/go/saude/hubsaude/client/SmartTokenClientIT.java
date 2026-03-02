@@ -11,7 +11,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.api.condition.EnabledIf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.images.builder.ImageFromDockerfile;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigInteger;
 import java.net.URI;
@@ -21,6 +28,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Duration;
@@ -31,67 +39,120 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Testes de integração do SmartTokenClient.
+ * Testes de integração do SmartTokenClient com simulador iniciado automaticamente.
  *
  * <p>
- * Estes testes requerem que o simulador (hubsaude-simulador) esteja em execução
- * na porta 8443. Para iniciar o simulador:
+ * Utiliza <strong>Testcontainers</strong> para iniciar automaticamente o simulador
+ * (hubsaude-simulador) como um container Docker. Isso garante que os testes sejam:
  * </p>
+ * <ul>
+ *   <li><strong>Autocontidos:</strong> Não requerem serviços externos iniciados manualmente</li>
+ *   <li><strong>Reproduzíveis:</strong> Funcionam em qualquer ambiente com Docker</li>
+ *   <li><strong>Isolados:</strong> Cada execução usa um container limpo</li>
+ * </ul>
  *
+ * <h2>Pré-requisitos</h2>
+ * <ul>
+ *   <li>Docker instalado e em execução</li>
+ *   <li>Projeto hubsaude-simulador compilado (mvn package -DskipTests)</li>
+ * </ul>
+ *
+ * <h2>Execução</h2>
  * <pre>{@code
- * cd projetos/hubsaude-simulador
- * mvn spring-boot:run
- * }</pre>
+ * # Compilar o simulador primeiro
+ * cd ../hubsaude-simulador && mvn package -DskipTests
  *
- * <p>
- * Os testes são marcados com {@code @Tag("integration")} e só executam quando
- * o simulador está acessível. Execute com:
- * </p>
- *
- * <pre>{@code
- * mvn verify -DskipUnitTests
- * # ou
- * mvn failsafe:integration-test
+ * # Executar testes de integração
+ * cd ../hubsaude-cliente-java && mvn verify
  * }</pre>
  *
  * @see SmartTokenClient
  */
 @Tag("integration")
-@DisplayName("Testes de Integração - SmartTokenClient")
+@Testcontainers
+@DisplayName("Testes de Integração - SmartTokenClient (Testcontainers)")
 class SmartTokenClientIT {
 
-    private static final String SIMULATOR_BASE_URL = "https://localhost:8443";
-    private static final String TOKEN_ENDPOINT = SIMULATOR_BASE_URL + "/auth/token";
-    private static final String REGISTER_ENDPOINT = SIMULATOR_BASE_URL + "/clients/register";
+    private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClientIT.class);
+
+    private static final int SIMULATOR_PORT = 8443;
     private static final String CLIENT_ID = "integration-test-client";
     private static final String ALLOWED_SCOPES = "system/Patient.rs system/Observation.rs";
+
+    /**
+     * Container do simulador HubSaúde.
+     *
+     * <p>
+     * Construído dinamicamente a partir do Dockerfile no diretório do simulador.
+     * O container é iniciado uma única vez para todos os testes da classe.
+     * </p>
+     */
+    @Container
+    @SuppressWarnings("resource")
+    private static final GenericContainer<?> SIMULATOR = createSimulatorContainer();
 
     private static Path keyFile;
     private static Path certFile;
     private static String certificatePem;
 
+    @SuppressWarnings("resource")
+    private static GenericContainer<?> createSimulatorContainer() {
+        final Path simulatorPath = resolveSimulatorPath();
+
+        return new GenericContainer<>(
+                new ImageFromDockerfile("hubsaude-simulador-test", false)
+                        .withDockerfile(simulatorPath.resolve("Dockerfile"))
+                        .withFileFromPath(".", simulatorPath))
+                .withExposedPorts(SIMULATOR_PORT)
+                .withEnv("LOG_LEVEL", "DEBUG")
+                .waitingFor(Wait.forHttps("/actuator/health")
+                        .forPort(SIMULATOR_PORT)
+                        .allowInsecure()
+                        .withStartupTimeout(Duration.ofMinutes(2)))
+                .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("simulador"));
+    }
+
     /**
-     * Verifica se o simulador está acessível antes de executar os testes.
+     * Resolve o caminho do projeto hubsaude-simulador.
+     *
+     * <p>
+     * Procura em locais típicos relativos ao diretório de execução dos testes.
+     * </p>
      */
-    static boolean isSimulatorAvailable() {
-        try {
-            final HttpClient client = HttpClient.newBuilder()
-                    .sslContext(SmartTokenClient.buildTrustAllSslContext())
-                    .connectTimeout(Duration.ofSeconds(2))
-                    .build();
+    private static Path resolveSimulatorPath() {
+        // Caminhos possíveis relativos ao diretório de execução
+        final Path[] possiblePaths = {
+                Paths.get("../hubsaude-simulador"),
+                Paths.get("../../hubsaude-simulador"),
+                Paths.get("projetos/hubsaude-simulador"),
+                Paths.get("../projetos/hubsaude-simulador")
+        };
 
-            final HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(SIMULATOR_BASE_URL + "/actuator/health"))
-                    .timeout(Duration.ofSeconds(2))
-                    .GET()
-                    .build();
-
-            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.statusCode() == 200;
-        } catch (final Exception e) {
-            System.err.println("Simulador não disponível em " + SIMULATOR_BASE_URL + ": " + e.getMessage());
-            return false;
+        for (final Path path : possiblePaths) {
+            final Path dockerfile = path.resolve("Dockerfile");
+            if (Files.exists(dockerfile)) {
+                LOG.info("Simulador encontrado em: {}", path.toAbsolutePath());
+                return path.toAbsolutePath();
+            }
         }
+
+        throw new IllegalStateException(
+                "Não foi possível localizar o projeto hubsaude-simulador. " +
+                        "Certifique-se de que o simulador está no diretório esperado.");
+    }
+
+    private static String getSimulatorBaseUrl() {
+        return String.format("https://%s:%d",
+                SIMULATOR.getHost(),
+                SIMULATOR.getMappedPort(SIMULATOR_PORT));
+    }
+
+    private static String getTokenEndpoint() {
+        return getSimulatorBaseUrl() + "/auth/token";
+    }
+
+    private static String getRegisterEndpoint() {
+        return getSimulatorBaseUrl() + "/clients/register";
     }
 
     @BeforeAll
@@ -114,13 +175,9 @@ class SmartTokenClientIT {
 
     @BeforeEach
     void registrarClienteNoSimulador() throws Exception {
-        if (!isSimulatorAvailable()) {
-            return;
-        }
-
         final HttpClient client = HttpClient.newBuilder()
                 .sslContext(SmartTokenClient.buildTrustAllSslContext())
-                .connectTimeout(Duration.ofSeconds(5))
+                .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
         // Registra o cliente via JSON
@@ -133,22 +190,22 @@ class SmartTokenClientIT {
                 """, CLIENT_ID, escapeJsonString(certificatePem), ALLOWED_SCOPES);
 
         final HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(REGISTER_ENDPOINT))
+                .uri(URI.create(getRegisterEndpoint()))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(30))
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
 
         // Ignora erros de conflito (cliente já registrado)
-        client.send(request, HttpResponse.BodyHandlers.ofString());
+        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        LOG.debug("Registro de cliente: status={}, body={}", response.statusCode(), response.body());
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve obter token de acesso com sucesso")
     void deveObterTokenComSucesso() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -162,11 +219,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve falhar com scope não permitido")
     void deveFalharComScopeNaoPermitido() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -178,11 +234,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve reutilizar token do cache quando válido")
     void deveReutilizarTokenDoCache() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -198,11 +253,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve obter tokens diferentes para scopes diferentes")
     void deveObterTokensDiferentesParaScopesDiferentes() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -217,11 +271,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve invalidar cache e obter novo token")
     void deveInvalidarCacheEObterNovoToken() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -242,11 +295,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve falhar com client_id não registrado")
     void deveFalharComClientIdNaoRegistrado() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId("cliente-inexistente-xyz")
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -258,11 +310,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve funcionar com múltiplos scopes")
     void deveFuncionarComMultiplosScopes() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
@@ -274,11 +325,10 @@ class SmartTokenClientIT {
     }
 
     @Test
-    @EnabledIf("isSimulatorAvailable")
     @DisplayName("Deve respeitar timeout configurado")
     void deveRespeitarTimeoutConfigurado() throws Exception {
         final SmartTokenClient tokenClient = SmartTokenClient.builder()
-                .tokenEndpoint(TOKEN_ENDPOINT)
+                .tokenEndpoint(getTokenEndpoint())
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
