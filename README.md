@@ -84,6 +84,38 @@ String token = circuitBreaker.executeSupplier(() -> {
 });
 ```
 
+## Testes
+
+### Testes Unitários
+
+Os testes unitários são autocontidos e não dependem de serviços externos:
+
+```bash
+mvn test
+```
+
+### Testes de Integração
+
+Os testes de integração requerem o **simulador** (hubsaude-simulador) em execução:
+
+```bash
+# Terminal 1: Iniciar o simulador
+cd ../hubsaude-simulador
+mvn spring-boot:run
+
+# Terminal 2: Executar testes de integração
+cd ../hubsaude-cliente-java
+mvn verify
+```
+
+Para executar apenas os testes de integração:
+
+```bash
+mvn failsafe:integration-test failsafe:verify
+```
+
+> **Nota:** Os testes de integração são automaticamente ignorados quando o simulador não está acessível.
+
 ## Licença
 
 Copyright (c) 2026 SES-GO / UFG. Todos os direitos reservados.

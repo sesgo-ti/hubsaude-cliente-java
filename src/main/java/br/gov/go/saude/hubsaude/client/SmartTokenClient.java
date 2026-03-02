@@ -64,7 +64,7 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  * </p>
  *
  * <h2>Exemplo de uso:</h2>
- * 
+ *
  * <pre>{@code
  * var tokenClient = new SmartTokenClient(
  *         "https://localhost:8443/auth/token",
@@ -257,6 +257,24 @@ public final class SmartTokenClient {
     private static final String GRANT_TYPE = "client_credentials";
     private static final String ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
+    /** Delay base para retry exponencial em milissegundos. */
+    private static final long RETRY_BASE_DELAY_MS = 1000L;
+
+    /** ObjectMapper compartilhado (thread-safe). */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /** Código HTTP: Rate Limit Exceeded. */
+    private static final int HTTP_TOO_MANY_REQUESTS = 429;
+
+    /** Código HTTP: OK. */
+    private static final int HTTP_OK = 200;
+
+    /** Tamanho inicial do StringBuilder para form body. */
+    private static final int FORM_BODY_INITIAL_CAPACITY = 128;
+
+    /** Limite máximo para sanitização de respostas de erro. */
+    private static final int MAX_ERROR_RESPONSE_LENGTH = 500;
+
     /** TTL padrão do client_assertion em segundos. */
     public static final int DEFAULT_ASSERTION_TTL_SECONDS = 60;
 
@@ -271,12 +289,6 @@ public final class SmartTokenClient {
 
     /** Margem padrão em segundos para renovar token antes da expiração. */
     public static final int DEFAULT_TOKEN_CACHE_MARGIN_SECONDS = 30;
-
-    /** Delay base para retry exponencial em milissegundos. */
-    private static final long RETRY_BASE_DELAY_MS = 1000L;
-
-    /** ObjectMapper compartilhado (thread-safe). */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String tokenEndpoint;
     private final String clientId;
@@ -390,7 +402,7 @@ public final class SmartTokenClient {
      * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
      * @param maxRetries              número máximo de tentativas em falhas transitórias
      */
-    @SuppressWarnings("PMD.ExcessiveParameterList") // Builder é a API recomendada
+    @SuppressWarnings({"PMD.ExcessiveParameterList", "checkstyle:ParameterNumber"}) // Builder é a API recomendada
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
@@ -412,7 +424,8 @@ public final class SmartTokenClient {
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
         this.assertionTtlSeconds = assertionTtlSeconds > 0 ? assertionTtlSeconds : DEFAULT_ASSERTION_TTL_SECONDS;
         this.enableTokenCache = enableTokenCache;
-        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0 ? tokenCacheMarginSeconds : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
+                ? tokenCacheMarginSeconds : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
         this.maxRetries = maxRetries > 0 ? maxRetries : DEFAULT_MAX_RETRIES;
 
         verifyKeyPairConsistency(privateKey, certificate);
@@ -547,12 +560,12 @@ public final class SmartTokenClient {
         final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         final int statusCode = response.statusCode();
-        if (statusCode == 429) {
+        if (statusCode == HTTP_TOO_MANY_REQUESTS) {
             LOG.warn("Rate limit atingido (HTTP 429) para clientId={}", clientId);
             throw new SmartTokenException("Rate limit atingido (HTTP 429). Tente novamente mais tarde.");
         }
 
-        if (statusCode != 200) {
+        if (statusCode != HTTP_OK) {
             LOG.error("Falha ao obter token: HTTP {} para clientId={}", statusCode, clientId);
             throw new SmartTokenException(
                     "Falha ao obter token: HTTP " + statusCode + " — " + sanitizeErrorResponse(response.body()));
@@ -601,7 +614,7 @@ public final class SmartTokenClient {
      * @return string pronta para envio no corpo da requisição HTTP
      */
     public static String buildFormBody(final String assertion, final String scope) {
-        final StringBuilder sb = new StringBuilder(128)
+        final StringBuilder sb = new StringBuilder(FORM_BODY_INITIAL_CAPACITY)
                 .append("grant_type=").append(encode(GRANT_TYPE))
                 .append("&client_assertion_type=").append(encode(ASSERTION_TYPE))
                 .append("&client_assertion=").append(encode(assertion));
@@ -658,8 +671,9 @@ public final class SmartTokenClient {
      * @return resposta sanitizada
      */
     private static String sanitizeErrorResponse(final String responseBody) {
-        if (responseBody == null || responseBody.length() > 500) {
-            return responseBody == null ? "<empty>" : responseBody.substring(0, 500) + "...";
+        if (responseBody == null || responseBody.length() > MAX_ERROR_RESPONSE_LENGTH) {
+            return responseBody == null ? "<empty>"
+                    : responseBody.substring(0, MAX_ERROR_RESPONSE_LENGTH) + "...";
         }
         // Remove possíveis tokens do erro
         return responseBody.replaceAll("(access_token|token)[^&\"]*", "$1=[REDACTED]");
@@ -691,8 +705,8 @@ public final class SmartTokenClient {
      * que seja um X.509 válido antes de iniciar o fluxo de autenticação.
      *
      * @param path caminho absoluto para o certificado PEM
-     * @throws IOException quando o arquivo não pode ser lido
      * @return certificado X.509 decodificado
+     * @throws IOException quando o arquivo não pode ser lido
      * @throws SmartTokenException quando o conteúdo não representa um
      *                             certificado X.509 válido
      */
@@ -811,22 +825,22 @@ public final class SmartTokenClient {
         LOG.warn("⚠️ Criando SSLContext trust-all - USO EXCLUSIVO PARA TESTES!");
         try {
             final TrustManager[] trustAll = {
-                    new X509TrustManager() {
-                        @Override
-                        public X509Certificate[] getAcceptedIssuers() {
-                            return new X509Certificate[0];
-                        }
-
-                        @Override
-                        public void checkClientTrusted(
-                                final X509Certificate[] c, final String a) {
-                        }
-
-                        @Override
-                        public void checkServerTrusted(
-                                final X509Certificate[] c, final String a) {
-                        }
+                new X509TrustManager() {
+                    @Override
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
                     }
+
+                    @Override
+                    public void checkClientTrusted(
+                            final X509Certificate[] c, final String a) {
+                    }
+
+                    @Override
+                    public void checkServerTrusted(
+                            final X509Certificate[] c, final String a) {
+                    }
+                }
             };
             final SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(null, trustAll, new SecureRandom());
@@ -844,6 +858,7 @@ public final class SmartTokenClient {
      * de forma legível e segura.
      * </p>
      */
+    @SuppressWarnings("checkstyle:HiddenField") // Padrão Builder usa nomes iguais
     public static final class Builder {
         private String tokenEndpoint;
         private String clientId;
