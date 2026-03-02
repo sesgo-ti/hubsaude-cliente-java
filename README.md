@@ -96,38 +96,37 @@ mvn test
 
 ### Testes de Integração
 
-Os testes de integração suportam **dois modos de execução**, ambos com inicialização automática do simulador:
+Os testes de integração usam arquitetura **Template Method** com duas implementações independentes:
 
-#### 1. Modo JAR (ProcessBuilder) — Padrão
+| Classe | Infraestrutura | Tempo | Uso Recomendado |
+|--------|----------------|-------|-----------------|
+| `SmartTokenClientJarIT` | ProcessBuilder | ~5s | Desenvolvimento local |
+| `SmartTokenClientDockerIT` | Testcontainers | ~9s | CI/CD, builds reproduzíveis |
 
-Inicia automaticamente o simulador como processo Java local.
-Mais rápido, ideal para **desenvolvimento local**.
+#### Executar Testes JAR (mais rápido)
+
+```bash
+mvn verify -Dit.test=SmartTokenClientJarIT
+```
+
+**Pré-requisitos:** Java 21+ instalado
+
+#### Executar Testes Docker
+
+```bash
+mvn verify -Dit.test=SmartTokenClientDockerIT
+```
+
+**Pré-requisitos:** Docker instalado e em execução
+
+#### Executar Todos os Testes de Integração
 
 ```bash
 mvn verify
 ```
 
-**Pré-requisitos:** Java 21+ instalado
-
-#### 2. Modo Docker (Testcontainers)
-
-Inicia automaticamente o simulador como container Docker.
-Ideal para **CI/CD** e builds reproduzíveis.
-
-```bash
-mvn verify -Dsimulator.mode=docker
-```
-
-**Pré-requisitos:** Docker instalado e em execução
-
-#### Comparação de Performance
-
-| Modo | Tempo dos Testes | Tempo Total |
-|------|------------------|-------------|
-| **JAR** | ~2s | ~5s |
-| Docker | ~6s | ~9s |
-
-> **Dica:** Para CI/CD, use o modo Docker (`-Dsimulator.mode=docker`) para builds 100% reproduzíveis.
+> **Arquitetura:** Os testes estão em `SmartTokenClientIntegrationTestBase` (classe abstrata).
+> Cada implementação (`*JarIT`, `*DockerIT`) apenas define como iniciar/parar o simulador.
 
 ## Licença
 
