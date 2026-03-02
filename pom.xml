@@ -116,6 +116,14 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Simulador SMART on FHIR para testes de integração (obtido via Maven, não path local) -->
+        <dependency>
+            <groupId>br.gov.go.saude.hubsaude</groupId>
+            <artifactId>hubsaude-simulador</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -128,6 +136,34 @@
                 </configuration>
             </plugin>
             
+            <!-- Copia o JAR do simulador para target/simulator (necessário para Testcontainers) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.8.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-simulator</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>br.gov.go.saude.hubsaude</groupId>
+                                    <artifactId>hubsaude-simulador</artifactId>
+                                    <version>${project.version}</version>
+                                    <type>jar</type>
+                                    <destFileName>hubsaude-simulador.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.directory}/simulator</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Configuração para testes unitários (exclui testes de integração) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

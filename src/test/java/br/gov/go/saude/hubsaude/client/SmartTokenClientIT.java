@@ -136,41 +136,21 @@ class SmartTokenClientIT {
      * Resolve o caminho do JAR do hubsaude-simulador.
      *
      * <p>
-     * Procura em locais típicos relativos ao diretório de execução dos testes.
+     * O JAR é obtido via Maven (dependência de teste) e copiado para target/simulator
+     * pelo maven-dependency-plugin durante a fase pre-integration-test.
      * </p>
      */
     private static Path resolveSimulatorJar() {
-        // Caminhos possíveis relativos ao diretório de execução
-        final Path[] possiblePaths = {
-                Paths.get("../hubsaude-simulador/target"),
-                Paths.get("../../hubsaude-simulador/target"),
-                Paths.get("projetos/hubsaude-simulador/target"),
-                Paths.get("../projetos/hubsaude-simulador/target")
-        };
-
-        for (final Path targetDir : possiblePaths) {
-            if (!Files.exists(targetDir)) {
-                continue;
-            }
-            // Procura o JAR do simulador (ignora -sources.jar, -javadoc.jar, etc.)
-            try (var files = Files.list(targetDir)) {
-                final var jar = files
-                        .filter(p -> p.getFileName().toString().startsWith("hubsaude-simulador-"))
-                        .filter(p -> p.getFileName().toString().endsWith(".jar"))
-                        .filter(p -> !p.getFileName().toString().contains("-sources"))
-                        .filter(p -> !p.getFileName().toString().contains("-javadoc"))
-                        .findFirst();
-                if (jar.isPresent()) {
-                    return jar.get().toAbsolutePath();
-                }
-            } catch (final Exception e) {
-                LOG.warn("Erro ao listar diretório {}: {}", targetDir, e.getMessage());
-            }
+        // JAR copiado pelo maven-dependency-plugin em pre-integration-test
+        final Path simulatorJar = Paths.get("target", "simulator", "hubsaude-simulador.jar");
+        
+        if (Files.exists(simulatorJar)) {
+            return simulatorJar.toAbsolutePath();
         }
 
         throw new IllegalStateException(
-                "Não foi possível localizar o JAR do hubsaude-simulador. " +
-                        "Execute 'mvn package -DskipTests' no projeto hubsaude-simulador primeiro.");
+                "Não foi possível localizar o JAR do hubsaude-simulador em " + simulatorJar + ". " +
+                        "Execute 'mvn verify' para que o maven-dependency-plugin copie o artefato.");
     }
 
     private static String getSimulatorBaseUrl() {
