@@ -22,7 +22,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -141,10 +140,10 @@ public class SmartTokenClient {
     }
 
     public static String buildFormBody(final String assertion, final String scope) {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("grant_type=").append(encode(GRANT_TYPE));
-        sb.append("&client_assertion_type=").append(encode(ASSERTION_TYPE));
-        sb.append("&client_assertion=").append(encode(assertion));
+        final StringBuilder sb = new StringBuilder(128)
+                .append("grant_type=").append(encode(GRANT_TYPE))
+                .append("&client_assertion_type=").append(encode(ASSERTION_TYPE))
+                .append("&client_assertion=").append(encode(assertion));
         if (scope != null && !scope.isBlank()) {
             sb.append("&scope=").append(encode(scope));
         }
@@ -190,7 +189,7 @@ public class SmartTokenClient {
             }
             throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
         } catch (CertificateException ex) {
-            throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage());
+            throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
         }
     }
 
@@ -206,14 +205,17 @@ public class SmartTokenClient {
         try {
             final TrustManager[] trustAll = {
                     new X509TrustManager() {
+                        @Override
                         public X509Certificate[] getAcceptedIssuers() {
                             return new X509Certificate[0];
                         }
 
+                        @Override
                         public void checkClientTrusted(
                                 final X509Certificate[] c, final String a) {
                         }
 
+                        @Override
                         public void checkServerTrusted(
                                 final X509Certificate[] c, final String a) {
                         }
@@ -231,6 +233,10 @@ public class SmartTokenClient {
     public static class SmartTokenException extends RuntimeException {
         public SmartTokenException(final String message) {
             super(message);
+        }
+
+        public SmartTokenException(final String message, final Throwable cause) {
+            super(message, cause);
         }
     }
 }
