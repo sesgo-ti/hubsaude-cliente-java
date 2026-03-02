@@ -351,6 +351,63 @@ class SmartTokenClientTest {
                                 .hasMessageContaining("Falha após 1 tentativas");
         }
 
+        // ---------- Testes do record CachedToken ----------
+
+        @Test
+        void cachedTokenDeveSerValidoQuandoExpiraNoFuturo() {
+                final var token = new SmartTokenClient.CachedToken(
+                                "access-token-123",
+                                java.time.Instant.now().plusSeconds(120));
+
+                assertThat(token.isValid(30)).isTrue();
+        }
+
+        @Test
+        void cachedTokenDeveSerInvalidoQuandoJaExpirou() {
+                final var token = new SmartTokenClient.CachedToken(
+                                "access-token-123",
+                                java.time.Instant.now().minusSeconds(10));
+
+                assertThat(token.isValid(30)).isFalse();
+        }
+
+        @Test
+        void cachedTokenDeveSerInvalidoQuandoExpiraDentroDaMargem() {
+                // Token expira em 20s, margem é 30s -> deve ser inválido
+                final var token = new SmartTokenClient.CachedToken(
+                                "access-token-123",
+                                java.time.Instant.now().plusSeconds(20));
+
+                assertThat(token.isValid(30)).isFalse();
+        }
+
+        @Test
+        void cachedTokenDeveSerValidoQuandoExpiraForaDaMargem() {
+                // Token expira em 60s, margem é 30s -> deve ser válido
+                final var token = new SmartTokenClient.CachedToken(
+                                "access-token-123",
+                                java.time.Instant.now().plusSeconds(60));
+
+                assertThat(token.isValid(30)).isTrue();
+        }
+
+        @Test
+        void cachedTokenDeveRetornarAccessTokenCorretamente() {
+                final var token = new SmartTokenClient.CachedToken(
+                                "my-access-token",
+                                java.time.Instant.now().plusSeconds(60));
+
+                assertThat(token.accessToken()).isEqualTo("my-access-token");
+        }
+
+        @Test
+        void cachedTokenDeveRetornarExpiresAtCorretamente() {
+                final java.time.Instant expiresAt = java.time.Instant.now().plusSeconds(120);
+                final var token = new SmartTokenClient.CachedToken("token", expiresAt);
+
+                assertThat(token.expiresAt()).isEqualTo(expiresAt);
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {
