@@ -335,6 +335,22 @@ class SmartTokenClientTest {
                 assertThat(SmartTokenClient.DEFAULT_TLS_PROTOCOL).isEqualTo("TLSv1.3");
         }
 
+        @Test
+        void deveFalharObtainTokenComUrlInvalidaAposRetry() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint("https://host-inexistente.local:9999/auth/token")
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .connectTimeout(Duration.ofMillis(500))
+                                .maxRetries(1)
+                                .build();
+
+                assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("Falha após 1 tentativas");
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {
