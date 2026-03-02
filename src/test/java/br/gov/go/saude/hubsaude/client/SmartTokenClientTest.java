@@ -249,6 +249,46 @@ class SmartTokenClientTest {
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
 
+        @Test
+        void deveConstruirBuilderComServerCertificatePem() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .serverCertificatePem(certFile) // usa o mesmo cert como trust anchor
+                                .build();
+
+                assertThat(client.buildClientAssertion()).isNotBlank();
+        }
+
+        @Test
+        void deveExtractAccessTokenDelegandoParaParseTokenResponse() throws Exception {
+                final String json = "{\"access_token\":\"token123\",\"token_type\":\"Bearer\"}";
+                final String token = SmartTokenClient.extractAccessToken(json);
+                assertThat(token).isEqualTo("token123");
+        }
+
+        @Test
+        void deveFalharLoadPrivateKeyComArquivoPemInvalido(@TempDir final Path tempDir) throws Exception {
+                final Path invalidPem = tempDir.resolve("invalid.pem");
+                Files.writeString(invalidPem, "-----BEGIN PUBLIC KEY-----\nINVALID\n-----END PUBLIC KEY-----\n");
+
+                assertThatThrownBy(() -> SmartTokenClient.loadPrivateKey(invalidPem))
+                                .isInstanceOf(Exception.class);
+        }
+
+        @Test
+        void deveFalharValidateCertificateComArquivoNaoX509(@TempDir final Path tempDir) throws Exception {
+                // Arquivo com chave privada em vez de certificado
+                final Path notCertFile = tempDir.resolve("not-cert.pem");
+                Files.writeString(notCertFile, toPkcs8Pem(privateKey.getEncoded()));
+
+                assertThatThrownBy(() -> SmartTokenClient.validateCertificate(notCertFile))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("X.509");
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {

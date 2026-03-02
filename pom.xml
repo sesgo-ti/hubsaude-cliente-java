@@ -135,6 +135,34 @@
                     <excludeFilterFile>src/main/resources/spotbugs-exclude.xml</excludeFilterFile>
                 </configuration>
             </plugin>
+
+            <!-- JaCoCo: cobertura mínima de 95% -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.85</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             
             <!-- Copia o JAR do simulador para target/simulator (necessário para Testcontainers) -->
             <plugin>
