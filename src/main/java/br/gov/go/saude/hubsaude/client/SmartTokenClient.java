@@ -45,7 +45,6 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 
 /**
@@ -251,8 +250,6 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
 @SuppressWarnings("PMD.CouplingBetweenObjects")
-@SuppressFBWarnings(value = "CT_CONSTRUCTOR_THROW",
-        justification = "Classe final sem finalize() - Finalizer attack não é aplicável")
 public final class SmartTokenClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
