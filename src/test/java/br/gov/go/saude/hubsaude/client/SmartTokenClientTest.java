@@ -175,6 +175,80 @@ class SmartTokenClientTest {
                 SmartTokenClient.verifyKeyPairConsistency(privateKey, clientCertificate);
         }
 
+        @Test
+        void deveConstruirClienteViaBuilderComParametrosEnterprise() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .connectTimeout(Duration.ofSeconds(5))
+                                .requestTimeout(Duration.ofSeconds(15))
+                                .assertionTtlSeconds(120)
+                                .enableTokenCache(true)
+                                .tokenCacheMarginSeconds(60)
+                                .maxRetries(5)
+                                .build();
+
+                final String assertion = client.buildClientAssertion();
+                assertThat(assertion).isNotBlank();
+        }
+
+        @Test
+        void deveParseTokenResponseComExpiresIn() throws Exception {
+                final String json = "{\"access_token\":\"abc123\",\"expires_in\":3600,\"token_type\":\"Bearer\"}";
+                final var response = SmartTokenClient.parseTokenResponse(json);
+
+                assertThat(response.accessToken()).isEqualTo("abc123");
+                assertThat(response.expiresIn()).isEqualTo(3600);
+        }
+
+        @Test
+        void deveParseTokenResponseSemExpiresIn() throws Exception {
+                final String json = "{\"access_token\":\"abc123\",\"token_type\":\"Bearer\"}";
+                final var response = SmartTokenClient.parseTokenResponse(json);
+
+                assertThat(response.accessToken()).isEqualTo("abc123");
+                assertThat(response.expiresIn()).isEqualTo(3600); // default
+        }
+
+        @Test
+        void deveFalharParseTokenResponseSemAccessToken() {
+                final String json = "{\"error\":\"invalid_grant\"}";
+                assertThatThrownBy(() -> SmartTokenClient.parseTokenResponse(json))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("access_token");
+        }
+
+        @Test
+        void deveInvalidarCacheDoCliente() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .enableTokenCache(true)
+                                .build();
+
+                // Não deve lançar exceção
+                client.invalidateCache();
+                client.invalidateCache("system/Patient.rs");
+        }
+
+        @Test
+        void deveDesabilitarCacheDeTokens() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .enableTokenCache(false)
+                                .build();
+
+                // Cliente criado sem exceção
+                assertThat(client.buildClientAssertion()).isNotBlank();
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {

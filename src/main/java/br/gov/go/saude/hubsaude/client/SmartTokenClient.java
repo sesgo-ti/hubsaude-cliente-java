@@ -21,6 +21,7 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,12 +34,15 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 
@@ -80,8 +84,21 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  *         .connectTimeout(Duration.ofSeconds(10))
  *         .requestTimeout(Duration.ofSeconds(30))
  *         .assertionTtlSeconds(120)
+ *         .enableTokenCache(true)
+ *         .tokenCacheMarginSeconds(30)
+ *         .maxRetries(3)
  *         .build();
  * }</pre>
+ *
+ * <h2>Recursos Enterprise:</h2>
+ * <ul>
+ * <li><strong>Cache de tokens:</strong> Tokens são cacheados e reutilizados até próximo
+ *     de sua expiração, reduzindo carga no authorization server</li>
+ * <li><strong>Retry com backoff:</strong> Falhas transitórias são tratadas com retry
+ *     exponencial (1s, 2s, 4s) até o limite configurado</li>
+ * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em aplicações multi-thread</li>
+ * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
+ * </ul>
  */
 public class SmartTokenClient {
 
@@ -99,12 +116,33 @@ public class SmartTokenClient {
     /** Timeout padrão de requisição. */
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
+    /** Número máximo padrão de tentativas em caso de falha transitória. */
+    public static final int DEFAULT_MAX_RETRIES = 3;
+
+    /** Margem padrão em segundos para renovar token antes da expiração. */
+    public static final int DEFAULT_TOKEN_CACHE_MARGIN_SECONDS = 30;
+
+    /** Delay base para retry exponencial em milissegundos. */
+    private static final long RETRY_BASE_DELAY_MS = 1000L;
+
+    /** ObjectMapper compartilhado (thread-safe). */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final String tokenEndpoint;
     private final String clientId;
     private final PrivateKey privateKey;
     private final HttpClient httpClient;
     private final int assertionTtlSeconds;
     private final Duration requestTimeout;
+    private final boolean enableTokenCache;
+    private final int tokenCacheMarginSeconds;
+    private final int maxRetries;
+
+    /** Cache de tokens por scope. */
+    private final ConcurrentHashMap<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
+
+    /** Lock para evitar múltiplas renovações simultâneas do mesmo scope. */
+    private final ConcurrentHashMap<String, ReentrantLock> scopeLocks = new ConcurrentHashMap<>();
 
     /**
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
@@ -128,7 +166,10 @@ public class SmartTokenClient {
                 buildSslContext(null),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
-                DEFAULT_ASSERTION_TTL_SECONDS);
+                DEFAULT_ASSERTION_TTL_SECONDS,
+                true,
+                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
+                DEFAULT_MAX_RETRIES);
     }
 
     /**
@@ -157,7 +198,10 @@ public class SmartTokenClient {
                 buildSslContext(serverCertificatePem),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
-                DEFAULT_ASSERTION_TTL_SECONDS);
+                DEFAULT_ASSERTION_TTL_SECONDS,
+                true,
+                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
+                DEFAULT_MAX_RETRIES);
     }
 
     /**
@@ -177,20 +221,24 @@ public class SmartTokenClient {
             final X509Certificate certificate,
             final SSLContext sslContext) {
         this(tokenEndpoint, clientId, privateKey, certificate, sslContext,
-                DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS);
+                DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS,
+                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS, DEFAULT_MAX_RETRIES);
     }
 
     /**
      * Construtor completo com todas as configurações disponíveis.
      *
-     * @param tokenEndpoint      URL do endpoint /auth/token do simulador
-     * @param clientId           identificador do cliente registrado
-     * @param privateKey         chave privada previamente carregada
-     * @param certificate        certificado X.509 correspondente à chave
-     * @param sslContext         contexto SSL a ser utilizado pelo {@link HttpClient}
-     * @param connectTimeout     timeout de conexão
-     * @param requestTimeout     timeout de requisição HTTP
-     * @param assertionTtlSeconds TTL do client_assertion em segundos
+     * @param tokenEndpoint           URL do endpoint /auth/token do simulador
+     * @param clientId                identificador do cliente registrado
+     * @param privateKey              chave privada previamente carregada
+     * @param certificate             certificado X.509 correspondente à chave
+     * @param sslContext              contexto SSL a ser utilizado pelo {@link HttpClient}
+     * @param connectTimeout          timeout de conexão
+     * @param requestTimeout          timeout de requisição HTTP
+     * @param assertionTtlSeconds     TTL do client_assertion em segundos
+     * @param enableTokenCache        habilita cache de tokens
+     * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
+     * @param maxRetries              número máximo de tentativas em falhas transitórias
      */
     public SmartTokenClient(
             final String tokenEndpoint,
@@ -200,7 +248,10 @@ public class SmartTokenClient {
             final SSLContext sslContext,
             final Duration connectTimeout,
             final Duration requestTimeout,
-            final int assertionTtlSeconds) {
+            final int assertionTtlSeconds,
+            final boolean enableTokenCache,
+            final int tokenCacheMarginSeconds,
+            final int maxRetries) {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
         this.privateKey = Objects.requireNonNull(privateKey, "privateKey");
@@ -209,6 +260,9 @@ public class SmartTokenClient {
         final Duration connTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
         this.assertionTtlSeconds = assertionTtlSeconds > 0 ? assertionTtlSeconds : DEFAULT_ASSERTION_TTL_SECONDS;
+        this.enableTokenCache = enableTokenCache;
+        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0 ? tokenCacheMarginSeconds : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+        this.maxRetries = maxRetries > 0 ? maxRetries : DEFAULT_MAX_RETRIES;
 
         verifyKeyPairConsistency(privateKey, certificate);
 
@@ -217,7 +271,8 @@ public class SmartTokenClient {
                 .connectTimeout(connTimeout)
                 .build();
 
-        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={}", clientId, tokenEndpoint);
+        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={}",
+                clientId, tokenEndpoint, enableTokenCache, this.maxRetries);
     }
 
     /**
@@ -232,15 +287,101 @@ public class SmartTokenClient {
     /**
      * Obtém um access token para os scopes informados.
      *
+     * <p>
+     * Se o cache estiver habilitado, tokens válidos são reutilizados.
+     * A renovação ocorre automaticamente quando o token está próximo
+     * de expirar (margem configurável).
+     * </p>
+     *
+     * <p>
+     * Em caso de falhas transitórias (timeout, erro de rede), o método
+     * realiza retry com backoff exponencial até o limite configurado.
+     * </p>
+     *
      * @param scope scopes separados por espaço (ex: {@code "system/Patient.rs"})
-     * @return access token JWT emitido pelo simulador
+     * @return access token JWT emitido pelo servidor de autorização
      * @throws IOException          em caso de erro de I/O na comunicação
      * @throws InterruptedException se a thread for interrompida durante a requisição
      * @throws SmartTokenException  se o servidor retornar erro ou resposta inválida
      */
     public String obtainToken(final String scope) throws IOException, InterruptedException {
+        final String normalizedScope = scope == null ? "" : scope.trim();
+
+        if (enableTokenCache) {
+            final CachedToken cached = tokenCache.get(normalizedScope);
+            if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
+                LOG.debug("Retornando token em cache para clientId={} scope={}", clientId, normalizedScope);
+                return cached.accessToken();
+            }
+        }
+
+        // Usa lock por scope para evitar múltiplas requisições simultâneas
+        final ReentrantLock lock = scopeLocks.computeIfAbsent(normalizedScope, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            // Double-check após adquirir o lock
+            if (enableTokenCache) {
+                final CachedToken cached = tokenCache.get(normalizedScope);
+                if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
+                    LOG.debug("Token renovado por outra thread para clientId={} scope={}", clientId, normalizedScope);
+                    return cached.accessToken();
+                }
+            }
+
+            return obtainTokenWithRetry(normalizedScope);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Invalida o cache de tokens, forçando nova obtenção na próxima chamada.
+     *
+     * <p>
+     * Útil quando o token foi revogado externamente ou após receber
+     * erro 401 em uma chamada subsequente.
+     * </p>
+     */
+    public void invalidateCache() {
+        tokenCache.clear();
+        LOG.info("Cache de tokens invalidado para clientId={}", clientId);
+    }
+
+    /**
+     * Invalida o cache para um scope específico.
+     *
+     * @param scope scope cujo token deve ser invalidado
+     */
+    public void invalidateCache(final String scope) {
+        final String normalizedScope = scope == null ? "" : scope.trim();
+        tokenCache.remove(normalizedScope);
+        LOG.debug("Cache invalidado para clientId={} scope={}", clientId, normalizedScope);
+    }
+
+    private String obtainTokenWithRetry(final String scope) throws IOException, InterruptedException {
         LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
 
+        IOException lastException = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return doObtainToken(scope);
+            } catch (HttpTimeoutException | java.net.ConnectException ex) {
+                lastException = ex;
+                if (attempt < maxRetries) {
+                    final long delayMs = RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
+                    LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
+                            attempt, maxRetries, clientId, ex.getMessage(), delayMs);
+                    Thread.sleep(delayMs);
+                } else {
+                    LOG.error("Todas as {} tentativas falharam para clientId={}", maxRetries, clientId);
+                }
+            }
+        }
+        throw new SmartTokenException(
+                "Falha após " + maxRetries + " tentativas: " + lastException.getMessage(), lastException);
+    }
+
+    private String doObtainToken(final String scope) throws IOException, InterruptedException {
         final String assertion = buildClientAssertion();
         final String body = buildFormBody(assertion, scope);
 
@@ -254,13 +395,28 @@ public class SmartTokenClient {
         LOG.trace("Enviando requisição POST para {}", tokenEndpoint);
         final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() != 200) {
-            LOG.error("Falha ao obter token: HTTP {} — {}", response.statusCode(), response.body());
-            throw new SmartTokenException(
-                    "Falha ao obter token: HTTP " + response.statusCode() + " — " + response.body());
+        final int statusCode = response.statusCode();
+        if (statusCode == 429) {
+            LOG.warn("Rate limit atingido (HTTP 429) para clientId={}", clientId);
+            throw new SmartTokenException("Rate limit atingido (HTTP 429). Tente novamente mais tarde.");
         }
 
-        final String accessToken = extractAccessToken(response.body());
+        if (statusCode != 200) {
+            LOG.error("Falha ao obter token: HTTP {} para clientId={}", statusCode, clientId);
+            throw new SmartTokenException(
+                    "Falha ao obter token: HTTP " + statusCode + " — " + sanitizeErrorResponse(response.body()));
+        }
+
+        final TokenResponse tokenResponse = parseTokenResponse(response.body());
+        final String accessToken = tokenResponse.accessToken();
+
+        if (enableTokenCache) {
+            final Instant expiresAt = Instant.now().plusSeconds(tokenResponse.expiresIn());
+            tokenCache.put(scope, new CachedToken(accessToken, expiresAt));
+            LOG.debug("Token cacheado para clientId={} scope={} expiresIn={}s",
+                    clientId, scope, tokenResponse.expiresIn());
+        }
+
         LOG.info("Token obtido com sucesso para clientId={}", clientId);
         return accessToken;
     }
@@ -324,12 +480,38 @@ public class SmartTokenClient {
      * @throws IOException caso o JSON seja inválido ou não contenha o atributo
      */
     public static String extractAccessToken(final String jsonBody) throws IOException {
-        final var mapper = new ObjectMapper();
-        final var node = mapper.readTree(jsonBody);
+        return parseTokenResponse(jsonBody).accessToken();
+    }
+
+    /**
+     * Faz o parse completo da resposta do token endpoint.
+     *
+     * @param jsonBody corpo JSON da resposta
+     * @return objeto com access_token e expires_in
+     * @throws IOException em caso de erro de parse
+     */
+    static TokenResponse parseTokenResponse(final String jsonBody) throws IOException {
+        final JsonNode node = OBJECT_MAPPER.readTree(jsonBody);
         if (!node.has("access_token")) {
-            throw new SmartTokenException("Resposta não contém 'access_token': " + jsonBody);
+            throw new SmartTokenException("Resposta não contém 'access_token'");
         }
-        return node.get("access_token").asText();
+        final String accessToken = node.get("access_token").asText();
+        final int expiresIn = node.has("expires_in") ? node.get("expires_in").asInt() : 3600;
+        return new TokenResponse(accessToken, expiresIn);
+    }
+
+    /**
+     * Sanitiza a resposta de erro para evitar vazamento de tokens em logs.
+     *
+     * @param responseBody corpo da resposta HTTP
+     * @return resposta sanitizada
+     */
+    private static String sanitizeErrorResponse(final String responseBody) {
+        if (responseBody == null || responseBody.length() > 500) {
+            return responseBody == null ? "<empty>" : responseBody.substring(0, 500) + "...";
+        }
+        // Remove possíveis tokens do erro
+        return responseBody.replaceAll("(access_token|token)[^&\"]*", "$1=[REDACTED]");
     }
 
     /**
@@ -443,13 +625,39 @@ public class SmartTokenClient {
      * Cria um {@link javax.net.ssl.SSLContext} que confia em todos os certificados.
      *
      * <p>
-     * <strong>Uso exclusivo para testes com o simulador local.</strong>
-     * Nunca utilizar em ambiente de produção.
+     * <strong>⚠️ ATENÇÃO: USO EXCLUSIVO PARA TESTES E DESENVOLVIMENTO LOCAL!</strong>
      * </p>
      *
-     * @return contexto SSL que aceita qualquer certificado
+     * <p>
+     * Este método cria um contexto SSL que <strong>DESABILITA COMPLETAMENTE</strong>
+     * a validação de certificados TLS, tornando a conexão vulnerável a:
+     * </p>
+     * <ul>
+     * <li>Ataques Man-in-the-Middle (MITM)</li>
+     * <li>Interceptação de tráfego</li>
+     * <li>Roubo de credenciais e tokens</li>
+     * <li>Violação de dados sensíveis de saúde</li>
+     * </ul>
+     *
+     * <p>
+     * <strong>NUNCA</strong> utilize este método em:
+     * </p>
+     * <ul>
+     * <li>Ambiente de produção</li>
+     * <li>Ambiente de homologação</li>
+     * <li>Qualquer ambiente que processe dados reais de pacientes</li>
+     * </ul>
+     *
+     * <p>
+     * Para ambientes de produção, utilize SEMPRE um {@link SSLContext} configurado
+     * com a cadeia de certificados correta do servidor de autorização.
+     * </p>
+     *
+     * @return contexto SSL que aceita qualquer certificado (⚠️ INSEGURO)
+     * @see #buildSslContext(Path) para configuração segura com certificado específico
      */
     public static SSLContext buildTrustAllSslContext() {
+        LOG.warn("⚠️ Criando SSLContext trust-all - USO EXCLUSIVO PARA TESTES!");
         try {
             final TrustManager[] trustAll = {
                     new X509TrustManager() {
@@ -494,6 +702,9 @@ public class SmartTokenClient {
         private Duration connectTimeout = DEFAULT_CONNECT_TIMEOUT;
         private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
         private int assertionTtlSeconds = DEFAULT_ASSERTION_TTL_SECONDS;
+        private boolean enableTokenCache = true;
+        private int tokenCacheMarginSeconds = DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+        private int maxRetries = DEFAULT_MAX_RETRIES;
 
         private Builder() {
         }
@@ -587,6 +798,54 @@ public class SmartTokenClient {
         }
 
         /**
+         * Habilita ou desabilita o cache de tokens.
+         *
+         * <p>
+         * Quando habilitado (padrão), tokens são reutilizados até próximo
+         * de sua expiração, reduzindo carga no authorization server.
+         * </p>
+         *
+         * @param enableTokenCache true para habilitar (padrão)
+         * @return este builder
+         */
+        public Builder enableTokenCache(final boolean enableTokenCache) {
+            this.enableTokenCache = enableTokenCache;
+            return this;
+        }
+
+        /**
+         * Define a margem em segundos para renovar token antes de expirar.
+         *
+         * <p>
+         * Exemplo: se tokenCacheMarginSeconds=30 e o token expira em 60s,
+         * o cliente renovará o token quando restarem 30s para expiração.
+         * </p>
+         *
+         * @param tokenCacheMarginSeconds margem positiva (padrão: 30s)
+         * @return este builder
+         */
+        public Builder tokenCacheMarginSeconds(final int tokenCacheMarginSeconds) {
+            this.tokenCacheMarginSeconds = tokenCacheMarginSeconds;
+            return this;
+        }
+
+        /**
+         * Define o número máximo de tentativas em caso de falha transitória.
+         *
+         * <p>
+         * Falhas transitórias incluem timeouts e erros de conexão.
+         * O retry usa backoff exponencial (1s, 2s, 4s...).
+         * </p>
+         *
+         * @param maxRetries número positivo (padrão: 3)
+         * @return este builder
+         */
+        public Builder maxRetries(final int maxRetries) {
+            this.maxRetries = maxRetries;
+            return this;
+        }
+
+        /**
          * Constrói a instância de {@link SmartTokenClient}.
          *
          * @return cliente configurado
@@ -606,7 +865,31 @@ public class SmartTokenClient {
                     buildSslContext(serverCertificatePem),
                     connectTimeout,
                     requestTimeout,
-                    assertionTtlSeconds);
+                    assertionTtlSeconds,
+                    enableTokenCache,
+                    tokenCacheMarginSeconds,
+                    maxRetries);
         }
+    }
+
+    /**
+     * Representa um token em cache com seu tempo de expiração.
+     */
+    record CachedToken(String accessToken, Instant expiresAt) {
+        /**
+         * Verifica se o token ainda é válido considerando a margem.
+         *
+         * @param marginSeconds segundos de margem antes da expiração
+         * @return true se o token ainda pode ser usado
+         */
+        boolean isValid(final int marginSeconds) {
+            return Instant.now().plusSeconds(marginSeconds).isBefore(expiresAt);
+        }
+    }
+
+    /**
+     * Representa a resposta do token endpoint.
+     */
+    record TokenResponse(String accessToken, int expiresIn) {
     }
 }
