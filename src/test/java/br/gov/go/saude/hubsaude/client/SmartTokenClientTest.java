@@ -83,6 +83,31 @@ class SmartTokenClientTest {
                                 .isInstanceOf(Exception.class);
         }
 
+        @Test
+        void deveConstruirClienteComCertificadoServidorCustomizado() throws Exception {
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT,
+                                CLIENT_ID,
+                                keyFile,
+                                certFile,
+                                certFile);
+
+                final String assertion = client.buildClientAssertion();
+                assertThat(assertion).isNotBlank();
+        }
+
+        @Test
+        void deveFalharQuandoCertificadoServidorInvalido(@TempDir final Path tempDir) {
+                final Path inexistente = tempDir.resolve("server.pem");
+                assertThatThrownBy(() -> new SmartTokenClient(
+                                TOKEN_ENDPOINT,
+                                CLIENT_ID,
+                                keyFile,
+                                certFile,
+                                inexistente))
+                                .isInstanceOf(SmartTokenException.class);
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {

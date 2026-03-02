@@ -22,6 +22,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -29,6 +30,7 @@ import java.util.Date;
 import java.util.UUID;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
+import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
@@ -89,11 +91,25 @@ public class SmartTokenClient {
             final String clientId,
             final Path privateKeyPem,
             final Path certificatePem) throws IOException {
+        this(tokenEndpoint, clientId, privateKeyPem, certificatePem, null);
+    }
+
+    /**
+     * Versão avançada que aceita um certificado público do servidor para ser
+     * utilizado como trust anchor, evitando o uso de SSL permissivo quando o
+     * chamador possui a cadeia correta.
+     */
+    public SmartTokenClient(
+            final String tokenEndpoint,
+            final String clientId,
+            final Path privateKeyPem,
+            final Path certificatePem,
+            final Path serverCertificatePem) throws IOException {
         this.tokenEndpoint = tokenEndpoint;
         this.clientId = clientId;
         this.privateKey = loadPrivateKey(privateKeyPem);
         this.httpClient = HttpClient.newBuilder()
-                .sslContext(buildTrustAllSslContext())
+                .sslContext(buildSslContext(serverCertificatePem))
                 .build();
         // valida que o certificado é legível (opcional, falha rápida)
         validateCertificate(certificatePem);
@@ -216,7 +232,7 @@ public class SmartTokenClient {
      * @throws SmartTokenException   quando o conteúdo não representa um
      *                               certificado X.509 válido
      */
-    public static void validateCertificate(final Path path) throws IOException {
+    public static X509Certificate validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
             final Object obj = parser.readObject();
@@ -225,11 +241,35 @@ public class SmartTokenClient {
                 if (cert == null) {
                     throw new SmartTokenException("Certificado inválido: " + path);
                 }
-                return;
+                return cert;
             }
             throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
         } catch (CertificateException ex) {
             throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static SSLContext buildSslContext(final Path serverCertificatePem) {
+        if (serverCertificatePem == null) {
+            return buildTrustAllSslContext();
+        }
+        try {
+            final X509Certificate trustedCert = validateCertificate(serverCertificatePem);
+            final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            trustStore.load(null, null);
+            trustStore.setCertificateEntry("trusted-server", trustedCert);
+
+            final TrustManagerFactory tmf = TrustManagerFactory
+                    .getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(trustStore);
+
+            final SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(null, tmf.getTrustManagers(), new SecureRandom());
+            return ctx;
+        } catch (SmartTokenException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SmartTokenException("Falha ao construir SSLContext customizado: " + ex.getMessage(), ex);
         }
     }
 
