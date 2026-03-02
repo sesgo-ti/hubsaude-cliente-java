@@ -96,7 +96,7 @@ public class SmartTokenClient {
                 .sslContext(buildTrustAllSslContext())
                 .build();
         // valida que o certificado é legível (opcional, falha rápida)
-        loadCertificate(certificatePem);
+        validateCertificate(certificatePem);
     }
 
     /**
@@ -163,7 +163,7 @@ public class SmartTokenClient {
         return node.get("access_token").asText();
     }
 
-    private PrivateKey loadPrivateKey(final Path path) throws IOException {
+    public static PrivateKey loadPrivateKey(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
             final Object obj = parser.readObject();
@@ -176,7 +176,7 @@ public class SmartTokenClient {
         }
     }
 
-    private void loadCertificate(final Path path) throws IOException {
+    public static void validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
             final Object obj = parser.readObject();
