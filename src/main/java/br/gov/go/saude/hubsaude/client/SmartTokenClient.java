@@ -5,9 +5,6 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-// Suppress: classe responsável por integração completa SMART Backend Services
-@SuppressWarnings("PMD.CouplingBetweenObjects")
-
 import io.jsonwebtoken.Jwts;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -251,6 +248,8 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  * @see <a href="https://micrometer.io/docs">Micrometer Documentation</a>
  * @see <a href="https://opentelemetry.io/docs/instrumentation/java/">OpenTelemetry Java</a>
  */
+// Suppress: classe responsável por integração completa SMART Backend Services
+@SuppressWarnings("PMD.CouplingBetweenObjects")
 public class SmartTokenClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
