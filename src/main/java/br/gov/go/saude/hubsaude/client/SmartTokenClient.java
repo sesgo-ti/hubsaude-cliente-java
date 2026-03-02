@@ -5,6 +5,9 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+// Suppress: classe responsável por integração completa SMART Backend Services
+@SuppressWarnings("PMD.CouplingBetweenObjects")
+
 import io.jsonwebtoken.Jwts;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -32,6 +35,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -286,10 +290,10 @@ public class SmartTokenClient {
     private final int maxRetries;
 
     /** Cache de tokens por scope. */
-    private final ConcurrentHashMap<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
 
     /** Lock para evitar múltiplas renovações simultâneas do mesmo scope. */
-    private final ConcurrentHashMap<String, ReentrantLock> scopeLocks = new ConcurrentHashMap<>();
+    private final Map<String, ReentrantLock> scopeLocks = new ConcurrentHashMap<>();
 
     /**
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
@@ -387,6 +391,7 @@ public class SmartTokenClient {
      * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
      * @param maxRetries              número máximo de tentativas em falhas transitórias
      */
+    @SuppressWarnings("PMD.ExcessiveParameterList") // Builder é a API recomendada
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
