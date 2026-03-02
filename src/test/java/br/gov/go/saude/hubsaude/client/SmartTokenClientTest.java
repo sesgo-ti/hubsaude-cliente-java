@@ -16,6 +16,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +39,8 @@ class SmartTokenClientTest {
         private static Path keyFile;
         private static Path certFile;
         private static RSAPublicKey publicKey;
+        private static PrivateKey privateKey;
+        private static X509Certificate clientCertificate;
 
         @BeforeAll
         static void gerarParChaves(@TempDir final Path tempDir) throws Exception {
@@ -44,6 +48,7 @@ class SmartTokenClientTest {
                 gen.initialize(2048);
                 final KeyPair pair = gen.generateKeyPair();
                 publicKey = (RSAPublicKey) pair.getPublic();
+                privateKey = pair.getPrivate();
 
                 // Escrever chave privada PEM
                 keyFile = tempDir.resolve("client-key.pem");
@@ -55,6 +60,8 @@ class SmartTokenClientTest {
                 certFile = tempDir.resolve("client-cert.pem");
                 final String certPem = generateSelfSignedCertPem(pair);
                 Files.writeString(certFile, certPem, StandardCharsets.UTF_8);
+
+                clientCertificate = SmartTokenClient.validateCertificate(certFile);
         }
 
         @Test
@@ -106,6 +113,18 @@ class SmartTokenClientTest {
                                 certFile,
                                 inexistente))
                                 .isInstanceOf(SmartTokenException.class);
+        }
+
+        @Test
+        void devePermitirConstrutorComObjetos() {
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT,
+                                CLIENT_ID,
+                                privateKey,
+                                clientCertificate,
+                                SmartTokenClient.buildTrustAllSslContext());
+
+                assertThat(client.buildClientAssertion()).isNotBlank();
         }
 
         // ---------- helpers ----------

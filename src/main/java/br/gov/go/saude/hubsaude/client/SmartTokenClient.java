@@ -28,6 +28,7 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
+import java.util.Objects;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import javax.net.ssl.TrustManagerFactory;
@@ -91,29 +92,64 @@ public class SmartTokenClient {
             final String clientId,
             final Path privateKeyPem,
             final Path certificatePem) throws IOException {
-        this(tokenEndpoint, clientId, privateKeyPem, certificatePem, null);
+        this(tokenEndpoint,
+                clientId,
+                loadPrivateKey(privateKeyPem),
+                validateCertificate(certificatePem),
+                buildSslContext(null));
     }
 
     /**
      * Versão avançada que aceita um certificado público do servidor para ser
      * utilizado como trust anchor, evitando o uso de SSL permissivo quando o
      * chamador possui a cadeia correta.
+     *
+     * @param tokenEndpoint       URL do endpoint /auth/token do simulador
+     * @param clientId            identificador do cliente registrado
+     * @param privateKeyPem       caminho para o arquivo PEM da chave privada
+     * @param certificatePem      caminho para o arquivo PEM do certificado do
+     *                            cliente
+     * @param serverCertificatePem certificado X.509 confiável do servidor; quando
+     *                            {@code null}, usa-se SSL permissivo para testes
      */
-    public SmartTokenClient(
+        public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
             final Path privateKeyPem,
             final Path certificatePem,
             final Path serverCertificatePem) throws IOException {
-        this.tokenEndpoint = tokenEndpoint;
-        this.clientId = clientId;
-        this.privateKey = loadPrivateKey(privateKeyPem);
+        this(tokenEndpoint,
+            clientId,
+            loadPrivateKey(privateKeyPem),
+            validateCertificate(certificatePem),
+            buildSslContext(serverCertificatePem));
+        }
+
+        /**
+         * Construtor de baixo nível para cenários em que os artefatos criptográficos
+         * já foram carregados (ex: Vault, Secret Manager).
+         *
+         * @param tokenEndpoint  URL do endpoint /auth/token do simulador
+         * @param clientId       identificador do cliente registrado
+         * @param privateKey     chave privada previamente carregada
+         * @param certificate    certificado X.509 correspondente à chave
+         * @param sslContext     contexto SSL a ser utilizado pelo {@link HttpClient}
+         */
+        public SmartTokenClient(
+            final String tokenEndpoint,
+            final String clientId,
+            final PrivateKey privateKey,
+            final X509Certificate certificate,
+            final SSLContext sslContext) {
+        this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
+        this.clientId = Objects.requireNonNull(clientId, "clientId");
+        this.privateKey = Objects.requireNonNull(privateKey, "privateKey");
+        Objects.requireNonNull(certificate, "certificate");
+        final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
         this.httpClient = HttpClient.newBuilder()
-                .sslContext(buildSslContext(serverCertificatePem))
-                .build();
-        // valida que o certificado é legível (opcional, falha rápida)
-        validateCertificate(certificatePem);
-    }
+            .sslContext(context)
+            .build();
+        }
 
     /**
      * Obtém um access token para os scopes informados.
@@ -229,6 +265,7 @@ public class SmartTokenClient {
      *
      * @param path caminho absoluto para o certificado PEM
      * @throws IOException           quando o arquivo não pode ser lido
+     * @return certificado X.509 decodificado
      * @throws SmartTokenException   quando o conteúdo não representa um
      *                               certificado X.509 válido
      */
@@ -280,6 +317,11 @@ public class SmartTokenClient {
      * <strong>Uso exclusivo para testes com o simulador local.</strong>
      * Nunca utilizar em ambiente de produção.
      * </p>
+     */
+    /**
+     * Constrói um SSLContext permissivo utilizado apenas em cenários de testes.
+     *
+     * @return contexto SSL que aceita qualquer certificado
      */
     public static SSLContext buildTrustAllSslContext() {
         try {
