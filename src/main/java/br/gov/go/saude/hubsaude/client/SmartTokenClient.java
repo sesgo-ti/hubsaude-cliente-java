@@ -139,6 +139,14 @@ public class SmartTokenClient {
                 .compact();
     }
 
+    /**
+     * Monta o payload {@code application/x-www-form-urlencoded} exigido pelo
+     * endpoint {@code /auth/token}, incluindo {@code client_assertion} e scopes.
+     *
+     * @param assertion JWT assinado que comprova a identidade do cliente
+     * @param scope     escopos solicitados, separados por espaço (opcional)
+     * @return string pronta para envio no corpo da requisição HTTP
+     */
     public static String buildFormBody(final String assertion, final String scope) {
         final StringBuilder sb = new StringBuilder(128)
                 .append("grant_type=").append(encode(GRANT_TYPE))
@@ -150,10 +158,25 @@ public class SmartTokenClient {
         return sb.toString();
     }
 
+    /**
+     * Encapsula {@link URLEncoder} para garantir codificação UTF-8 consistente nos
+     * campos do formulário.
+     *
+     * @param value texto a ser percent-encoded
+     * @return valor codificado no formato {@code application/x-www-form-urlencoded}
+     */
     public static String encode(final String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
+    /**
+     * Faz o parse da resposta JSON retornada pelo servidor e extrai o campo
+     * {@code access_token}, validando sua presença.
+     *
+     * @param jsonBody corpo JSON completo retornado pelo endpoint /auth/token
+     * @return access token extraído
+     * @throws IOException caso o JSON seja inválido ou não contenha o atributo
+     */
     public static String extractAccessToken(final String jsonBody) throws IOException {
         final var mapper = new ObjectMapper();
         final var node = mapper.readTree(jsonBody);
@@ -163,6 +186,14 @@ public class SmartTokenClient {
         return node.get("access_token").asText();
     }
 
+    /**
+     * Converte um arquivo PEM (PKCS#1 ou PKCS#8) em {@link PrivateKey}, aceitando
+     * chaves RSA geradas para o simulador.
+     *
+     * @param path caminho absoluto para o arquivo PEM
+     * @return chave privada pronta para assinar o {@code client_assertion}
+     * @throws IOException caso o arquivo não possa ser lido ou decodificado
+     */
     public static PrivateKey loadPrivateKey(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
@@ -176,6 +207,15 @@ public class SmartTokenClient {
         }
     }
 
+    /**
+     * Realiza um sanity check no certificado PEM associado ao cliente, garantindo
+     * que seja um X.509 válido antes de iniciar o fluxo de autenticação.
+     *
+     * @param path caminho absoluto para o certificado PEM
+     * @throws IOException           quando o arquivo não pode ser lido
+     * @throws SmartTokenException   quando o conteúdo não representa um
+     *                               certificado X.509 válido
+     */
     public static void validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
@@ -201,7 +241,7 @@ public class SmartTokenClient {
      * Nunca utilizar em ambiente de produção.
      * </p>
      */
-    private static SSLContext buildTrustAllSslContext() {
+    public static SSLContext buildTrustAllSslContext() {
         try {
             final TrustManager[] trustAll = {
                     new X509TrustManager() {
@@ -229,14 +269,4 @@ public class SmartTokenClient {
         }
     }
 
-    /** Exceção de domínio da classe de conveniência. */
-    public static class SmartTokenException extends RuntimeException {
-        public SmartTokenException(final String message) {
-            super(message);
-        }
-
-        public SmartTokenException(final String message, final Throwable cause) {
-            super(message, cause);
-        }
-    }
 }
