@@ -104,38 +104,38 @@ public class SmartTokenClient {
      * utilizado como trust anchor, evitando o uso de SSL permissivo quando o
      * chamador possui a cadeia correta.
      *
-     * @param tokenEndpoint       URL do endpoint /auth/token do simulador
-     * @param clientId            identificador do cliente registrado
-     * @param privateKeyPem       caminho para o arquivo PEM da chave privada
-     * @param certificatePem      caminho para o arquivo PEM do certificado do
-     *                            cliente
+     * @param tokenEndpoint        URL do endpoint /auth/token do simulador
+     * @param clientId             identificador do cliente registrado
+     * @param privateKeyPem        caminho para o arquivo PEM da chave privada
+     * @param certificatePem       caminho para o arquivo PEM do certificado do
+     *                             cliente
      * @param serverCertificatePem certificado X.509 confiável do servidor; quando
-     *                            {@code null}, usa-se SSL permissivo para testes
+     *                             {@code null}, usa-se SSL permissivo para testes
      */
-        public SmartTokenClient(
+    public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
             final Path privateKeyPem,
             final Path certificatePem,
             final Path serverCertificatePem) throws IOException {
         this(tokenEndpoint,
-            clientId,
-            loadPrivateKey(privateKeyPem),
-            validateCertificate(certificatePem),
-            buildSslContext(serverCertificatePem));
-        }
+                clientId,
+                loadPrivateKey(privateKeyPem),
+                validateCertificate(certificatePem),
+                buildSslContext(serverCertificatePem));
+    }
 
-        /**
-         * Construtor de baixo nível para cenários em que os artefatos criptográficos
-         * já foram carregados (ex: Vault, Secret Manager).
-         *
-         * @param tokenEndpoint  URL do endpoint /auth/token do simulador
-         * @param clientId       identificador do cliente registrado
-         * @param privateKey     chave privada previamente carregada
-         * @param certificate    certificado X.509 correspondente à chave
-         * @param sslContext     contexto SSL a ser utilizado pelo {@link HttpClient}
-         */
-        public SmartTokenClient(
+    /**
+     * Construtor de baixo nível para cenários em que os artefatos criptográficos
+     * já foram carregados (ex: Vault, Secret Manager).
+     *
+     * @param tokenEndpoint URL do endpoint /auth/token do simulador
+     * @param clientId      identificador do cliente registrado
+     * @param privateKey    chave privada previamente carregada
+     * @param certificate   certificado X.509 correspondente à chave
+     * @param sslContext    contexto SSL a ser utilizado pelo {@link HttpClient}
+     */
+    public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
             final PrivateKey privateKey,
@@ -147,9 +147,9 @@ public class SmartTokenClient {
         Objects.requireNonNull(certificate, "certificate");
         final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
         this.httpClient = HttpClient.newBuilder()
-            .sslContext(context)
-            .build();
-        }
+                .sslContext(context)
+                .build();
+    }
 
     /**
      * Obtém um access token para os scopes informados.
@@ -264,10 +264,10 @@ public class SmartTokenClient {
      * que seja um X.509 válido antes de iniciar o fluxo de autenticação.
      *
      * @param path caminho absoluto para o certificado PEM
-     * @throws IOException           quando o arquivo não pode ser lido
+     * @throws IOException quando o arquivo não pode ser lido
      * @return certificado X.509 decodificado
-     * @throws SmartTokenException   quando o conteúdo não representa um
-     *                               certificado X.509 válido
+     * @throws SmartTokenException quando o conteúdo não representa um
+     *                             certificado X.509 válido
      */
     public static X509Certificate validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
