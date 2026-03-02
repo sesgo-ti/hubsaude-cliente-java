@@ -3,7 +3,7 @@
  * Todos os direitos reservados.
  */
 
-package br.gov.go.saude.hubsaude.simulador.client;
+package br.gov.go.saude.hubsaude.client;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

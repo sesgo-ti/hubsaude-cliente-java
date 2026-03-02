@@ -3,14 +3,14 @@
  * Todos os direitos reservados.
  */
 
-package br.gov.go.saude.hubsaude.simulador.client;
+package br.gov.go.saude.hubsaude.client;
 
 /**
  * Exceção de domínio para operações utilitárias do {@link SmartTokenClient}.
  *
  * <p>
  * Sinaliza falhas de parsing de PEM/JSON ou respostas inesperadas do
- * simulador, preservando a causa original para facilitar o diagnóstico.
+ * servidor de autorização, preservando a causa original para facilitar o diagnóstico.
  * </p>
  */
 public class SmartTokenException extends RuntimeException {

@@ -3,7 +3,7 @@
  * Todos os direitos reservados.
  */
 
-package br.gov.go.saude.hubsaude.simulador.client;
+package br.gov.go.saude.hubsaude.client;
 
 import io.jsonwebtoken.Jwts;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -58,8 +58,8 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  * </ul>
  *
  * <p>
- * Destinada ao uso em testes de integração com Testcontainers e exemplos
- * no README, evitando boilerplate criptográfico nos casos de teste.
+ * Destinada ao uso em aplicações cliente que precisam se autenticar junto
+ * ao HubSaúde utilizando o fluxo SMART Backend Services.
  * </p>
  *
  * <h2>Exemplo de uso:</h2>
@@ -294,7 +294,7 @@ public class SmartTokenClient {
     /**
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
      *
-     * @param tokenEndpoint  URL do endpoint /auth/token do simulador
+     * @param tokenEndpoint  URL do endpoint /auth/token do servidor de autorização
      * @param clientId       identificador do cliente registrado
      * @param privateKeyPem  caminho para o arquivo PEM da chave privada
      * @param certificatePem caminho para o arquivo PEM do certificado (não usado na
@@ -324,7 +324,7 @@ public class SmartTokenClient {
      * utilizado como trust anchor, evitando o uso de SSL permissivo quando o
      * chamador possui a cadeia correta.
      *
-     * @param tokenEndpoint        URL do endpoint /auth/token do simulador
+     * @param tokenEndpoint        URL do endpoint /auth/token do servidor de autorização
      * @param clientId             identificador do cliente registrado
      * @param privateKeyPem        caminho para o arquivo PEM da chave privada
      * @param certificatePem       caminho para o arquivo PEM do certificado do
@@ -355,7 +355,7 @@ public class SmartTokenClient {
      * Construtor de baixo nível para cenários em que os artefatos criptográficos
      * já foram carregados (ex: Vault, Secret Manager).
      *
-     * @param tokenEndpoint URL do endpoint /auth/token do simulador
+     * @param tokenEndpoint URL do endpoint /auth/token do servidor de autorização
      * @param clientId      identificador do cliente registrado
      * @param privateKey    chave privada previamente carregada
      * @param certificate   certificado X.509 correspondente à chave
@@ -375,7 +375,7 @@ public class SmartTokenClient {
     /**
      * Construtor completo com todas as configurações disponíveis.
      *
-     * @param tokenEndpoint           URL do endpoint /auth/token do simulador
+     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
      * @param clientId                identificador do cliente registrado
      * @param privateKey              chave privada previamente carregada
      * @param certificate             certificado X.509 correspondente à chave
@@ -663,7 +663,7 @@ public class SmartTokenClient {
 
     /**
      * Converte um arquivo PEM (PKCS#1 ou PKCS#8) em {@link PrivateKey}, aceitando
-     * chaves RSA geradas para o simulador.
+     * chaves RSA geradas para o HubSaúde.
      *
      * @param path caminho absoluto para o arquivo PEM
      * @return chave privada pronta para assinar o {@code client_assertion}
