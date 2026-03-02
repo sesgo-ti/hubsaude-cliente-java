@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- 
+        CT_CONSTRUCTOR_THROW: Classe final sem finalize() - Finalizer attack não é aplicável.
+        SmartTokenClient é uma classe final que não define finalize(), portanto
+        o ataque de Finalizer que esta regra tenta prevenir não é possível.
+    -->
+    <Match>
+        <Class name="br.gov.go.saude.hubsaude.client.SmartTokenClient"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+</FindBugsFilter>
