@@ -96,33 +96,38 @@ mvn test
 
 ### Testes de Integração
 
-Os testes de integração utilizam **Testcontainers** para iniciar automaticamente o simulador 
-(hubsaude-simulador) como um container Docker. Isso garante que os testes sejam:
+Os testes de integração suportam **dois modos de execução**, ambos com inicialização automática do simulador:
 
-- **Autocontidos:** Não requerem serviços externos iniciados manualmente
-- **Reproduzíveis:** Funcionam em qualquer ambiente com Docker e Maven
-- **Isolados:** Cada execução usa um container limpo
+#### 1. Modo Docker (Testcontainers) — Padrão
 
-**Pré-requisitos:**
-
-1. Docker instalado e em execução
-2. hubsaude-simulador publicado no GitHub Packages (ou no .m2 local)
-
-**Execução:**
+Inicia automaticamente o simulador como container Docker.
+Ideal para **CI/CD** e builds reproduzíveis.
 
 ```bash
-# O JAR do simulador é baixado automaticamente via Maven
 mvn verify
 ```
 
-Para executar apenas os testes de integração:
+**Pré-requisitos:** Docker instalado e em execução
+
+#### 2. Modo JAR (ProcessBuilder)
+
+Inicia automaticamente o simulador como processo Java local.
+Ideal para **desenvolvimento local** (mais rápido, sem overhead do Docker).
 
 ```bash
-mvn failsafe:integration-test failsafe:verify
+mvn verify -Dsimulator.mode=jar
 ```
 
-> **Nota:** Na primeira execução, a imagem Docker do simulador será construída automaticamente 
-> a partir do JAR. Execuções subsequentes reutilizam a imagem em cache.
+**Pré-requisitos:** Java 21+ instalado
+
+#### Comparação de Performance
+
+| Modo | Tempo dos Testes | Tempo Total |
+|------|------------------|-------------|
+| Docker | ~6s | ~9s |
+| JAR | ~2s | ~5s |
+
+> **Dica:** Durante o desenvolvimento, use o modo JAR (`-Dsimulator.mode=jar`) para ciclos de feedback 2-3x mais rápidos.
 
 ## Licença
 

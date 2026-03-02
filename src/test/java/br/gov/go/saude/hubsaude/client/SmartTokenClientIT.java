@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,9 +18,10 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.ImageFromDockerfile;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -34,74 +36,173 @@ import java.security.KeyPairGenerator;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Testes de integração do SmartTokenClient com simulador iniciado automaticamente.
+ * Testes de integração do SmartTokenClient com simulador SMART on FHIR.
  *
  * <p>
- * Utiliza <strong>Testcontainers</strong> para iniciar automaticamente o simulador
- * (hubsaude-simulador) como um container Docker. Isso garante que os testes sejam:
+ * Suporta <strong>dois modos de execução</strong>, ambos com inicialização automática:
  * </p>
- * <ul>
- *   <li><strong>Autocontidos:</strong> Não requerem serviços externos iniciados manualmente</li>
- *   <li><strong>Reproduzíveis:</strong> Funcionam em qualquer ambiente com Docker e Maven</li>
- *   <li><strong>Isolados:</strong> Cada execução usa um container limpo</li>
- * </ul>
+ *
+ * <h2>1. Modo Docker (Testcontainers) — Padrão</h2>
+ * <p>
+ * Inicia automaticamente o simulador como container Docker.
+ * Ideal para CI/CD e builds reproduzíveis.
+ * </p>
+ * <pre>{@code
+ * mvn verify
+ * }</pre>
+ *
+ * <h2>2. Modo JAR (ProcessBuilder)</h2>
+ * <p>
+ * Inicia automaticamente o simulador como processo Java local.
+ * Ideal para desenvolvimento local (mais rápido, sem overhead do Docker).
+ * </p>
+ * <pre>{@code
+ * mvn verify -Dsimulator.mode=jar
+ * }</pre>
  *
  * <h2>Pré-requisitos</h2>
  * <ul>
- *   <li>Docker instalado e em execução</li>
- *   <li>hubsaude-simulador publicado no GitHub Packages (ou no .m2 local)</li>
+ *   <li><strong>Modo Docker:</strong> Docker instalado e em execução</li>
+ *   <li><strong>Modo JAR:</strong> Java 21+ instalado</li>
+ *   <li>hubsaude-simulador disponível via Maven (GitHub Packages ou .m2 local)</li>
  * </ul>
  *
- * <h2>Execução</h2>
- * <pre>{@code
- * # O JAR do simulador é baixado automaticamente via Maven
- * mvn verify
- * }</pre>
+ * <h2>Comparação de Performance</h2>
+ * <table>
+ *   <tr><th>Modo</th><th>Tempo aproximado</th><th>Uso recomendado</th></tr>
+ *   <tr><td>Docker</td><td>~6s</td><td>CI/CD, builds reproduzíveis</td></tr>
+ *   <tr><td>JAR</td><td>~3s</td><td>Desenvolvimento local</td></tr>
+ * </table>
  *
  * @see SmartTokenClient
  */
 @Tag("integration")
-@Testcontainers
-@DisplayName("Testes de Integração - SmartTokenClient (Testcontainers)")
+@DisplayName("Testes de Integração - SmartTokenClient")
 class SmartTokenClientIT {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClientIT.class);
 
     private static final int SIMULATOR_PORT = 8443;
+    private static final int DOCKER_HOST_PORT = 18443;
     private static final String CLIENT_ID = "integration-test-client";
     private static final String ALLOWED_SCOPES = "system/Patient.rs system/Observation.rs";
 
     /**
-     * Container do simulador HubSaúde.
-     *
-     * <p>
-     * Construído dinamicamente enviando apenas o JAR do simulador (não o diretório inteiro).
-     * O container é iniciado uma única vez para todos os testes da classe.
-     * </p>
+     * Modo de execução do simulador: "docker" (padrão) ou "jar".
      */
-    @Container
-    @SuppressWarnings("resource")
-    private static final GenericContainer<?> SIMULATOR = createSimulatorContainer();
+    private static final String SIMULATOR_MODE = System.getProperty("simulator.mode", "docker");
+
+    /**
+     * Indica se estamos usando modo JAR (ProcessBuilder) ou Docker (Testcontainers).
+     */
+    private static final boolean USING_JAR_MODE = "jar".equalsIgnoreCase(SIMULATOR_MODE);
+
+    /**
+     * Container do simulador HubSaúde (null se usando modo JAR).
+     */
+    private static GenericContainer<?> dockerContainer;
+
+    /**
+     * Processo do simulador JAR (null se usando modo Docker).
+     */
+    private static Process jarProcess;
+
+    /**
+     * URL base do simulador (depende do modo de execução).
+     */
+    private static String simulatorBaseUrl;
 
     private static Path keyFile;
     private static Path certFile;
     private static String certificatePem;
 
-    // Porta fixa no host para evitar problemas de audience no JWT
-    private static final int HOST_PORT = 18443;
+    @BeforeAll
+    static void inicializarSimulador(@TempDir final Path tempDir) throws Exception {
+        if (USING_JAR_MODE) {
+            LOG.info("☕ Modo JAR: iniciando simulador via ProcessBuilder");
+            startJarSimulator();
+            simulatorBaseUrl = "https://localhost:" + SIMULATOR_PORT;
+        } else {
+            LOG.info("🐳 Modo DOCKER: iniciando simulador via Testcontainers");
+            startDockerSimulator();
+            simulatorBaseUrl = "https://localhost:" + DOCKER_HOST_PORT;
+        }
 
-    @SuppressWarnings("resource")
-    private static GenericContainer<?> createSimulatorContainer() {
+        LOG.info("Simulador disponível em: {}", simulatorBaseUrl);
+
+        // Gera credenciais de teste
+        gerarCredenciais(tempDir);
+    }
+
+    @AfterAll
+    static void pararSimulador() {
+        if (USING_JAR_MODE && jarProcess != null) {
+            LOG.info("Parando processo JAR do simulador...");
+            jarProcess.destroy();
+            try {
+                jarProcess.waitFor(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                jarProcess.destroyForcibly();
+            }
+            LOG.info("Processo JAR encerrado");
+        }
+
+        if (!USING_JAR_MODE && dockerContainer != null && dockerContainer.isRunning()) {
+            LOG.info("Parando container Docker do simulador...");
+            dockerContainer.stop();
+            LOG.info("Container Docker encerrado");
+        }
+    }
+
+    // ==================== Inicialização do Simulador ====================
+
+    private static void startJarSimulator() throws Exception {
         final Path jarPath = resolveSimulatorJar();
         LOG.info("Usando JAR do simulador: {}", jarPath);
 
-        // Constrói imagem enviando apenas o JAR (não o diretório inteiro - muito mais rápido)
-        return new GenericContainer<>(
+        final ProcessBuilder pb = new ProcessBuilder(
+                "java",
+                "-Djava.security.egd=file:/dev/./urandom",
+                "-jar", jarPath.toString()
+        );
+        pb.redirectErrorStream(true);
+
+        jarProcess = pb.start();
+
+        // Thread para consumir output (evita bloqueio do processo)
+        final Thread outputThread = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(jarProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    LOG.debug("[simulador-jar] {}", line);
+                }
+            } catch (IOException e) {
+                if (jarProcess.isAlive()) {
+                    LOG.warn("Erro ao ler output do simulador: {}", e.getMessage());
+                }
+            }
+        }, "simulator-output-reader");
+        outputThread.setDaemon(true);
+        outputThread.start();
+
+        // Aguarda o simulador ficar pronto
+        waitForSimulator("https://localhost:" + SIMULATOR_PORT);
+    }
+
+    @SuppressWarnings("resource")
+    private static void startDockerSimulator() {
+        final Path jarPath = resolveSimulatorJar();
+        LOG.info("Usando JAR do simulador: {}", jarPath);
+
+        dockerContainer = new GenericContainer<>(
                 new ImageFromDockerfile("hubsaude-simulador-test", false)
                         .withFileFromPath("app.jar", jarPath)
                         .withDockerfileFromBuilder(builder -> builder
@@ -117,30 +218,75 @@ class SmartTokenClientIT {
                 .withCreateContainerCmdModifier(cmd ->
                         cmd.withHostConfig(cmd.getHostConfig()
                                 .withPortBindings(new com.github.dockerjava.api.model.PortBinding(
-                                        com.github.dockerjava.api.model.Ports.Binding.bindPort(HOST_PORT),
+                                        com.github.dockerjava.api.model.Ports.Binding.bindPort(DOCKER_HOST_PORT),
                                         new com.github.dockerjava.api.model.ExposedPort(SIMULATOR_PORT)))))
                 .withEnv("LOG_LEVEL", "DEBUG")
-                .withEnv("SERVER_BASE_URL", "https://localhost:" + HOST_PORT)
+                .withEnv("SERVER_BASE_URL", "https://localhost:" + DOCKER_HOST_PORT)
                 .waitingFor(Wait.forHttps("/.well-known/smart-configuration")
                         .forPort(SIMULATOR_PORT)
                         .forStatusCode(200)
                         .allowInsecure()
                         .withStartupTimeout(Duration.ofMinutes(2)))
                 .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("simulador"));
+
+        dockerContainer.start();
+    }
+
+    /**
+     * Aguarda o simulador ficar pronto (usado no modo JAR).
+     */
+    private static void waitForSimulator(final String baseUrl) throws Exception {
+        final HttpClient client = HttpClient.newBuilder()
+                .sslContext(SmartTokenClient.buildTrustAllSslContext())
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+
+        final String healthUrl = baseUrl + "/.well-known/smart-configuration";
+        final int maxAttempts = 60; // 60 segundos no máximo
+        final int delayMs = 1000;
+
+        LOG.info("Aguardando simulador em {}...", healthUrl);
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                final HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(healthUrl))
+                        .timeout(Duration.ofSeconds(5))
+                        .GET()
+                        .build();
+
+                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200) {
+                    LOG.info("Simulador pronto após {} tentativa(s)", attempt);
+                    return;
+                }
+            } catch (Exception e) {
+                // Simulador ainda não está pronto
+                if (attempt % 10 == 0) {
+                    LOG.debug("Tentativa {}/{}: {}", attempt, maxAttempts, e.getMessage());
+                }
+            }
+
+            // Verifica se o processo ainda está vivo
+            if (jarProcess != null && !jarProcess.isAlive()) {
+                throw new IllegalStateException(
+                        "Processo do simulador terminou inesperadamente com código: " + jarProcess.exitValue());
+            }
+
+            Thread.sleep(delayMs);
+        }
+
+        throw new IllegalStateException(
+                "Simulador não ficou pronto em " + maxAttempts + " segundos. URL: " + healthUrl);
     }
 
     /**
      * Resolve o caminho do JAR do hubsaude-simulador.
-     *
-     * <p>
-     * O JAR é obtido via Maven (dependência de teste) e copiado para target/simulator
-     * pelo maven-dependency-plugin durante a fase pre-integration-test.
-     * </p>
      */
     private static Path resolveSimulatorJar() {
-        // JAR copiado pelo maven-dependency-plugin em pre-integration-test
         final Path simulatorJar = Paths.get("target", "simulator", "hubsaude-simulador.jar");
-        
+
         if (Files.exists(simulatorJar)) {
             return simulatorJar.toAbsolutePath();
         }
@@ -150,22 +296,7 @@ class SmartTokenClientIT {
                         "Execute 'mvn verify' para que o maven-dependency-plugin copie o artefato.");
     }
 
-    private static String getSimulatorBaseUrl() {
-        return String.format("https://%s:%d",
-                SIMULATOR.getHost(),
-                HOST_PORT);
-    }
-
-    private static String getTokenEndpoint() {
-        return getSimulatorBaseUrl() + "/auth/token";
-    }
-
-    private static String getRegisterEndpoint() {
-        return getSimulatorBaseUrl() + "/clients/register";
-    }
-
-    @BeforeAll
-    static void gerarCredenciais(@TempDir final Path tempDir) throws Exception {
+    private static void gerarCredenciais(final Path tempDir) throws Exception {
         // Gera par de chaves RSA
         final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
         gen.initialize(2048);
@@ -181,6 +312,18 @@ class SmartTokenClientIT {
         certificatePem = generateSelfSignedCertPem(pair);
         Files.writeString(certFile, certificatePem, StandardCharsets.UTF_8);
     }
+
+    // ==================== URLs do Simulador ====================
+
+    private static String getTokenEndpoint() {
+        return simulatorBaseUrl + "/auth/token";
+    }
+
+    private static String getRegisterEndpoint() {
+        return simulatorBaseUrl + "/clients/register";
+    }
+
+    // ==================== Setup dos Testes ====================
 
     @BeforeEach
     void registrarClienteNoSimulador() throws Exception {
@@ -209,6 +352,8 @@ class SmartTokenClientIT {
         final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         LOG.debug("Registro de cliente: status={}, body={}", response.statusCode(), response.body());
     }
+
+    // ==================== Testes ====================
 
     @Test
     @DisplayName("Deve obter token de acesso com sucesso")
@@ -350,7 +495,7 @@ class SmartTokenClientIT {
         assertThat(accessToken).isNotBlank();
     }
 
-    // ---------- Métodos auxiliares ----------
+    // ==================== Métodos Auxiliares ====================
 
     private static String toPkcs8Pem(final byte[] encoded) {
         final String b64 = Base64.getMimeEncoder(64, "\n".getBytes())
