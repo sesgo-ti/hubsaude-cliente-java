@@ -290,6 +290,9 @@ public final class SmartTokenClient {
     /** Margem padrão em segundos para renovar token antes da expiração. */
     public static final int DEFAULT_TOKEN_CACHE_MARGIN_SECONDS = 30;
 
+    /** Protocolo TLS padrão. */
+    public static final String DEFAULT_TLS_PROTOCOL = "TLSv1.3";
+
     private final String tokenEndpoint;
     private final String clientId;
     private final PrivateKey privateKey;
@@ -325,7 +328,7 @@ public final class SmartTokenClient {
                 clientId,
                 loadPrivateKey(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(null),
+                buildSslContext(null, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
                 DEFAULT_ASSERTION_TTL_SECONDS,
@@ -357,7 +360,7 @@ public final class SmartTokenClient {
                 clientId,
                 loadPrivateKey(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(serverCertificatePem),
+                buildSslContext(serverCertificatePem, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
                 DEFAULT_ASSERTION_TTL_SECONDS,
@@ -727,9 +730,17 @@ public final class SmartTokenClient {
         }
     }
 
-    private static SSLContext buildSslContext(final Path serverCertificatePem) {
+    /**
+     * Constrói um {@link SSLContext} configurado com o certificado do servidor.
+     *
+     * @param serverCertificatePem certificado do servidor; se null, usa trust-all
+     * @param tlsProtocol          protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
+     * @return contexto SSL configurado
+     * @throws SmartTokenException se o protocolo for inválido ou houver erro de configuração
+     */
+    public static SSLContext buildSslContext(final Path serverCertificatePem, final String tlsProtocol) {
         if (serverCertificatePem == null) {
-            return buildTrustAllSslContext();
+            return buildTrustAllSslContext(tlsProtocol);
         }
         try {
             final X509Certificate trustedCert = validateCertificate(serverCertificatePem);
@@ -741,7 +752,7 @@ public final class SmartTokenClient {
                     .getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init(trustStore);
 
-            final SSLContext ctx = SSLContext.getInstance("TLS");
+            final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
             ctx.init(null, tmf.getTrustManagers(), new SecureRandom());
             return ctx;
         } catch (SmartTokenException ex) {
@@ -818,11 +829,12 @@ public final class SmartTokenClient {
      * com a cadeia de certificados correta do servidor de autorização.
      * </p>
      *
+     * @param tlsProtocol protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
      * @return contexto SSL que aceita qualquer certificado (⚠️ INSEGURO)
-     * @see #buildSslContext(Path) para configuração segura com certificado específico
+     * @see #buildSslContext(Path, String) para configuração segura com certificado específico
      */
-    public static SSLContext buildTrustAllSslContext() {
-        LOG.warn("⚠️ Criando SSLContext trust-all - USO EXCLUSIVO PARA TESTES!");
+    public static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
+        LOG.warn("⚠️ Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
         try {
             final TrustManager[] trustAll = {
                 new X509TrustManager() {
@@ -842,11 +854,11 @@ public final class SmartTokenClient {
                     }
                 }
             };
-            final SSLContext ctx = SSLContext.getInstance("TLS");
+            final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
             ctx.init(null, trustAll, new SecureRandom());
             return ctx;
         } catch (Exception ex) {
-            throw new IllegalStateException("Falha ao criar SSLContext trust-all", ex);
+            throw new SmartTokenException("Falha ao criar SSLContext trust-all com protocolo '" + tlsProtocol + "'", ex);
         }
     }
 
@@ -865,6 +877,7 @@ public final class SmartTokenClient {
         private Path privateKeyPem;
         private Path certificatePem;
         private Path serverCertificatePem;
+        private String tlsProtocol = DEFAULT_TLS_PROTOCOL;
         private Duration connectTimeout = DEFAULT_CONNECT_TIMEOUT;
         private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
         private int assertionTtlSeconds = DEFAULT_ASSERTION_TTL_SECONDS;
@@ -927,6 +940,22 @@ public final class SmartTokenClient {
          */
         public Builder serverCertificatePem(final Path serverCertificatePem) {
             this.serverCertificatePem = serverCertificatePem;
+            return this;
+        }
+
+        /**
+         * Define o protocolo TLS a utilizar.
+         *
+         * <p>
+         * Valores válidos incluem: "TLSv1.3" (padrão), "TLSv1.2", "TLS".
+         * O uso de TLSv1.3 é recomendado por segurança.
+         * </p>
+         *
+         * @param tlsProtocol protocolo TLS (padrão: TLSv1.3)
+         * @return este builder
+         */
+        public Builder tlsProtocol(final String tlsProtocol) {
+            this.tlsProtocol = tlsProtocol;
             return this;
         }
 
@@ -1028,7 +1057,7 @@ public final class SmartTokenClient {
                     clientId,
                     loadPrivateKey(privateKeyPem),
                     validateCertificate(certificatePem),
-                    buildSslContext(serverCertificatePem),
+                    buildSslContext(serverCertificatePem, tlsProtocol),
                     connectTimeout,
                     requestTimeout,
                     assertionTtlSeconds,

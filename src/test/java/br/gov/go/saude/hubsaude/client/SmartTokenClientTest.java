@@ -123,7 +123,7 @@ class SmartTokenClientTest {
                                 CLIENT_ID,
                                 privateKey,
                                 clientCertificate,
-                                SmartTokenClient.buildTrustAllSslContext());
+                                SmartTokenClient.buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL));
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
@@ -164,7 +164,7 @@ class SmartTokenClientTest {
                                 CLIENT_ID,
                                 privateKey,
                                 outroCert,
-                                SmartTokenClient.buildTrustAllSslContext()))
+                                SmartTokenClient.buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL)))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("não corresponde");
         }
@@ -173,6 +173,20 @@ class SmartTokenClientTest {
         void deveValidarCoerenciaEntreChaveECertificado() {
                 // Não deve lançar exceção quando key e cert correspondem
                 SmartTokenClient.verifyKeyPairConsistency(privateKey, clientCertificate);
+        }
+
+        @Test
+        void deveFalharVerifyKeyPairConsistencyComChaveIncompativel() throws Exception {
+                // Cria chave EC (incompatível com SHA256withRSA usado internamente)
+                final KeyPairGenerator ecGen = KeyPairGenerator.getInstance("EC");
+                ecGen.initialize(256);
+                final KeyPair ecPair = ecGen.generateKeyPair();
+
+                // Deve lançar SmartTokenException encapsulando InvalidKeyException
+                assertThatThrownBy(() -> SmartTokenClient.verifyKeyPairConsistency(
+                                ecPair.getPrivate(), clientCertificate))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("Falha ao verificar consistência");
         }
 
         @Test
@@ -287,6 +301,38 @@ class SmartTokenClientTest {
                 assertThatThrownBy(() -> SmartTokenClient.validateCertificate(notCertFile))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("X.509");
+        }
+
+        @Test
+        void deveConstruirBuilderComTlsProtocolCustomizado() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .tlsProtocol("TLSv1.2") // protocolo válido alternativo
+                                .build();
+
+                assertThat(client.buildClientAssertion()).isNotBlank();
+        }
+
+        @Test
+        void deveFalharBuildTrustAllSslContextComProtocoloInvalido() {
+                assertThatThrownBy(() -> SmartTokenClient.buildTrustAllSslContext("TLSv99.INVALIDO"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("TLSv99.INVALIDO");
+        }
+
+        @Test
+        void deveFalharBuildSslContextComProtocoloInvalido() {
+                assertThatThrownBy(() -> SmartTokenClient.buildSslContext(certFile, "PROTOCOLO_INVALIDO"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("SSLContext");
+        }
+
+        @Test
+        void deveUsarTlsv13ComoPadrao() {
+                assertThat(SmartTokenClient.DEFAULT_TLS_PROTOCOL).isEqualTo("TLSv1.3");
         }
 
         // ---------- helpers ----------

@@ -126,7 +126,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     private static void waitForSimulator() throws Exception {
         final HttpClient client = HttpClient.newBuilder()
-                .sslContext(SmartTokenClient.buildTrustAllSslContext())
+                .sslContext(SmartTokenClient.buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL))
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
 
