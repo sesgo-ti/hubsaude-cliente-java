@@ -47,23 +47,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </p>
  * <ul>
  *   <li><strong>Autocontidos:</strong> Não requerem serviços externos iniciados manualmente</li>
- *   <li><strong>Reproduzíveis:</strong> Funcionam em qualquer ambiente com Docker</li>
+ *   <li><strong>Reproduzíveis:</strong> Funcionam em qualquer ambiente com Docker e Maven</li>
  *   <li><strong>Isolados:</strong> Cada execução usa um container limpo</li>
  * </ul>
  *
  * <h2>Pré-requisitos</h2>
  * <ul>
  *   <li>Docker instalado e em execução</li>
- *   <li>Projeto hubsaude-simulador compilado (mvn package -DskipTests)</li>
+ *   <li>hubsaude-simulador publicado no GitHub Packages (ou no .m2 local)</li>
  * </ul>
  *
  * <h2>Execução</h2>
  * <pre>{@code
- * # Compilar o simulador primeiro
- * cd ../hubsaude-simulador && mvn package -DskipTests
- *
- * # Executar testes de integração
- * cd ../hubsaude-cliente-java && mvn verify
+ * # O JAR do simulador é baixado automaticamente via Maven
+ * mvn verify
  * }</pre>
  *
  * @see SmartTokenClient
