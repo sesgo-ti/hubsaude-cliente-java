@@ -98,36 +98,36 @@ mvn test
 
 Os testes de integração suportam **dois modos de execução**, ambos com inicialização automática do simulador:
 
-#### 1. Modo Docker (Testcontainers) — Padrão
+#### 1. Modo JAR (ProcessBuilder) — Padrão
 
-Inicia automaticamente o simulador como container Docker.
-Ideal para **CI/CD** e builds reproduzíveis.
+Inicia automaticamente o simulador como processo Java local.
+Mais rápido, ideal para **desenvolvimento local**.
 
 ```bash
 mvn verify
 ```
 
-**Pré-requisitos:** Docker instalado e em execução
+**Pré-requisitos:** Java 21+ instalado
 
-#### 2. Modo JAR (ProcessBuilder)
+#### 2. Modo Docker (Testcontainers)
 
-Inicia automaticamente o simulador como processo Java local.
-Ideal para **desenvolvimento local** (mais rápido, sem overhead do Docker).
+Inicia automaticamente o simulador como container Docker.
+Ideal para **CI/CD** e builds reproduzíveis.
 
 ```bash
-mvn verify -Dsimulator.mode=jar
+mvn verify -Dsimulator.mode=docker
 ```
 
-**Pré-requisitos:** Java 21+ instalado
+**Pré-requisitos:** Docker instalado e em execução
 
 #### Comparação de Performance
 
 | Modo | Tempo dos Testes | Tempo Total |
 |------|------------------|-------------|
+| **JAR** | ~2s | ~5s |
 | Docker | ~6s | ~9s |
-| JAR | ~2s | ~5s |
 
-> **Dica:** Durante o desenvolvimento, use o modo JAR (`-Dsimulator.mode=jar`) para ciclos de feedback 2-3x mais rápidos.
+> **Dica:** Para CI/CD, use o modo Docker (`-Dsimulator.mode=docker`) para builds 100% reproduzíveis.
 
 ## Licença
 

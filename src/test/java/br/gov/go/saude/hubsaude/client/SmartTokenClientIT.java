@@ -48,28 +48,28 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Suporta <strong>dois modos de execução</strong>, ambos com inicialização automática:
  * </p>
  *
- * <h2>1. Modo Docker (Testcontainers) — Padrão</h2>
+ * <h2>1. Modo JAR (ProcessBuilder) — Padrão</h2>
  * <p>
- * Inicia automaticamente o simulador como container Docker.
- * Ideal para CI/CD e builds reproduzíveis.
+ * Inicia automaticamente o simulador como processo Java local.
+ * Mais rápido, ideal para desenvolvimento local.
  * </p>
  * <pre>{@code
  * mvn verify
  * }</pre>
  *
- * <h2>2. Modo JAR (ProcessBuilder)</h2>
+ * <h2>2. Modo Docker (Testcontainers)</h2>
  * <p>
- * Inicia automaticamente o simulador como processo Java local.
- * Ideal para desenvolvimento local (mais rápido, sem overhead do Docker).
+ * Inicia automaticamente o simulador como container Docker.
+ * Ideal para CI/CD e builds reproduzíveis.
  * </p>
  * <pre>{@code
- * mvn verify -Dsimulator.mode=jar
+ * mvn verify -Dsimulator.mode=docker
  * }</pre>
  *
  * <h2>Pré-requisitos</h2>
  * <ul>
- *   <li><strong>Modo Docker:</strong> Docker instalado e em execução</li>
  *   <li><strong>Modo JAR:</strong> Java 21+ instalado</li>
+ *   <li><strong>Modo Docker:</strong> Docker instalado e em execução</li>
  *   <li>hubsaude-simulador disponível via Maven (GitHub Packages ou .m2 local)</li>
  * </ul>
  *
@@ -94,14 +94,14 @@ class SmartTokenClientIT {
     private static final String ALLOWED_SCOPES = "system/Patient.rs system/Observation.rs";
 
     /**
-     * Modo de execução do simulador: "docker" (padrão) ou "jar".
+     * Modo de execução do simulador: "jar" (padrão) ou "docker".
      */
-    private static final String SIMULATOR_MODE = System.getProperty("simulator.mode", "docker");
+    private static final String SIMULATOR_MODE = System.getProperty("simulator.mode", "jar");
 
     /**
-     * Indica se estamos usando modo JAR (ProcessBuilder) ou Docker (Testcontainers).
+     * Indica se estamos usando modo Docker (Testcontainers) ou JAR (ProcessBuilder).
      */
-    private static final boolean USING_JAR_MODE = "jar".equalsIgnoreCase(SIMULATOR_MODE);
+    private static final boolean USING_DOCKER_MODE = "docker".equalsIgnoreCase(SIMULATOR_MODE);
 
     /**
      * Container do simulador HubSaúde (null se usando modo JAR).
@@ -124,14 +124,14 @@ class SmartTokenClientIT {
 
     @BeforeAll
     static void inicializarSimulador(@TempDir final Path tempDir) throws Exception {
-        if (USING_JAR_MODE) {
-            LOG.info("☕ Modo JAR: iniciando simulador via ProcessBuilder");
-            startJarSimulator();
-            simulatorBaseUrl = "https://localhost:" + SIMULATOR_PORT;
-        } else {
+        if (USING_DOCKER_MODE) {
             LOG.info("🐳 Modo DOCKER: iniciando simulador via Testcontainers");
             startDockerSimulator();
             simulatorBaseUrl = "https://localhost:" + DOCKER_HOST_PORT;
+        } else {
+            LOG.info("☕ Modo JAR: iniciando simulador via ProcessBuilder");
+            startJarSimulator();
+            simulatorBaseUrl = "https://localhost:" + SIMULATOR_PORT;
         }
 
         LOG.info("Simulador disponível em: {}", simulatorBaseUrl);
@@ -142,7 +142,13 @@ class SmartTokenClientIT {
 
     @AfterAll
     static void pararSimulador() {
-        if (USING_JAR_MODE && jarProcess != null) {
+        if (USING_DOCKER_MODE && dockerContainer != null && dockerContainer.isRunning()) {
+            LOG.info("Parando container Docker do simulador...");
+            dockerContainer.stop();
+            LOG.info("Container Docker encerrado");
+        }
+
+        if (!USING_DOCKER_MODE && jarProcess != null) {
             LOG.info("Parando processo JAR do simulador...");
             jarProcess.destroy();
             try {
@@ -152,12 +158,6 @@ class SmartTokenClientIT {
                 jarProcess.destroyForcibly();
             }
             LOG.info("Processo JAR encerrado");
-        }
-
-        if (!USING_JAR_MODE && dockerContainer != null && dockerContainer.isRunning()) {
-            LOG.info("Parando container Docker do simulador...");
-            dockerContainer.stop();
-            LOG.info("Container Docker encerrado");
         }
     }
 
