@@ -83,7 +83,7 @@ class SmartTokenClientIT {
      * Container do simulador HubSaúde.
      *
      * <p>
-     * Construído dinamicamente a partir do Dockerfile no diretório do simulador.
+     * Construído dinamicamente enviando apenas o JAR do simulador (não o diretório inteiro).
      * O container é iniciado uma única vez para todos os testes da classe.
      * </p>
      */
@@ -97,12 +97,21 @@ class SmartTokenClientIT {
 
     @SuppressWarnings("resource")
     private static GenericContainer<?> createSimulatorContainer() {
-        final Path simulatorPath = resolveSimulatorPath();
+        final Path jarPath = resolveSimulatorJar();
+        LOG.info("Usando JAR do simulador: {}", jarPath);
 
+        // Constrói imagem enviando apenas o JAR (não o diretório inteiro - muito mais rápido)
         return new GenericContainer<>(
                 new ImageFromDockerfile("hubsaude-simulador-test", false)
-                        .withDockerfile(simulatorPath.resolve("Dockerfile"))
-                        .withFileFromPath(".", simulatorPath))
+                        .withFileFromPath("app.jar", jarPath)
+                        .withDockerfileFromBuilder(builder -> builder
+                                .from("eclipse-temurin:21-jre-alpine")
+                                .workDir("/app")
+                                .copy("app.jar", "app.jar")
+                                .expose(SIMULATOR_PORT)
+                                .env("LOG_LEVEL", "INFO")
+                                .entryPoint("java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar")
+                                .build()))
                 .withExposedPorts(SIMULATOR_PORT)
                 .withEnv("LOG_LEVEL", "DEBUG")
                 .waitingFor(Wait.forHttps("/actuator/health")
@@ -113,32 +122,44 @@ class SmartTokenClientIT {
     }
 
     /**
-     * Resolve o caminho do projeto hubsaude-simulador.
+     * Resolve o caminho do JAR do hubsaude-simulador.
      *
      * <p>
      * Procura em locais típicos relativos ao diretório de execução dos testes.
      * </p>
      */
-    private static Path resolveSimulatorPath() {
+    private static Path resolveSimulatorJar() {
         // Caminhos possíveis relativos ao diretório de execução
         final Path[] possiblePaths = {
-                Paths.get("../hubsaude-simulador"),
-                Paths.get("../../hubsaude-simulador"),
-                Paths.get("projetos/hubsaude-simulador"),
-                Paths.get("../projetos/hubsaude-simulador")
+                Paths.get("../hubsaude-simulador/target"),
+                Paths.get("../../hubsaude-simulador/target"),
+                Paths.get("projetos/hubsaude-simulador/target"),
+                Paths.get("../projetos/hubsaude-simulador/target")
         };
 
-        for (final Path path : possiblePaths) {
-            final Path dockerfile = path.resolve("Dockerfile");
-            if (Files.exists(dockerfile)) {
-                LOG.info("Simulador encontrado em: {}", path.toAbsolutePath());
-                return path.toAbsolutePath();
+        for (final Path targetDir : possiblePaths) {
+            if (!Files.exists(targetDir)) {
+                continue;
+            }
+            // Procura o JAR do simulador (ignora -sources.jar, -javadoc.jar, etc.)
+            try (var files = Files.list(targetDir)) {
+                final var jar = files
+                        .filter(p -> p.getFileName().toString().startsWith("hubsaude-simulador-"))
+                        .filter(p -> p.getFileName().toString().endsWith(".jar"))
+                        .filter(p -> !p.getFileName().toString().contains("-sources"))
+                        .filter(p -> !p.getFileName().toString().contains("-javadoc"))
+                        .findFirst();
+                if (jar.isPresent()) {
+                    return jar.get().toAbsolutePath();
+                }
+            } catch (final Exception e) {
+                LOG.warn("Erro ao listar diretório {}: {}", targetDir, e.getMessage());
             }
         }
 
         throw new IllegalStateException(
-                "Não foi possível localizar o projeto hubsaude-simulador. " +
-                        "Certifique-se de que o simulador está no diretório esperado.");
+                "Não foi possível localizar o JAR do hubsaude-simulador. " +
+                        "Execute 'mvn package -DskipTests' no projeto hubsaude-simulador primeiro.");
     }
 
     private static String getSimulatorBaseUrl() {
