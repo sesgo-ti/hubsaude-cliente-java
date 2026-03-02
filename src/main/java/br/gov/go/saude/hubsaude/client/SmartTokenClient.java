@@ -99,6 +99,153 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em aplicações multi-thread</li>
  * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
  * </ul>
+ *
+ * <h2>Integração com Infraestrutura Enterprise</h2>
+ *
+ * <p>
+ * Esta classe implementa resiliência básica (retry com backoff) internamente. Para cenários
+ * de produção com requisitos avançados de observabilidade e tolerância a falhas, recomenda-se
+ * integrar com frameworks especializados <strong>na camada de orquestração</strong>, não
+ * diretamente nesta classe. Isso mantém a separação de responsabilidades e permite configuração
+ * centralizada.
+ * </p>
+ *
+ * <h3>Circuit Breaker (Resilience4j)</h3>
+ *
+ * <p>
+ * Para proteger o sistema contra falhas em cascata quando o authorization server estiver
+ * degradado, decore as chamadas ao {@link #obtainToken(String)} com um Circuit Breaker:
+ * </p>
+ *
+ * <pre>{@code
+ * // Configuração do Circuit Breaker
+ * CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+ *     .failureRateThreshold(50)
+ *     .waitDurationInOpenState(Duration.ofSeconds(30))
+ *     .slidingWindowSize(10)
+ *     .permittedNumberOfCallsInHalfOpenState(3)
+ *     .build();
+ *
+ * CircuitBreaker circuitBreaker = CircuitBreaker.of("smartToken", config);
+ *
+ * // Uso decorado
+ * Supplier<String> decoratedSupplier = CircuitBreaker
+ *     .decorateSupplier(circuitBreaker, () -> {
+ *         try {
+ *             return tokenClient.obtainToken(scope);
+ *         } catch (Exception e) {
+ *             throw new RuntimeException(e);
+ *         }
+ *     });
+ *
+ * String token = Try.ofSupplier(decoratedSupplier)
+ *     .recover(CallNotPermittedException.class, e -> handleCircuitOpen())
+ *     .get();
+ * }</pre>
+ *
+ * <h3>Métricas (Micrometer)</h3>
+ *
+ * <p>
+ * Para monitoramento em tempo real da obtenção de tokens, instrumente as chamadas com
+ * Micrometer. Métricas recomendadas:
+ * </p>
+ *
+ * <ul>
+ * <li>{@code smart.token.requests} — contador de requisições (tags: status, scope)</li>
+ * <li>{@code smart.token.latency} — histograma de latência</li>
+ * <li>{@code smart.token.cache.hits} — taxa de acerto do cache</li>
+ * <li>{@code smart.token.retries} — contador de retries</li>
+ * </ul>
+ *
+ * <pre>{@code
+ * // Wrapper com métricas
+ * public class InstrumentedTokenClient {
+ *     private final SmartTokenClient delegate;
+ *     private final MeterRegistry registry;
+ *     private final Timer tokenTimer;
+ *     private final Counter cacheHits;
+ *     private final Counter cacheMisses;
+ *
+ *     public String obtainToken(String scope) throws IOException, InterruptedException {
+ *         return tokenTimer.record(() -> {
+ *             try {
+ *                 return delegate.obtainToken(scope);
+ *             } catch (Exception e) {
+ *                 registry.counter("smart.token.errors", "type", e.getClass().getSimpleName()).increment();
+ *                 throw e;
+ *             }
+ *         });
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h3>Distributed Tracing (OpenTelemetry)</h3>
+ *
+ * <p>
+ * Para rastreamento de requisições distribuídas, propague o contexto de trace nas chamadas
+ * HTTP. O {@link SmartTokenClient} utiliza {@link java.net.http.HttpClient} internamente,
+ * que pode ser instrumentado via OpenTelemetry Java Agent ou manualmente:
+ * </p>
+ *
+ * <pre>{@code
+ * // Com OpenTelemetry Java Agent (recomendado)
+ * // Adicione o agent na JVM: -javaagent:opentelemetry-javaagent.jar
+ * // O HttpClient será instrumentado automaticamente
+ *
+ * // Instrumentação manual (se necessário)
+ * Tracer tracer = GlobalOpenTelemetry.getTracer("hubsaude-client");
+ *
+ * public String obtainTokenWithTracing(String scope) throws Exception {
+ *     Span span = tracer.spanBuilder("SmartTokenClient.obtainToken")
+ *         .setSpanKind(SpanKind.CLIENT)
+ *         .setAttribute("smart.client_id", clientId)
+ *         .setAttribute("smart.scope", scope)
+ *         .startSpan();
+ *
+ *     try (Scope ignored = span.makeCurrent()) {
+ *         String token = tokenClient.obtainToken(scope);
+ *         span.setStatus(StatusCode.OK);
+ *         return token;
+ *     } catch (Exception e) {
+ *         span.setStatus(StatusCode.ERROR, e.getMessage());
+ *         span.recordException(e);
+ *         throw e;
+ *     } finally {
+ *         span.end();
+ *     }
+ * }
+ * }</pre>
+ *
+ * <h3>Arquitetura Recomendada</h3>
+ *
+ * <p>
+ * Para aplicações Spring Boot, encapsule o {@link SmartTokenClient} em um {@code @Service}
+ * que centraliza as integrações enterprise:
+ * </p>
+ *
+ * <pre>{@code
+ * @Service
+ * public class TokenService {
+ *     private final SmartTokenClient tokenClient;
+ *     private final CircuitBreaker circuitBreaker;
+ *     private final MeterRegistry meterRegistry;
+ *
+ *     @Timed("smart.token.obtain")
+ *     public String getToken(String scope) {
+ *         return circuitBreaker.executeSupplier(() -> {
+ *             try {
+ *                 return tokenClient.obtainToken(scope);
+ *             } catch (Exception e) {
+ *                 throw new TokenServiceException("Falha ao obter token", e);
+ *             }
+ *         });
+ *     }
+ * }
+ * }</pre>
+ *
+ * @see <a href="https://resilience4j.readme.io/docs/circuitbreaker">Resilience4j Circuit Breaker</a>
+ * @see <a href="https://micrometer.io/docs">Micrometer Documentation</a>
+ * @see <a href="https://opentelemetry.io/docs/instrumentation/java/">OpenTelemetry Java</a>
  */
 public class SmartTokenClient {
 
