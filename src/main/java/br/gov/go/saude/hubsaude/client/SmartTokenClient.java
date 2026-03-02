@@ -140,7 +140,7 @@ public class SmartTokenClient {
                 .compact();
     }
 
-    private String buildFormBody(final String assertion, final String scope) {
+    public static String buildFormBody(final String assertion, final String scope) {
         final StringBuilder sb = new StringBuilder();
         sb.append("grant_type=").append(encode(GRANT_TYPE));
         sb.append("&client_assertion_type=").append(encode(ASSERTION_TYPE));
@@ -151,11 +151,11 @@ public class SmartTokenClient {
         return sb.toString();
     }
 
-    private String encode(final String value) {
+    public static String encode(final String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private String extractAccessToken(final String jsonBody) throws IOException {
+    public static String extractAccessToken(final String jsonBody) throws IOException {
         final var mapper = new ObjectMapper();
         final var node = mapper.readTree(jsonBody);
         if (!node.has("access_token")) {
