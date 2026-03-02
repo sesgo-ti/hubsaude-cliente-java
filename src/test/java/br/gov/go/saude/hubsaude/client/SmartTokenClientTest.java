@@ -19,6 +19,7 @@ import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -125,6 +126,53 @@ class SmartTokenClientTest {
                                 SmartTokenClient.buildTrustAllSslContext());
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
+        }
+
+        @Test
+        void deveConstruirClienteViaBuilder() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .connectTimeout(Duration.ofSeconds(5))
+                                .requestTimeout(Duration.ofSeconds(15))
+                                .assertionTtlSeconds(120)
+                                .build();
+
+                final String assertion = client.buildClientAssertion();
+                assertThat(assertion).isNotBlank();
+        }
+
+        @Test
+        void deveFalharQuandoChaveNaoCorrespondeAoCertificado(@TempDir final Path tempDir) throws Exception {
+                // Gera um par de chaves diferente
+                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+                gen.initialize(2048);
+                final KeyPair outroPar = gen.generateKeyPair();
+
+                // Gera um certificado com a chave pública do outro par
+                final Path outroCertFile = tempDir.resolve("outro-cert.pem");
+                final String outroCertPem = generateSelfSignedCertPem(outroPar);
+                Files.writeString(outroCertFile, outroCertPem, StandardCharsets.UTF_8);
+
+                final X509Certificate outroCert = SmartTokenClient.validateCertificate(outroCertFile);
+
+                // Tenta criar cliente com chave privada original + certificado de outro par
+                assertThatThrownBy(() -> new SmartTokenClient(
+                                TOKEN_ENDPOINT,
+                                CLIENT_ID,
+                                privateKey,
+                                outroCert,
+                                SmartTokenClient.buildTrustAllSslContext()))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("não corresponde");
+        }
+
+        @Test
+        void deveValidarCoerenciaEntreChaveECertificado() {
+                // Não deve lançar exceção quando key e cert correspondem
+                SmartTokenClient.verifyKeyPairConsistency(privateKey, clientCertificate);
         }
 
         // ---------- helpers ----------

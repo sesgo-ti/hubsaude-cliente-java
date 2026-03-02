@@ -11,6 +11,8 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -24,7 +26,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.Signature;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
@@ -65,17 +69,42 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
  *
  * String accessToken = tokenClient.obtainToken("system/Patient.rs");
  * }</pre>
+ *
+ * <h2>Uso avançado com Builder:</h2>
+ * <pre>{@code
+ * var tokenClient = SmartTokenClient.builder()
+ *         .tokenEndpoint("https://localhost:8443/auth/token")
+ *         .clientId("my-backend-app")
+ *         .privateKeyPem(Path.of("client-key.pem"))
+ *         .certificatePem(Path.of("client-cert.pem"))
+ *         .connectTimeout(Duration.ofSeconds(10))
+ *         .requestTimeout(Duration.ofSeconds(30))
+ *         .assertionTtlSeconds(120)
+ *         .build();
+ * }</pre>
  */
 public class SmartTokenClient {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
+
     private static final String GRANT_TYPE = "client_credentials";
     private static final String ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
-    private static final int ASSERTION_TTL_SECONDS = 60;
+
+    /** TTL padrão do client_assertion em segundos. */
+    public static final int DEFAULT_ASSERTION_TTL_SECONDS = 60;
+
+    /** Timeout padrão de conexão. */
+    public static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(10);
+
+    /** Timeout padrão de requisição. */
+    public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     private final String tokenEndpoint;
     private final String clientId;
     private final PrivateKey privateKey;
     private final HttpClient httpClient;
+    private final int assertionTtlSeconds;
+    private final Duration requestTimeout;
 
     /**
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
@@ -96,7 +125,10 @@ public class SmartTokenClient {
                 clientId,
                 loadPrivateKey(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(null));
+                buildSslContext(null),
+                DEFAULT_CONNECT_TIMEOUT,
+                DEFAULT_REQUEST_TIMEOUT,
+                DEFAULT_ASSERTION_TTL_SECONDS);
     }
 
     /**
@@ -122,7 +154,10 @@ public class SmartTokenClient {
                 clientId,
                 loadPrivateKey(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(serverCertificatePem));
+                buildSslContext(serverCertificatePem),
+                DEFAULT_CONNECT_TIMEOUT,
+                DEFAULT_REQUEST_TIMEOUT,
+                DEFAULT_ASSERTION_TTL_SECONDS);
     }
 
     /**
@@ -141,14 +176,57 @@ public class SmartTokenClient {
             final PrivateKey privateKey,
             final X509Certificate certificate,
             final SSLContext sslContext) {
+        this(tokenEndpoint, clientId, privateKey, certificate, sslContext,
+                DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS);
+    }
+
+    /**
+     * Construtor completo com todas as configurações disponíveis.
+     *
+     * @param tokenEndpoint      URL do endpoint /auth/token do simulador
+     * @param clientId           identificador do cliente registrado
+     * @param privateKey         chave privada previamente carregada
+     * @param certificate        certificado X.509 correspondente à chave
+     * @param sslContext         contexto SSL a ser utilizado pelo {@link HttpClient}
+     * @param connectTimeout     timeout de conexão
+     * @param requestTimeout     timeout de requisição HTTP
+     * @param assertionTtlSeconds TTL do client_assertion em segundos
+     */
+    public SmartTokenClient(
+            final String tokenEndpoint,
+            final String clientId,
+            final PrivateKey privateKey,
+            final X509Certificate certificate,
+            final SSLContext sslContext,
+            final Duration connectTimeout,
+            final Duration requestTimeout,
+            final int assertionTtlSeconds) {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
         this.privateKey = Objects.requireNonNull(privateKey, "privateKey");
         Objects.requireNonNull(certificate, "certificate");
         final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
+        final Duration connTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
+        this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
+        this.assertionTtlSeconds = assertionTtlSeconds > 0 ? assertionTtlSeconds : DEFAULT_ASSERTION_TTL_SECONDS;
+
+        verifyKeyPairConsistency(privateKey, certificate);
+
         this.httpClient = HttpClient.newBuilder()
                 .sslContext(context)
+                .connectTimeout(connTimeout)
                 .build();
+
+        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={}", clientId, tokenEndpoint);
+    }
+
+    /**
+     * Cria um novo {@link Builder} para configuração fluente do cliente.
+     *
+     * @return nova instância do builder
+     */
+    public static Builder builder() {
+        return new Builder();
     }
 
     /**
@@ -156,37 +234,53 @@ public class SmartTokenClient {
      *
      * @param scope scopes separados por espaço (ex: {@code "system/Patient.rs"})
      * @return access token JWT emitido pelo simulador
+     * @throws IOException          em caso de erro de I/O na comunicação
+     * @throws InterruptedException se a thread for interrompida durante a requisição
+     * @throws SmartTokenException  se o servidor retornar erro ou resposta inválida
      */
     public String obtainToken(final String scope) throws IOException, InterruptedException {
+        LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
+
         final String assertion = buildClientAssertion();
         final String body = buildFormBody(assertion, scope);
 
         final HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(tokenEndpoint))
                 .header("Content-Type", "application/x-www-form-urlencoded")
+                .timeout(requestTimeout)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
+        LOG.trace("Enviando requisição POST para {}", tokenEndpoint);
         final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() != 200) {
+            LOG.error("Falha ao obter token: HTTP {} — {}", response.statusCode(), response.body());
             throw new SmartTokenException(
                     "Falha ao obter token: HTTP " + response.statusCode() + " — " + response.body());
         }
 
-        return extractAccessToken(response.body());
+        final String accessToken = extractAccessToken(response.body());
+        LOG.info("Token obtido com sucesso para clientId={}", clientId);
+        return accessToken;
     }
 
-    /** Constrói o JWT client_assertion assinado com RS384. */
+    /**
+     * Constrói o JWT client_assertion assinado com RS384.
+     *
+     * @return JWT compacto pronto para uso no campo client_assertion
+     */
     String buildClientAssertion() {
         final Instant now = Instant.now();
+        final String jti = UUID.randomUUID().toString();
+        LOG.trace("Construindo client_assertion jti={} ttl={}s", jti, assertionTtlSeconds);
         return Jwts.builder()
                 .issuer(clientId)
                 .subject(clientId)
                 .audience().add(tokenEndpoint).and()
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(ASSERTION_TTL_SECONDS)))
-                .id(UUID.randomUUID().toString())
+                .expiration(Date.from(now.plusSeconds(assertionTtlSeconds)))
+                .id(jti)
                 .signWith(privateKey, Jwts.SIG.RS384)
                 .compact();
     }
@@ -311,15 +405,47 @@ public class SmartTokenClient {
     }
 
     /**
+     * Verifica se a chave privada corresponde ao certificado X.509,
+     * realizando uma assinatura de teste e validando com a chave pública.
+     *
+     * @param privateKey  chave privada a validar
+     * @param certificate certificado contendo a chave pública
+     * @throws SmartTokenException se as chaves não corresponderem
+     */
+    public static void verifyKeyPairConsistency(
+            final PrivateKey privateKey,
+            final X509Certificate certificate) {
+        try {
+            final byte[] challenge = "key-pair-consistency-check".getBytes(StandardCharsets.UTF_8);
+            final Signature signer = Signature.getInstance("SHA256withRSA");
+            signer.initSign(privateKey);
+            signer.update(challenge);
+            final byte[] signature = signer.sign();
+
+            final Signature verifier = Signature.getInstance("SHA256withRSA");
+            verifier.initVerify(certificate.getPublicKey());
+            verifier.update(challenge);
+
+            if (!verifier.verify(signature)) {
+                throw new SmartTokenException(
+                        "Chave privada não corresponde ao certificado: assinatura inválida");
+            }
+            LOG.trace("Verificação de consistência key-cert concluída com sucesso");
+        } catch (SmartTokenException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SmartTokenException(
+                    "Falha ao verificar consistência entre chave privada e certificado: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * Cria um {@link javax.net.ssl.SSLContext} que confia em todos os certificados.
      *
      * <p>
      * <strong>Uso exclusivo para testes com o simulador local.</strong>
      * Nunca utilizar em ambiente de produção.
      * </p>
-     */
-    /**
-     * Constrói um SSLContext permissivo utilizado apenas em cenários de testes.
      *
      * @return contexto SSL que aceita qualquer certificado
      */
@@ -351,4 +477,136 @@ public class SmartTokenClient {
         }
     }
 
+    /**
+     * Builder fluente para construção de instâncias de {@link SmartTokenClient}.
+     *
+     * <p>
+     * Permite configurar timeouts, TTL do assertion e demais parâmetros
+     * de forma legível e segura.
+     * </p>
+     */
+    public static final class Builder {
+        private String tokenEndpoint;
+        private String clientId;
+        private Path privateKeyPem;
+        private Path certificatePem;
+        private Path serverCertificatePem;
+        private Duration connectTimeout = DEFAULT_CONNECT_TIMEOUT;
+        private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
+        private int assertionTtlSeconds = DEFAULT_ASSERTION_TTL_SECONDS;
+
+        private Builder() {
+        }
+
+        /**
+         * Define a URL do endpoint de token.
+         *
+         * @param tokenEndpoint URL completa (ex: https://host/auth/token)
+         * @return este builder
+         */
+        public Builder tokenEndpoint(final String tokenEndpoint) {
+            this.tokenEndpoint = tokenEndpoint;
+            return this;
+        }
+
+        /**
+         * Define o identificador do cliente.
+         *
+         * @param clientId identificador registrado no servidor
+         * @return este builder
+         */
+        public Builder clientId(final String clientId) {
+            this.clientId = clientId;
+            return this;
+        }
+
+        /**
+         * Define o caminho para o arquivo PEM da chave privada.
+         *
+         * @param privateKeyPem caminho absoluto
+         * @return este builder
+         */
+        public Builder privateKeyPem(final Path privateKeyPem) {
+            this.privateKeyPem = privateKeyPem;
+            return this;
+        }
+
+        /**
+         * Define o caminho para o arquivo PEM do certificado do cliente.
+         *
+         * @param certificatePem caminho absoluto
+         * @return este builder
+         */
+        public Builder certificatePem(final Path certificatePem) {
+            this.certificatePem = certificatePem;
+            return this;
+        }
+
+        /**
+         * Define o certificado do servidor para validação TLS customizada.
+         *
+         * @param serverCertificatePem caminho absoluto; null usa trust-all
+         * @return este builder
+         */
+        public Builder serverCertificatePem(final Path serverCertificatePem) {
+            this.serverCertificatePem = serverCertificatePem;
+            return this;
+        }
+
+        /**
+         * Define o timeout de conexão TCP.
+         *
+         * @param connectTimeout duração positiva
+         * @return este builder
+         */
+        public Builder connectTimeout(final Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+            return this;
+        }
+
+        /**
+         * Define o timeout máximo da requisição HTTP.
+         *
+         * @param requestTimeout duração positiva
+         * @return este builder
+         */
+        public Builder requestTimeout(final Duration requestTimeout) {
+            this.requestTimeout = requestTimeout;
+            return this;
+        }
+
+        /**
+         * Define o TTL do client_assertion JWT em segundos.
+         *
+         * @param assertionTtlSeconds valor positivo
+         * @return este builder
+         */
+        public Builder assertionTtlSeconds(final int assertionTtlSeconds) {
+            this.assertionTtlSeconds = assertionTtlSeconds;
+            return this;
+        }
+
+        /**
+         * Constrói a instância de {@link SmartTokenClient}.
+         *
+         * @return cliente configurado
+         * @throws IOException se os arquivos PEM não puderem ser lidos
+         */
+        public SmartTokenClient build() throws IOException {
+            Objects.requireNonNull(tokenEndpoint, "tokenEndpoint é obrigatório");
+            Objects.requireNonNull(clientId, "clientId é obrigatório");
+            Objects.requireNonNull(privateKeyPem, "privateKeyPem é obrigatório");
+            Objects.requireNonNull(certificatePem, "certificatePem é obrigatório");
+
+            return new SmartTokenClient(
+                    tokenEndpoint,
+                    clientId,
+                    loadPrivateKey(privateKeyPem),
+                    validateCertificate(certificatePem),
+                    buildSslContext(serverCertificatePem),
+                    connectTimeout,
+                    requestTimeout,
+                    assertionTtlSeconds);
+        }
+    }
 }
