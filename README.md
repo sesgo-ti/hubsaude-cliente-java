@@ -35,13 +35,80 @@ var tokenClient = SmartTokenClient.builder()
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
-        .serverCertificatePem(Path.of("ca-hubsaude.pem"))  // Opcional: trust anchor
+        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // Opcional: trust anchor
         .connectTimeout(Duration.ofSeconds(10))
         .requestTimeout(Duration.ofSeconds(30))
         .assertionTtlSeconds(120)
         .enableTokenCache(true)
         .tokenCacheMarginSeconds(30)
         .maxRetries(3)
+        .build();
+```
+
+### Chave Privada com Senha (PKCS#8 Criptografada)
+
+```java
+var tokenClient = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .privateKeyPem(Path.of("chave-privada-encrypted.pem"))
+        .privateKeyPassword("minha-senha".toCharArray())  // Senha da chave
+        .certificatePem(Path.of("certificado.pem"))
+        .build();
+```
+
+### HSM via PKCS#11 (Chave Nunca Sai do Hardware)
+
+```java
+// Configurar provider PKCS#11
+Provider pkcs11Provider = SigningStrategyFactory.configurePkcs11Provider("/etc/pkcs11/hsm.cfg");
+
+// Criar estratégia de assinatura que delega ao HSM
+SigningStrategy hsmStrategy = SigningStrategyFactory.fromPkcs11(
+        pkcs11Provider,
+        "minha-chave-alias",
+        "123456".toCharArray());  // PIN do token
+
+var tokenClient = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .signingStrategy(hsmStrategy)  // Usa HSM em vez de arquivo PEM
+        .certificatePem(Path.of("certificado.pem"))
+        .build();
+```
+
+### KeyStore (JKS/PKCS#12)
+
+```java
+KeyStore ks = KeyStore.getInstance("PKCS12");
+ks.load(new FileInputStream("keystore.p12"), "senha-keystore".toCharArray());
+
+SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(
+        ks, 
+        "alias-da-chave", 
+        "senha-da-chave".toCharArray());
+
+var tokenClient = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .signingStrategy(strategy)
+        .certificatePem(Path.of("certificado.pem"))
+        .build();
+```
+
+### HashiCorp Vault (via API)
+
+```java
+// Obter chave do Vault (exemplo simplificado)
+PrivateKey vaultKey = vaultClient.getPrivateKey("secret/data/hubsaude/key");
+
+SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(vaultKey);
+
+var tokenClient = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .signingStrategy(strategy)
+        .certificatePem(Path.of("certificado.pem"))
         .build();
 ```
 
@@ -54,6 +121,38 @@ var tokenClient = SmartTokenClient.builder()
 | **Thread-safe** | Locks por scope evitam renovações duplicadas |
 | **Logs sanitizados** | Tokens nunca aparecem em logs |
 | **Validação de key-cert** | Verifica correspondência entre chave e certificado |
+| **HSM/PKCS#11** | Assinatura delegada ao hardware (chave nunca sai do HSM) |
+| **Chaves criptografadas** | Suporte a PKCS#8 e OpenSSL encrypted PEM |
+| **KeyStore** | Integração com JKS, PKCS#12 e keystores customizados |
+
+## Arquitetura: SigningStrategy
+
+O padrão **Strategy** permite flexibilidade na fonte de material criptográfico:
+
+```
+┌─────────────────────┐
+│  SmartTokenClient   │
+│  ─────────────────  │
+│  signingStrategy ───┼──► SigningStrategy.sign(byte[])
+└─────────────────────┘              │
+                                     ▼
+                    ┌────────────────────────────────┐
+                    │   PrivateKeySigningStrategy    │
+                    │   ────────────────────────────│
+                    │   - Chave em memória (PEM)     │
+                    │   - Handle PKCS#11 (HSM)       │
+                    │   - KeyStore (JKS/PKCS#12)     │
+                    └────────────────────────────────┘
+```
+
+**Classes principais:**
+
+| Classe | Responsabilidade |
+|--------|------------------|
+| `SigningStrategy` | Interface funcional `sign(byte[]) → byte[]` |
+| `PrivateKeySigningStrategy` | Implementação com `java.security.Signature` |
+| `SigningStrategyFactory` | Factory para criar estratégias de diferentes fontes |
+| `PemLoader` | Utilitário para carregar PEM (com suporte a senha) |
 
 ## Dependência Maven
 

@@ -353,7 +353,7 @@ public final class SmartTokenClient {
      * @param privateKeyPem        caminho para o arquivo PEM da chave privada
      * @param certificatePem       caminho para o arquivo PEM do certificado do
      *                             cliente
-     * @param serverCertificatePem certificado X.509 confiável do servidor; quando
+     * @param serverTrustAnchor certificado X.509 confiável do servidor; quando
      *                             {@code null}, usa-se SSL permissivo para testes
      */
     public SmartTokenClient(
@@ -361,12 +361,12 @@ public final class SmartTokenClient {
             final String clientId,
             final Path privateKeyPem,
             final Path certificatePem,
-            final Path serverCertificatePem) throws IOException {
+            final Path serverTrustAnchor) throws IOException {
         this(tokenEndpoint,
                 clientId,
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(serverCertificatePem, DEFAULT_TLS_PROTOCOL),
+                buildSslContext(serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
                 DEFAULT_ASSERTION_TTL_SECONDS,
@@ -827,17 +827,17 @@ public final class SmartTokenClient {
     /**
      * Constrói um {@link SSLContext} configurado com o certificado do servidor.
      *
-     * @param serverCertificatePem certificado do servidor; se null, usa trust-all
+     * @param serverTrustAnchor certificado do servidor; se null, usa trust-all
      * @param tlsProtocol          protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
      * @return contexto SSL configurado
      * @throws SmartTokenException se o protocolo for inválido ou houver erro de configuração
      */
-    public static SSLContext buildSslContext(final Path serverCertificatePem, final String tlsProtocol) {
-        if (serverCertificatePem == null) {
+    public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
+        if (serverTrustAnchor == null) {
             return buildTrustAllSslContext(tlsProtocol);
         }
         try {
-            final X509Certificate trustedCert = validateCertificate(serverCertificatePem);
+            final X509Certificate trustedCert = validateCertificate(serverTrustAnchor);
             final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
             trustStore.load(null, null);
             trustStore.setCertificateEntry("trusted-server", trustedCert);
@@ -992,7 +992,7 @@ public final class SmartTokenClient {
         private char[] privateKeyPassword;
         private SigningStrategy signingStrategy;
         private Path certificatePem;
-        private Path serverCertificatePem;
+        private Path serverTrustAnchor;
         private String tlsProtocol = DEFAULT_TLS_PROTOCOL;
         private Duration connectTimeout = DEFAULT_CONNECT_TIMEOUT;
         private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
@@ -1094,11 +1094,11 @@ public final class SmartTokenClient {
         /**
          * Define o certificado do servidor para validação TLS customizada.
          *
-         * @param serverCertificatePem caminho absoluto; null usa trust-all
+         * @param serverTrustAnchor caminho absoluto; null usa trust-all
          * @return este builder
          */
-        public Builder serverCertificatePem(final Path serverCertificatePem) {
-            this.serverCertificatePem = serverCertificatePem;
+        public Builder serverTrustAnchor(final Path serverTrustAnchor) {
+            this.serverTrustAnchor = serverTrustAnchor;
             return this;
         }
 
@@ -1235,7 +1235,7 @@ public final class SmartTokenClient {
                     clientId,
                     effectiveStrategy,
                     cert,
-                    buildSslContext(serverCertificatePem, tlsProtocol),
+                    buildSslContext(serverTrustAnchor, tlsProtocol),
                     connectTimeout,
                     requestTimeout,
                     assertionTtlSeconds,

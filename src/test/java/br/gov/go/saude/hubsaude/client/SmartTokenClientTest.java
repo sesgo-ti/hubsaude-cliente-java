@@ -270,7 +270,7 @@ class SmartTokenClientTest {
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .serverCertificatePem(certFile) // usa o mesmo cert como trust anchor
+                                .serverTrustAnchor(certFile) // usa o mesmo cert como trust anchor
                                 .build();
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
