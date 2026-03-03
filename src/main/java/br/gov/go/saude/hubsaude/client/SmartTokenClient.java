@@ -857,12 +857,40 @@ public final class SmartTokenClient {
     }
 
     /**
-     * Verifica se a chave privada corresponde ao certificado X.509,
-     * realizando uma assinatura de teste e validando com a chave pública.
+     * Validação fail-fast de consistência entre chave privada e certificado.
+     *
+     * <p>
+     * Este método realiza uma assinatura de teste com a chave privada e verifica
+     * o resultado usando a chave pública extraída do certificado. Se a verificação
+     * falhar, significa que os arquivos não formam um par criptográfico válido.
+     * </p>
+     *
+     * <h3>Propósito</h3>
+     * <p>
+     * Detectar <strong>erros de configuração na inicialização</strong>, antes de
+     * qualquer tentativa de obter tokens. Sem esta validação, o erro só seria
+     * descoberto quando o authorization server rejeitasse o JWT — uma falha mais
+     * difícil de diagnosticar.
+     * </p>
+     *
+     * <h3>Quando é executado</h3>
+     * <p>
+     * Automaticamente durante a construção do {@link SmartTokenClient} quando
+     * são fornecidos objetos {@link PrivateKey} e {@link X509Certificate} diretamente
+     * (não via arquivo PEM ou {@link SigningStrategy}).
+     * </p>
+     *
+     * <h3>Cenários detectados</h3>
+     * <ul>
+     *   <li>Arquivos trocados (certificado de um sistema, chave de outro)</li>
+     *   <li>Chave privada corrompida ou truncada</li>
+     *   <li>Certificado regenerado sem atualizar a chave</li>
+     * </ul>
      *
      * @param privateKey  chave privada a validar
-     * @param certificate certificado contendo a chave pública
-     * @throws SmartTokenException se as chaves não corresponderem
+     * @param certificate certificado X.509 contendo a chave pública correspondente
+     * @throws SmartTokenException se a assinatura de teste falhar, indicando
+     *         que chave e certificado não formam um par válido
      */
     public static void verifyKeyPairConsistency(
             final PrivateKey privateKey,
