@@ -1051,6 +1051,7 @@ public final class SmartTokenClient {
          * @param password senha da chave privada
          * @return este builder
          */
+        @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
         public Builder privateKeyPassword(final char[] password) {
             this.privateKeyPassword = password;
             return this;

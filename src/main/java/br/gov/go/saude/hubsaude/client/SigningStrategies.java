@@ -108,6 +108,7 @@ public final class SigningStrategies {
      * @throws IOException se o arquivo não puder ser lido
      * @throws SmartTokenException se a senha for incorreta ou formato inválido
      */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     public static SigningStrategy fromPemFile(final Path keyPath, final char[] password) throws IOException {
         Objects.requireNonNull(keyPath, "keyPath não pode ser null");
         final PrivateKey key = PemLoader.loadPrivateKey(keyPath, password);
@@ -126,6 +127,7 @@ public final class SigningStrategies {
      * @return estratégia de assinatura configurada
      * @throws IOException se o PEM não puder ser decodificado
      */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     public static SigningStrategy fromPemString(final String pemContent, final char[] password) throws IOException {
         Objects.requireNonNull(pemContent, "pemContent não pode ser null");
         final PrivateKey key = PemLoader.loadPrivateKeyFromString(pemContent, password, "<string>");
@@ -156,6 +158,7 @@ public final class SigningStrategies {
      * @return estratégia de assinatura que usa o HSM
      * @throws SmartTokenException se a chave não for encontrada ou PIN inválido
      */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para PIN é intencional - segurança
     public static SigningStrategy fromPkcs11(
             final Provider pkcs11Provider,
             final String keyAlias,
@@ -195,6 +198,7 @@ public final class SigningStrategies {
      * @return estratégia de assinatura configurada
      * @throws SmartTokenException se a chave não for encontrada
      */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     public static SigningStrategy fromKeyStore(
             final KeyStore keyStore,
             final String alias,

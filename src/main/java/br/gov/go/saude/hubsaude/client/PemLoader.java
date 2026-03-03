@@ -81,6 +81,7 @@ public final class PemLoader {
      * @throws SmartTokenException se a chave requer senha não fornecida,
      *                            se a senha for incorreta, ou formato inválido
      */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     public static PrivateKey loadPrivateKey(final Path path, final char[] password) throws IOException {
         Objects.requireNonNull(path, "path não pode ser null");
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
