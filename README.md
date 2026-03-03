@@ -14,7 +14,13 @@ Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do flux
 - Retry com backoff exponencial para resiliência
 - Thread-safety para uso concorrente
 
-## Uso Rápido
+## Uso 
+
+Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
+- URL do endpoint onde o token é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`)
+- `client_id` fornecido pela SES-GO no momento do credenciamento (ex.: `meu-sistema`)
+- Chave privada usada para assinar o JWT de client assertion (em formato PEM, PKCS#8 ou via HSM)
+- Certificado correspondente à chave privada (em formato PEM)
 
 ```java
 // Uso básico
