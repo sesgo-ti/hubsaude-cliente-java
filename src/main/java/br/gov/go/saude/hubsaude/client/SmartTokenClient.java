@@ -5,7 +5,6 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import io.jsonwebtoken.Jwts;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMKeyPair;
@@ -31,7 +30,7 @@ import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Objects;
@@ -293,9 +292,15 @@ public final class SmartTokenClient {
     /** Protocolo TLS padrão. */
     public static final String DEFAULT_TLS_PROTOCOL = "TLSv1.3";
 
+    /** Header JWT para RS384. */
+    private static final String JWT_HEADER_RS384 = "{\"alg\":\"RS384\",\"typ\":\"JWT\"}";
+
+    /** Encoder Base64 URL-safe sem padding. */
+    private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
+
     private final String tokenEndpoint;
     private final String clientId;
-    private final PrivateKey privateKey;
+    private final SigningStrategy signingStrategy;
     private final HttpClient httpClient;
     private final int assertionTtlSeconds;
     private final Duration requestTimeout;
@@ -326,7 +331,7 @@ public final class SmartTokenClient {
             final Path certificatePem) throws IOException {
         this(tokenEndpoint,
                 clientId,
-                loadPrivateKey(privateKeyPem),
+                SigningStrategies.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
                 buildSslContext(null, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
@@ -358,7 +363,7 @@ public final class SmartTokenClient {
             final Path serverCertificatePem) throws IOException {
         this(tokenEndpoint,
                 clientId,
-                loadPrivateKey(privateKeyPem),
+                SigningStrategies.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
                 buildSslContext(serverCertificatePem, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
@@ -391,7 +396,7 @@ public final class SmartTokenClient {
     }
 
     /**
-     * Construtor completo com todas as configurações disponíveis.
+     * Construtor completo com todas as configurações disponíveis (retrocompatível).
      *
      * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
      * @param clientId                identificador do cliente registrado
@@ -418,10 +423,65 @@ public final class SmartTokenClient {
             final boolean enableTokenCache,
             final int tokenCacheMarginSeconds,
             final int maxRetries) {
+        this(tokenEndpoint, clientId,
+                createValidatedSigningStrategy(privateKey, certificate),
+                certificate, sslContext,
+                connectTimeout, requestTimeout, assertionTtlSeconds, enableTokenCache,
+                tokenCacheMarginSeconds, maxRetries);
+    }
+
+    /**
+     * Cria SigningStrategy validando a consistência entre chave e certificado.
+     *
+     * @param privateKey  chave privada
+     * @param certificate certificado X.509
+     * @return SigningStrategy validado
+     * @throws SmartTokenException se a chave não corresponder ao certificado
+     */
+    private static SigningStrategy createValidatedSigningStrategy(
+            final PrivateKey privateKey,
+            final X509Certificate certificate) {
+        verifyKeyPairConsistency(privateKey, certificate);
+        return SigningStrategies.fromPrivateKey(privateKey);
+    }
+
+    /**
+     * Construtor principal que aceita {@link SigningStrategy}.
+     *
+     * <p>
+     * Este é o construtor recomendado para cenários enterprise onde a fonte
+     * do material criptográfico pode variar (arquivo, HSM, Vault, etc.).
+     * </p>
+     *
+     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
+     * @param clientId                identificador do cliente registrado
+     * @param signingStrategy         estratégia de assinatura configurada
+     * @param certificate             certificado X.509 para validação (pode ser null se não houver validação)
+     * @param sslContext              contexto SSL a ser utilizado pelo {@link HttpClient}
+     * @param connectTimeout          timeout de conexão
+     * @param requestTimeout          timeout de requisição HTTP
+     * @param assertionTtlSeconds     TTL do client_assertion em segundos
+     * @param enableTokenCache        habilita cache de tokens
+     * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
+     * @param maxRetries              número máximo de tentativas em falhas transitórias
+     */
+    @SuppressWarnings({"PMD.ExcessiveParameterList", "checkstyle:ParameterNumber"}) // Builder é a API recomendada
+    public SmartTokenClient(
+            final String tokenEndpoint,
+            final String clientId,
+            final SigningStrategy signingStrategy,
+            final X509Certificate certificate,
+            final SSLContext sslContext,
+            final Duration connectTimeout,
+            final Duration requestTimeout,
+            final int assertionTtlSeconds,
+            final boolean enableTokenCache,
+            final int tokenCacheMarginSeconds,
+            final int maxRetries) {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
-        this.privateKey = Objects.requireNonNull(privateKey, "privateKey");
-        Objects.requireNonNull(certificate, "certificate");
+        this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
+        // certificate pode ser null para estratégias onde verificação não é aplicável (ex: Vault)
         final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
         final Duration connTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
@@ -430,8 +490,6 @@ public final class SmartTokenClient {
         this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
                 ? tokenCacheMarginSeconds : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
         this.maxRetries = maxRetries > 0 ? maxRetries : DEFAULT_MAX_RETRIES;
-
-        verifyKeyPairConsistency(privateKey, certificate);
 
         this.httpClient = HttpClient.newBuilder()
                 .sslContext(context)
@@ -595,17 +653,52 @@ public final class SmartTokenClient {
      */
     String buildClientAssertion() {
         final Instant now = Instant.now();
+        final long iat = now.getEpochSecond();
+        final long exp = now.plusSeconds(assertionTtlSeconds).getEpochSecond();
         final String jti = UUID.randomUUID().toString();
         LOG.trace("Construindo client_assertion jti={} ttl={}s", jti, assertionTtlSeconds);
-        return Jwts.builder()
-                .issuer(clientId)
-                .subject(clientId)
-                .audience().add(tokenEndpoint).and()
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(assertionTtlSeconds)))
-                .id(jti)
-                .signWith(privateKey, Jwts.SIG.RS384)
-                .compact();
+
+        // Constrói o payload JSON manualmente para independência de bibliotecas JWT
+        final String payload = String.format(
+                "{\"iss\":\"%s\",\"sub\":\"%s\",\"aud\":\"%s\",\"iat\":%d,\"exp\":%d,\"jti\":\"%s\"}",
+                escapeJson(clientId),
+                escapeJson(clientId),
+                escapeJson(tokenEndpoint),
+                iat,
+                exp,
+                jti);
+
+        // Codifica header e payload em Base64Url
+        final String headerB64 = BASE64_URL_ENCODER.encodeToString(
+                JWT_HEADER_RS384.getBytes(StandardCharsets.UTF_8));
+        final String payloadB64 = BASE64_URL_ENCODER.encodeToString(
+                payload.getBytes(StandardCharsets.UTF_8));
+
+        // Dados a serem assinados: header.payload
+        final String dataToSign = headerB64 + "." + payloadB64;
+
+        // Assina usando a estratégia configurada (pode ser HSM, Vault, etc.)
+        final byte[] signature = signingStrategy.sign(dataToSign.getBytes(StandardCharsets.UTF_8));
+        final String signatureB64 = BASE64_URL_ENCODER.encodeToString(signature);
+
+        return dataToSign + "." + signatureB64;
+    }
+
+    /**
+     * Escapa caracteres especiais para JSON.
+     *
+     * @param value valor a escapar
+     * @return valor escapado
+     */
+    private static String escapeJson(final String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
@@ -869,12 +962,34 @@ public final class SmartTokenClient {
      * Permite configurar timeouts, TTL do assertion e demais parâmetros
      * de forma legível e segura.
      * </p>
+     *
+     * <h2>Exemplo com arquivo PEM</h2>
+     * <pre>{@code
+     * var client = SmartTokenClient.builder()
+     *     .tokenEndpoint("https://auth.example.com/token")
+     *     .clientId("my-app")
+     *     .privateKeyPem(Path.of("key.pem"))
+     *     .certificatePem(Path.of("cert.pem"))
+     *     .build();
+     * }</pre>
+     *
+     * <h2>Exemplo com SigningStrategy (HSM, Vault, etc.)</h2>
+     * <pre>{@code
+     * var client = SmartTokenClient.builder()
+     *     .tokenEndpoint("https://auth.example.com/token")
+     *     .clientId("my-app")
+     *     .signingStrategy(SigningStrategies.fromPkcs11(provider, "alias", pin))
+     *     .certificatePem(Path.of("cert.pem"))
+     *     .build();
+     * }</pre>
      */
     @SuppressWarnings("checkstyle:HiddenField") // Padrão Builder usa nomes iguais
     public static final class Builder {
         private String tokenEndpoint;
         private String clientId;
         private Path privateKeyPem;
+        private char[] privateKeyPassword;
+        private SigningStrategy signingStrategy;
         private Path certificatePem;
         private Path serverCertificatePem;
         private String tlsProtocol = DEFAULT_TLS_PROTOCOL;
@@ -913,11 +1028,51 @@ public final class SmartTokenClient {
         /**
          * Define o caminho para o arquivo PEM da chave privada.
          *
+         * <p>
+         * Mutuamente exclusivo com {@link #signingStrategy(SigningStrategy)}.
+         * </p>
+         *
          * @param privateKeyPem caminho absoluto
          * @return este builder
          */
         public Builder privateKeyPem(final Path privateKeyPem) {
             this.privateKeyPem = privateKeyPem;
+            return this;
+        }
+
+        /**
+         * Define a senha para decriptar a chave privada PEM.
+         *
+         * <p>
+         * Necessária apenas se a chave estiver criptografada (PKCS#8 encrypted
+         * ou formato OpenSSL tradicional com DEK-Info).
+         * </p>
+         *
+         * @param password senha da chave privada
+         * @return este builder
+         */
+        public Builder privateKeyPassword(final char[] password) {
+            this.privateKeyPassword = password;
+            return this;
+        }
+
+        /**
+         * Define a estratégia de assinatura diretamente.
+         *
+         * <p>
+         * Use este método para cenários enterprise onde a chave não está
+         * em arquivo (HSM via PKCS#11, HashiCorp Vault, etc.).
+         * </p>
+         *
+         * <p>
+         * Mutuamente exclusivo com {@link #privateKeyPem(Path)}.
+         * </p>
+         *
+         * @param signingStrategy estratégia de assinatura configurada
+         * @return este builder
+         */
+        public Builder signingStrategy(final SigningStrategy signingStrategy) {
+            this.signingStrategy = signingStrategy;
             return this;
         }
 
@@ -1045,18 +1200,37 @@ public final class SmartTokenClient {
          *
          * @return cliente configurado
          * @throws IOException se os arquivos PEM não puderem ser lidos
+         * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem definidos
          */
         public SmartTokenClient build() throws IOException {
             Objects.requireNonNull(tokenEndpoint, "tokenEndpoint é obrigatório");
             Objects.requireNonNull(clientId, "clientId é obrigatório");
-            Objects.requireNonNull(privateKeyPem, "privateKeyPem é obrigatório");
-            Objects.requireNonNull(certificatePem, "certificatePem é obrigatório");
+
+            // Determina a estratégia de assinatura
+            final SigningStrategy effectiveStrategy;
+            if (signingStrategy != null) {
+                if (privateKeyPem != null) {
+                    throw new IllegalStateException(
+                            "Defina signingStrategy OU privateKeyPem, não ambos");
+                }
+                effectiveStrategy = signingStrategy;
+            } else if (privateKeyPem != null) {
+                effectiveStrategy = SigningStrategies.fromPemFile(privateKeyPem, privateKeyPassword);
+            } else {
+                throw new IllegalStateException(
+                        "É obrigatório definir signingStrategy ou privateKeyPem");
+            }
+
+            // Certificado é opcional quando usando SigningStrategy diretamente
+            final X509Certificate cert = certificatePem != null
+                    ? validateCertificate(certificatePem)
+                    : null;
 
             return new SmartTokenClient(
                     tokenEndpoint,
                     clientId,
-                    loadPrivateKey(privateKeyPem),
-                    validateCertificate(certificatePem),
+                    effectiveStrategy,
+                    cert,
                     buildSslContext(serverCertificatePem, tlsProtocol),
                     connectTimeout,
                     requestTimeout,
