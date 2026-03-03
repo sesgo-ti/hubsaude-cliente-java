@@ -13,7 +13,7 @@
 
     <artifactId>hubsaude-cliente-java</artifactId>
     <name>HubSaúde Cliente Java</name>
-    <description>Cliente Java para autenticação SMART Backend Services no HubSaúde</description>
+    <description>Cliente Java para obtenção de token de acesso exigido para usufruir dos serviços oferecidos pelo HubSaúde.</description>
     <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude</url>
 
     <developers>
