@@ -1,6 +1,7 @@
 # hubsaude-cliente-java
 
-Cliente Java enterprise-grade para autenticação SMART Backend Services junto ao HubSaúde.
+Cliente Java para obtenção de token de acesso exigido para 
+usufruir dos serviços oferecidos pelo HubSaúde.
 
 ## Descrição
 
