@@ -5,11 +5,11 @@ usufruir dos serviços oferecidos pelo HubSaúde.
 
 ## Descrição
 
-Este módulo fornece a classe `SmartTokenClient` que abstrai toda a complexidade do fluxo de autenticação SMART Backend Services (RFC 7523):
+Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do fluxo de autenticação SMART Backend Services (RFC 7523):
 
 - Leitura de chaves privadas e certificados PEM
 - Montagem do `client_assertion` JWT (RS384)
-- Comunicação HTTP com o endpoint `/auth/token`
+- Comunicação HTTPS com o endpoint `/auth/token`
 - Cache de tokens com renovação proativa
 - Retry com backoff exponencial para resiliência
 - Thread-safety para uso concorrente
