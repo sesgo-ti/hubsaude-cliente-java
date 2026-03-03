@@ -284,6 +284,7 @@ class SmartTokenClientTest {
         }
 
         @Test
+        @SuppressWarnings("removal") // Testando método deprecated
         void deveFalharLoadPrivateKeyComArquivoPemInvalido(@TempDir final Path tempDir) throws Exception {
                 final Path invalidPem = tempDir.resolve("invalid.pem");
                 Files.writeString(invalidPem, "-----BEGIN PUBLIC KEY-----\nINVALID\n-----END PUBLIC KEY-----\n");
@@ -408,6 +409,157 @@ class SmartTokenClientTest {
                 assertThat(token.expiresAt()).isEqualTo(expiresAt);
         }
 
+        // ---------- Testes de Concorrência ----------
+
+        @Test
+        void deveConstruirClientAssertionConcorrentemente() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                final int numThreads = 10;
+                final java.util.concurrent.ExecutorService executor = 
+                        java.util.concurrent.Executors.newFixedThreadPool(numThreads);
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(numThreads);
+                final java.util.List<String> assertions = java.util.Collections.synchronizedList(
+                        new java.util.ArrayList<>());
+                final java.util.concurrent.atomic.AtomicInteger errors = 
+                        new java.util.concurrent.atomic.AtomicInteger(0);
+
+                for (int i = 0; i < numThreads; i++) {
+                        executor.submit(() -> {
+                                try {
+                                        final String assertion = client.buildClientAssertion();
+                                        assertions.add(assertion);
+                                } catch (Exception e) {
+                                        errors.incrementAndGet();
+                                } finally {
+                                        latch.countDown();
+                                }
+                        });
+                }
+
+                latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                executor.shutdown();
+
+                assertThat(errors.get()).isZero();
+                assertThat(assertions).hasSize(numThreads);
+                // Cada assertion deve ser única (jti diferente)
+                assertThat(new java.util.HashSet<>(assertions)).hasSize(numThreads);
+        }
+
+        @Test
+        void deveInvalidarCacheConcorrentemente() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .enableTokenCache(true)
+                                .build();
+
+                final int numThreads = 20;
+                final java.util.concurrent.ExecutorService executor = 
+                        java.util.concurrent.Executors.newFixedThreadPool(numThreads);
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(numThreads);
+                final java.util.concurrent.atomic.AtomicInteger errors = 
+                        new java.util.concurrent.atomic.AtomicInteger(0);
+
+                for (int i = 0; i < numThreads; i++) {
+                        final int idx = i;
+                        executor.submit(() -> {
+                                try {
+                                        if (idx % 2 == 0) {
+                                                client.invalidateCache("scope-" + idx);
+                                        } else {
+                                                client.invalidateCache();
+                                        }
+                                } catch (Exception e) {
+                                        errors.incrementAndGet();
+                                } finally {
+                                        latch.countDown();
+                                }
+                        });
+                }
+
+                latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                executor.shutdown();
+
+                assertThat(errors.get()).isZero();
+        }
+
+        // ---------- Testes de Validação de Certificado ----------
+
+        @Test
+        void deveFalharComCertificadoExpirado(@TempDir final Path tempDir) throws Exception {
+                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+                gen.initialize(2048);
+                final KeyPair pair = gen.generateKeyPair();
+
+                // Gera certificado que já expirou
+                final Path certExpirado = tempDir.resolve("cert-expirado.pem");
+                final String certPem = generateExpiredCertPem(pair);
+                Files.writeString(certExpirado, certPem, StandardCharsets.UTF_8);
+
+                assertThatThrownBy(() -> SmartTokenClient.validateCertificate(certExpirado))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("expirado");
+        }
+
+        @Test
+        void deveFalharComCertificadoAindaNaoValido(@TempDir final Path tempDir) throws Exception {
+                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+                gen.initialize(2048);
+                final KeyPair pair = gen.generateKeyPair();
+
+                // Gera certificado que só será válido no futuro
+                final Path certFuturo = tempDir.resolve("cert-futuro.pem");
+                final String certPem = generateFutureCertPem(pair);
+                Files.writeString(certFuturo, certPem, StandardCharsets.UTF_8);
+
+                assertThatThrownBy(() -> SmartTokenClient.validateCertificate(certFuturo))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("ainda não é válido");
+        }
+
+        // ---------- Teste do Algoritmo Dinâmico ----------
+
+        @Test
+        void deveVerificarConsistenciaComChaveEC() throws Exception {
+                // Cria par EC
+                final java.security.KeyPairGenerator ecGen = java.security.KeyPairGenerator.getInstance("EC");
+                ecGen.initialize(256);
+                final java.security.KeyPair ecPair = ecGen.generateKeyPair();
+
+                // Gera certificado EC
+                final org.bouncycastle.asn1.x500.X500Name subject = new org.bouncycastle.asn1.x500.X500Name(
+                                "CN=test-ec,O=Test,C=BR");
+                final java.math.BigInteger serial = java.math.BigInteger.TWO;
+                final java.util.Date notBefore = new java.util.Date();
+                final java.util.Date notAfter = new java.util.Date(
+                                System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
+
+                final org.bouncycastle.cert.X509v3CertificateBuilder builder = 
+                        new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                                subject, serial, notBefore, notAfter, subject, ecPair.getPublic());
+
+                final org.bouncycastle.operator.ContentSigner signer = 
+                        new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA")
+                                .build(ecPair.getPrivate());
+
+                final byte[] certDer = builder.build(signer).getEncoded();
+                final java.security.cert.CertificateFactory cf = 
+                        java.security.cert.CertificateFactory.getInstance("X.509");
+                final X509Certificate ecCert = (X509Certificate) cf.generateCertificate(
+                        new java.io.ByteArrayInputStream(certDer));
+
+                // Deve passar - verifyKeyPairConsistency agora suporta EC
+                SmartTokenClient.verifyKeyPairConsistency(ecPair.getPrivate(), ecCert);
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {
@@ -424,6 +576,58 @@ class SmartTokenClientTest {
                                 "CN=test-client,O=Test,C=BR");
                 final java.math.BigInteger serial = java.math.BigInteger.ONE;
                 final java.util.Date notBefore = new java.util.Date();
+                final java.util.Date notAfter = new java.util.Date(
+                                System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
+
+                final org.bouncycastle.cert.X509v3CertificateBuilder builder = new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                                subject, serial, notBefore, notAfter, subject, pair.getPublic());
+
+                final org.bouncycastle.operator.ContentSigner signer = new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder(
+                                "SHA256WithRSA")
+                                .build(pair.getPrivate());
+
+                final byte[] certDer = builder.build(signer).getEncoded();
+                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                                .encodeToString(certDer);
+                return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
+        }
+
+        /**
+         * Gera certificado X.509 que já expirou (notBefore e notAfter no passado).
+         */
+        private static String generateExpiredCertPem(final KeyPair pair) throws Exception {
+                final org.bouncycastle.asn1.x500.X500Name subject = new org.bouncycastle.asn1.x500.X500Name(
+                                "CN=expired-cert,O=Test,C=BR");
+                final java.math.BigInteger serial = java.math.BigInteger.valueOf(3);
+                // Certificado expirou há 2 dias
+                final java.util.Date notBefore = new java.util.Date(
+                                System.currentTimeMillis() - 3L * 24 * 3600 * 1000);
+                final java.util.Date notAfter = new java.util.Date(
+                                System.currentTimeMillis() - 1L * 24 * 3600 * 1000);
+
+                final org.bouncycastle.cert.X509v3CertificateBuilder builder = new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                                subject, serial, notBefore, notAfter, subject, pair.getPublic());
+
+                final org.bouncycastle.operator.ContentSigner signer = new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder(
+                                "SHA256WithRSA")
+                                .build(pair.getPrivate());
+
+                final byte[] certDer = builder.build(signer).getEncoded();
+                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                                .encodeToString(certDer);
+                return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
+        }
+
+        /**
+         * Gera certificado X.509 que só será válido no futuro.
+         */
+        private static String generateFutureCertPem(final KeyPair pair) throws Exception {
+                final org.bouncycastle.asn1.x500.X500Name subject = new org.bouncycastle.asn1.x500.X500Name(
+                                "CN=future-cert,O=Test,C=BR");
+                final java.math.BigInteger serial = java.math.BigInteger.valueOf(4);
+                // Certificado só será válido em 2 dias
+                final java.util.Date notBefore = new java.util.Date(
+                                System.currentTimeMillis() + 2L * 24 * 3600 * 1000);
                 final java.util.Date notAfter = new java.util.Date(
                                 System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
 

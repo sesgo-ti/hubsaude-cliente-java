@@ -186,6 +186,8 @@ public final class SigningStrategyFactory {
             throw e;
         } catch (Exception e) {
             throw new SmartTokenException("Falha ao acessar chave PKCS#11: " + e.getMessage(), e);
+        } finally {
+            PemLoader.clearPassword(pin);
         }
     }
 
@@ -216,6 +218,8 @@ public final class SigningStrategyFactory {
             throw e;
         } catch (Exception e) {
             throw new SmartTokenException("Falha ao obter chave do KeyStore: " + e.getMessage(), e);
+        } finally {
+            PemLoader.clearPassword(password);
         }
     }
 

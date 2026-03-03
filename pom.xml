@@ -159,9 +159,9 @@
                                     </limits>
                                 </rule>
                             </rules>
-                            <!-- Exclui métodos que requerem hardware PKCS#11/HSM -->
+                            <!-- Exclui métodos específicos que requerem hardware PKCS#11/HSM -->
                             <excludes>
-                                <exclude>**/SigningStrategyFactory.class</exclude>
+                                <exclude>**/SigningStrategyFactory$*Pkcs11*</exclude>
                             </excludes>
                         </configuration>
                     </execution>

@@ -8,9 +8,7 @@ package br.gov.go.saude.hubsaude.client;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,9 +41,9 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 
 /**
  * Classe de conveniência para obtenção de access tokens SMART Backend Services.
@@ -260,8 +258,9 @@ public final class SmartTokenClient {
     /** Delay base para retry exponencial em milissegundos. */
     private static final long RETRY_BASE_DELAY_MS = 1000L;
 
-    /** ObjectMapper compartilhado (thread-safe). */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    /** ObjectMapper compartilhado (thread-safe) com configuração de segurança. */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     /** Código HTTP: Rate Limit Exceeded. */
     private static final int HTTP_TOO_MANY_REQUESTS = 429;
@@ -657,7 +656,7 @@ public final class SmartTokenClient {
         final long iat = now.getEpochSecond();
         final long exp = now.plusSeconds(assertionTtlSeconds).getEpochSecond();
         final String jti = UUID.randomUUID().toString();
-        LOG.trace("Construindo client_assertion jti={} ttl={}s", jti, assertionTtlSeconds);
+        LOG.trace("Construindo client_assertion ttl={}s", assertionTtlSeconds);
 
         // Constrói o payload JSON manualmente para independência de bibliotecas JWT
         final String payload = String.format(
@@ -783,29 +782,23 @@ public final class SmartTokenClient {
      * @param path caminho absoluto para o arquivo PEM
      * @return chave privada pronta para assinar o {@code client_assertion}
      * @throws IOException caso o arquivo não possa ser lido ou decodificado
+     * @deprecated Use {@link PemLoader#loadPrivateKey(Path)} em vez deste método.
      */
+    @Deprecated(since = "1.0.0", forRemoval = true)
     public static PrivateKey loadPrivateKey(final Path path) throws IOException {
-        final String pem = Files.readString(path, StandardCharsets.UTF_8);
-        try (PEMParser parser = new PEMParser(new StringReader(pem))) {
-            final Object obj = parser.readObject();
-            if (obj instanceof PEMKeyPair pemKeyPair) {
-                return new JcaPEMKeyConverter().getKeyPair(pemKeyPair).getPrivate();
-            } else if (obj instanceof PrivateKeyInfo pki) {
-                return new JcaPEMKeyConverter().getPrivateKey(pki);
-            }
-            throw new SmartTokenException("Arquivo PEM não contém chave privada válida: " + path);
-        }
+        return PemLoader.loadPrivateKey(path);
     }
 
     /**
      * Realiza um sanity check no certificado PEM associado ao cliente, garantindo
-     * que seja um X.509 válido antes de iniciar o fluxo de autenticação.
+     * que seja um X.509 válido e dentro do período de validade antes de iniciar
+     * o fluxo de autenticação.
      *
      * @param path caminho absoluto para o certificado PEM
      * @return certificado X.509 decodificado
      * @throws IOException quando o arquivo não pode ser lido
      * @throws SmartTokenException quando o conteúdo não representa um
-     *                             certificado X.509 válido
+     *                             certificado X.509 válido ou está expirado
      */
     public static X509Certificate validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
@@ -816,9 +809,15 @@ public final class SmartTokenClient {
                 if (cert == null) {
                     throw new SmartTokenException("Certificado inválido: " + path);
                 }
+                // Valida período de validade
+                cert.checkValidity();
                 return cert;
             }
             throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
+        } catch (java.security.cert.CertificateExpiredException ex) {
+            throw new SmartTokenException("Certificado expirado: " + path, ex);
+        } catch (java.security.cert.CertificateNotYetValidException ex) {
+            throw new SmartTokenException("Certificado ainda não é válido: " + path, ex);
         } catch (CertificateException ex) {
             throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
         }
@@ -896,13 +895,16 @@ public final class SmartTokenClient {
             final PrivateKey privateKey,
             final X509Certificate certificate) {
         try {
+            // Determina o algoritmo de assinatura baseado no tipo da chave
+            final String signatureAlgorithm = determineSignatureAlgorithm(privateKey);
+            
             final byte[] challenge = "key-pair-consistency-check".getBytes(StandardCharsets.UTF_8);
-            final Signature signer = Signature.getInstance("SHA256withRSA");
+            final Signature signer = Signature.getInstance(signatureAlgorithm);
             signer.initSign(privateKey);
             signer.update(challenge);
             final byte[] signature = signer.sign();
 
-            final Signature verifier = Signature.getInstance("SHA256withRSA");
+            final Signature verifier = Signature.getInstance(signatureAlgorithm);
             verifier.initVerify(certificate.getPublicKey());
             verifier.update(challenge);
 
@@ -917,6 +919,24 @@ public final class SmartTokenClient {
             throw new SmartTokenException(
                     "Falha ao verificar consistência entre chave privada e certificado: " + ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * Determina o algoritmo de assinatura apropriado para o tipo de chave.
+     *
+     * @param privateKey chave privada
+     * @return algoritmo de assinatura compatível
+     */
+    private static String determineSignatureAlgorithm(final PrivateKey privateKey) {
+        final String keyAlgorithm = privateKey.getAlgorithm();
+        return switch (keyAlgorithm) {
+            case "RSA" -> "SHA256withRSA";
+            case "EC" -> "SHA256withECDSA";
+            case "Ed25519" -> "Ed25519";
+            case "Ed448" -> "Ed448";
+            default -> throw new SmartTokenException(
+                    "Tipo de chave não suportado para validação: " + keyAlgorithm);
+        };
     }
 
     /**

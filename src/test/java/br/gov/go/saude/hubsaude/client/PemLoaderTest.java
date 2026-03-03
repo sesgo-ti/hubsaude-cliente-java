@@ -17,7 +17,6 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.security.interfaces.RSAPublicKey;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -160,6 +159,36 @@ class PemLoaderTest {
         
         assertThatThrownBy(() -> PemLoader.loadCertificateFromString(null, "test"))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    // ---------- Testes de clearPassword ----------
+
+    @Test
+    void deveLimparSenhaAposUso() {
+        final char[] senha = "minha-senha-secreta".toCharArray();
+        final char[] original = java.util.Arrays.copyOf(senha, senha.length);
+        
+        PemLoader.clearPassword(senha);
+        
+        // Verifica que todos os caracteres foram zerados
+        for (char c : senha) {
+            assertThat(c).isEqualTo('\0');
+        }
+        // Confirma que era diferente antes
+        assertThat(original[0]).isNotEqualTo('\0');
+    }
+
+    @Test
+    void deveTratarSenhaNullSemFalha() {
+        // Não deve lançar exceção
+        PemLoader.clearPassword(null);
+    }
+
+    @Test
+    void deveTratarSenhaVaziaSemFalha() {
+        final char[] senhaVazia = new char[0];
+        // Não deve lançar exceção
+        PemLoader.clearPassword(senhaVazia);
     }
 
     @Test

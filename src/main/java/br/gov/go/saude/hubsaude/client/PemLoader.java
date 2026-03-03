@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -137,6 +138,10 @@ public final class PemLoader {
 
     /**
      * Decripta chave PKCS#8 criptografada.
+     *
+     * <p>
+     * A senha é limpa da memória após uso para minimizar exposição.
+     * </p>
      */
     private static PrivateKey decryptPkcs8(
             final PKCS8EncryptedPrivateKeyInfo encrypted,
@@ -152,11 +157,17 @@ public final class PemLoader {
             return new JcaPEMKeyConverter().getPrivateKey(pki);
         } catch (Exception e) {
             throw new SmartTokenException("Falha ao decriptar chave PKCS#8 (senha incorreta?): " + source, e);
+        } finally {
+            clearPassword(password);
         }
     }
 
     /**
      * Decripta chave no formato OpenSSL tradicional criptografado.
+     *
+     * <p>
+     * A senha é limpa da memória após uso para minimizar exposição.
+     * </p>
      */
     private static PrivateKey decryptOpenSslKey(
             final PEMEncryptedKeyPair encryptedKeyPair,
@@ -171,6 +182,19 @@ public final class PemLoader {
             return new JcaPEMKeyConverter().getKeyPair(decrypted).getPrivate();
         } catch (Exception e) {
             throw new SmartTokenException("Falha ao decriptar chave OpenSSL (senha incorreta?): " + source, e);
+        } finally {
+            clearPassword(password);
+        }
+    }
+
+    /**
+     * Limpa array de senha da memória para minimizar exposição.
+     *
+     * @param password array de senha a ser limpo (pode ser null)
+     */
+    static void clearPassword(final char[] password) {
+        if (password != null) {
+            Arrays.fill(password, '\0');
         }
     }
 
