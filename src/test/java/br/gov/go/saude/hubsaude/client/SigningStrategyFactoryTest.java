@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Testes unitários para {@link SigningStrategies}.
+ * Testes unitários para {@link SigningStrategyFactory}.
  */
-class SigningStrategiesTest {
+class SigningStrategyFactoryTest {
 
     private static Path keyFile;
     private static PrivateKey privateKey;
@@ -50,7 +50,7 @@ class SigningStrategiesTest {
 
     @Test
     void deveAssinarComChavePrivadaDireta() throws Exception {
-        final SigningStrategy strategy = SigningStrategies.fromPrivateKey(privateKey);
+        final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
         final byte[] dados = "dados para assinar".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
@@ -67,7 +67,7 @@ class SigningStrategiesTest {
 
     @Test
     void deveAssinarComArquivoPemSemSenha() throws Exception {
-        final SigningStrategy strategy = SigningStrategies.fromPemFile(keyFile, null);
+        final SigningStrategy strategy = SigningStrategyFactory.fromPemFile(keyFile, null);
         final byte[] dados = "mensagem de teste".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
@@ -84,7 +84,7 @@ class SigningStrategiesTest {
     @Test
     void deveAssinarComPemString() throws Exception {
         final String pemContent = Files.readString(keyFile, StandardCharsets.UTF_8);
-        final SigningStrategy strategy = SigningStrategies.fromPemString(pemContent, null);
+        final SigningStrategy strategy = SigningStrategyFactory.fromPemString(pemContent, null);
         final byte[] dados = "dados string pem".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
@@ -102,31 +102,31 @@ class SigningStrategiesTest {
     void deveFalharComArquivoPemInexistente(@TempDir final Path tempDir) {
         final Path naoExiste = tempDir.resolve("nao-existe.pem");
 
-        assertThatThrownBy(() -> SigningStrategies.fromPemFile(naoExiste, null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPemFile(naoExiste, null))
                 .isInstanceOf(IOException.class);
     }
 
     @Test
     void deveFalharComChavePrivadaNula() {
-        assertThatThrownBy(() -> SigningStrategies.fromPrivateKey(null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPrivateKey(null))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void deveFalharComPathNulo() {
-        assertThatThrownBy(() -> SigningStrategies.fromPemFile(null, null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPemFile(null, null))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void deveFalharComPemStringNula() {
-        assertThatThrownBy(() -> SigningStrategies.fromPemString(null, null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPemString(null, null))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void estrategiasDevemSerIdempotentes() throws Exception {
-        final SigningStrategy strategy = SigningStrategies.fromPrivateKey(privateKey);
+        final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
         final byte[] dados = "dados idempotentes".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura1 = strategy.sign(dados);
@@ -138,7 +138,7 @@ class SigningStrategiesTest {
 
     @Test
     void deveUsarAlgoritmoRS384() throws Exception {
-        final SigningStrategy strategy = SigningStrategies.fromPrivateKey(privateKey);
+        final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
         final byte[] dados = "teste RS384".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
@@ -158,7 +158,7 @@ class SigningStrategiesTest {
 
     @Test
     void deveAssinarComChavePrivadaEAlgoritmoCustomizado() throws Exception {
-        final SigningStrategy strategy = SigningStrategies.fromPrivateKey(privateKey, "SHA256withRSA");
+        final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey, "SHA256withRSA");
         final byte[] dados = "teste SHA256".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
@@ -172,7 +172,7 @@ class SigningStrategiesTest {
 
     @Test
     void deveFalharComAlgorithmNeNulo() {
-        assertThatThrownBy(() -> SigningStrategies.fromPrivateKey(privateKey, null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPrivateKey(privateKey, null))
                 .isInstanceOf(NullPointerException.class);
     }
 
@@ -188,7 +188,7 @@ class SigningStrategiesTest {
                 new java.security.cert.Certificate[]{cert});
 
         // Criar estratégia
-        final SigningStrategy strategy = SigningStrategies.fromKeyStore(ks, "test-alias", "senha123".toCharArray());
+        final SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(ks, "test-alias", "senha123".toCharArray());
         final byte[] dados = "dados keystore".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
@@ -205,14 +205,14 @@ class SigningStrategiesTest {
         final KeyStore ks = KeyStore.getInstance("PKCS12");
         ks.load(null, null);
 
-        assertThatThrownBy(() -> SigningStrategies.fromKeyStore(ks, "alias-inexistente", null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromKeyStore(ks, "alias-inexistente", null))
                 .isInstanceOf(SmartTokenException.class)
                 .hasMessageContaining("Chave não encontrada");
     }
 
     @Test
     void deveFalharComKeyStoreNulo() {
-        assertThatThrownBy(() -> SigningStrategies.fromKeyStore(null, "alias", null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromKeyStore(null, "alias", null))
                 .isInstanceOf(NullPointerException.class);
     }
 
@@ -221,13 +221,13 @@ class SigningStrategiesTest {
         final KeyStore ks = KeyStore.getInstance("PKCS12");
         ks.load(null, null);
 
-        assertThatThrownBy(() -> SigningStrategies.fromKeyStore(ks, null, null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromKeyStore(ks, null, null))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void deveFalharComPkcs11ProviderNulo() {
-        assertThatThrownBy(() -> SigningStrategies.fromPkcs11(null, "alias", "pin".toCharArray()))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(null, "alias", "pin".toCharArray()))
                 .isInstanceOf(NullPointerException.class);
     }
 
@@ -236,7 +236,7 @@ class SigningStrategiesTest {
         // Usar provider fictício apenas para teste de validação
         final java.security.Provider provider = java.security.Security.getProvider("SunJCE");
         
-        assertThatThrownBy(() -> SigningStrategies.fromPkcs11(provider, null, "pin".toCharArray()))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(provider, null, "pin".toCharArray()))
                 .isInstanceOf(NullPointerException.class);
     }
 
@@ -244,13 +244,13 @@ class SigningStrategiesTest {
     void deveFalharComPkcs11PinNulo() {
         final java.security.Provider provider = java.security.Security.getProvider("SunJCE");
         
-        assertThatThrownBy(() -> SigningStrategies.fromPkcs11(provider, "alias", null))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(provider, "alias", null))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void deveFalharComConfigPathNuloParaPkcs11() {
-        assertThatThrownBy(() -> SigningStrategies.configurePkcs11Provider(null))
+        assertThatThrownBy(() -> SigningStrategyFactory.configurePkcs11Provider(null))
                 .isInstanceOf(NullPointerException.class);
     }
 

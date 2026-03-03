@@ -32,24 +32,24 @@ import java.util.Objects;
  * <h2>Exemplo de Uso</h2>
  * <pre>{@code
  * // Arquivo PEM simples
- * SigningStrategy strategy = SigningStrategies.fromPemFile(Path.of("key.pem"));
+ * SigningStrategy strategy = SigningStrategyFactory.fromPemFile(Path.of("key.pem"));
  *
  * // Arquivo PEM com senha
- * SigningStrategy strategy = SigningStrategies.fromPemFile(
+ * SigningStrategy strategy = SigningStrategyFactory.fromPemFile(
  *     Path.of("key.pem"),
  *     "minha-senha".toCharArray());
  *
  * // HSM via PKCS#11
  * Provider pkcs11 = loadPkcs11Provider();
- * SigningStrategy strategy = SigningStrategies.fromPkcs11(pkcs11, "key-alias", pin);
+ * SigningStrategy strategy = SigningStrategyFactory.fromPkcs11(pkcs11, "key-alias", pin);
  * }</pre>
  *
  * @see SigningStrategy
  * @see PrivateKeySigningStrategy
  */
-public final class SigningStrategies {
+public final class SigningStrategyFactory {
 
-    private SigningStrategies() {
+    private SigningStrategyFactory() {
         // Factory não instanciável
     }
 

@@ -161,7 +161,7 @@
                             </rules>
                             <!-- Exclui métodos que requerem hardware PKCS#11/HSM -->
                             <excludes>
-                                <exclude>**/SigningStrategies.class</exclude>
+                                <exclude>**/SigningStrategyFactory.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>

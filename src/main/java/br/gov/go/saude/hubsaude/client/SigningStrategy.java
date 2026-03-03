@@ -33,7 +33,7 @@ package br.gov.go.saude.hubsaude.client;
  * </p>
  *
  * @see PrivateKeySigningStrategy implementação padrão baseada em PrivateKey
- * @see SigningStrategies factory methods para criação de estratégias
+ * @see SigningStrategyFactory factory methods para criação de estratégias
  */
 @FunctionalInterface
 public interface SigningStrategy {

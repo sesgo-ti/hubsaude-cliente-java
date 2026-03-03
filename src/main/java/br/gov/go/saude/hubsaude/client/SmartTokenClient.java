@@ -5,6 +5,7 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMKeyPair;
@@ -331,7 +332,7 @@ public final class SmartTokenClient {
             final Path certificatePem) throws IOException {
         this(tokenEndpoint,
                 clientId,
-                SigningStrategies.fromPemFile(privateKeyPem),
+                SigningStrategyFactory.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
                 buildSslContext(null, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
@@ -363,7 +364,7 @@ public final class SmartTokenClient {
             final Path serverCertificatePem) throws IOException {
         this(tokenEndpoint,
                 clientId,
-                SigningStrategies.fromPemFile(privateKeyPem),
+                SigningStrategyFactory.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
                 buildSslContext(serverCertificatePem, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
@@ -442,7 +443,7 @@ public final class SmartTokenClient {
             final PrivateKey privateKey,
             final X509Certificate certificate) {
         verifyKeyPairConsistency(privateKey, certificate);
-        return SigningStrategies.fromPrivateKey(privateKey);
+        return SigningStrategyFactory.fromPrivateKey(privateKey);
     }
 
     /**
@@ -978,7 +979,7 @@ public final class SmartTokenClient {
      * var client = SmartTokenClient.builder()
      *     .tokenEndpoint("https://auth.example.com/token")
      *     .clientId("my-app")
-     *     .signingStrategy(SigningStrategies.fromPkcs11(provider, "alias", pin))
+     *     .signingStrategy(SigningStrategyFactory.fromPkcs11(provider, "alias", pin))
      *     .certificatePem(Path.of("cert.pem"))
      *     .build();
      * }</pre>
@@ -1052,6 +1053,8 @@ public final class SmartTokenClient {
          * @return este builder
          */
         @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
+        @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+                justification = "Não copiar char[] minimiza exposição de senha em memória")
         public Builder privateKeyPassword(final char[] password) {
             this.privateKeyPassword = password;
             return this;
@@ -1216,7 +1219,7 @@ public final class SmartTokenClient {
                 }
                 effectiveStrategy = signingStrategy;
             } else if (privateKeyPem != null) {
-                effectiveStrategy = SigningStrategies.fromPemFile(privateKeyPem, privateKeyPassword);
+                effectiveStrategy = SigningStrategyFactory.fromPemFile(privateKeyPem, privateKeyPassword);
             } else {
                 throw new IllegalStateException(
                         "É obrigatório definir signingStrategy ou privateKeyPem");

@@ -46,7 +46,7 @@ import java.util.Objects;
  * e deve ser limpa pelo chamador após o uso para minimizar exposição em memória.
  * </p>
  *
- * @see SigningStrategies factory methods que utilizam este loader
+ * @see SigningStrategyFactory factory methods que utilizam este loader
  */
 public final class PemLoader {
 

@@ -5,6 +5,8 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.Provider;
@@ -38,7 +40,7 @@ import java.util.Objects;
  * uma nova instância de {@link Signature}, evitando problemas de concorrência.
  * </p>
  *
- * @see SigningStrategies factory methods para criação
+ * @see SigningStrategyFactory factory methods para criação
  */
 public final class PrivateKeySigningStrategy implements SigningStrategy {
 
@@ -84,6 +86,8 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
      * @param provider   provider criptográfico (null = padrão da JVM)
      * @param algorithm  algoritmo de assinatura
      */
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "Provider é efetivamente imutável - singleton/thread-safe")
     public PrivateKeySigningStrategy(
             final PrivateKey privateKey,
             final Provider provider,
