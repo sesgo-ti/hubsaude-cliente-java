@@ -319,7 +319,7 @@ public final class SmartTokenClient {
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
      *
      * @param tokenEndpoint  URL do endpoint /auth/token do servidor de autorização
-     * @param clientId       identificador do cliente registrado
+     * @param clientId       identificador do cliente (fornecido pelo Ganesha no credenciamento)
      * @param privateKeyPem  caminho para o arquivo PEM da chave privada
      * @param certificatePem caminho para o arquivo PEM do certificado (não usado na
      *                       assinatura,
@@ -349,7 +349,7 @@ public final class SmartTokenClient {
      * chamador possui a cadeia correta.
      *
      * @param tokenEndpoint        URL do endpoint /auth/token do servidor de autorização
-     * @param clientId             identificador do cliente registrado
+     * @param clientId             identificador do cliente (fornecido pelo Ganesha no credenciamento)
      * @param privateKeyPem        caminho para o arquivo PEM da chave privada
      * @param certificatePem       caminho para o arquivo PEM do certificado do
      *                             cliente
@@ -380,7 +380,7 @@ public final class SmartTokenClient {
      * já foram carregados (ex: Vault, Secret Manager).
      *
      * @param tokenEndpoint URL do endpoint /auth/token do servidor de autorização
-     * @param clientId      identificador do cliente registrado
+     * @param clientId      identificador do cliente (fornecido pelo Ganesha no credenciamento)
      * @param privateKey    chave privada previamente carregada
      * @param certificate   certificado X.509 correspondente à chave
      * @param sslContext    contexto SSL a ser utilizado pelo {@link HttpClient}
@@ -400,7 +400,7 @@ public final class SmartTokenClient {
      * Construtor completo com todas as configurações disponíveis (retrocompatível).
      *
      * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
-     * @param clientId                identificador do cliente registrado
+     * @param clientId                identificador do cliente (fornecido pelo Ganesha no credenciamento)
      * @param privateKey              chave privada previamente carregada
      * @param certificate             certificado X.509 correspondente à chave
      * @param sslContext              contexto SSL a ser utilizado pelo {@link HttpClient}
@@ -455,7 +455,7 @@ public final class SmartTokenClient {
      * </p>
      *
      * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
-     * @param clientId                identificador do cliente registrado
+     * @param clientId                identificador do cliente (fornecido pelo Ganesha no credenciamento)
      * @param signingStrategy         estratégia de assinatura configurada
      * @param certificate             certificado X.509 para validação (pode ser null se não houver validação)
      * @param sslContext              contexto SSL a ser utilizado pelo {@link HttpClient}
@@ -1018,7 +1018,12 @@ public final class SmartTokenClient {
         /**
          * Define o identificador do cliente.
          *
-         * @param clientId identificador registrado no servidor
+         * <p>
+         * Este valor é fornecido pelo sistema Ganesha no momento do credenciamento
+         * do sistema interlocutor junto ao HubSaúde.
+         * </p>
+         *
+         * @param clientId identificador do cliente (ex: {@code hs-XXXXXXXX})
          * @return este builder
          */
         public Builder clientId(final String clientId) {
