@@ -21,6 +21,7 @@ Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
 - `client_id` fornecido pela SES-GO no momento do credenciamento (ex.: `meu-sistema`)
 - Chave privada usada para assinar o JWT de client assertion (em formato PEM, PKCS#8 ou via HSM)
 - Certificado ICP-Brasil correspondente à chave privada (em formato PEM)
+- Vários outros parâmetros podem ser fornecidos para controle de timeouts, cache, retries e validação de certificados.
 
 ```java
 // Uso básico
@@ -118,7 +119,7 @@ var tokenClient = SmartTokenClient.builder()
         .build();
 ```
 
-## Recursos Enterprise
+## Observações
 
 | Recurso | Descrição |
 |---------|-----------|
