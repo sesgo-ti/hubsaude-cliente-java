@@ -121,16 +121,16 @@ var tokenClient = SmartTokenClient.builder()
 
 ## Observações
 
-| Recurso | Descrição |
-|---------|-----------|
-| **Cache de tokens** | Tokens são reutilizados até próximo de expiração |
-| **Retry com backoff** | Falhas transitórias tratadas com backoff exponencial (1s→2s→4s) |
-| **Thread-safe** | Locks por scope evitam renovações duplicadas |
-| **Logs sanitizados** | Tokens nunca aparecem em logs |
-| **Validação de key-cert** | Verifica correspondência entre chave e certificado |
-| **HSM/PKCS#11** | Assinatura delegada ao hardware (chave nunca sai do HSM) |
-| **Chaves criptografadas** | Suporte a PKCS#8 e OpenSSL encrypted PEM |
-| **KeyStore** | Integração com JKS, PKCS#12 e keystores customizados |
+| Recurso                   | Descrição                                                       |
+| ------------------------- | --------------------------------------------------------------- |
+| **Cache de tokens**       | Tokens são reutilizados até próximo de expiração                |
+| **Retry com backoff**     | Falhas transitórias tratadas com backoff exponencial (1s→2s→4s) |
+| **Thread-safe**           | Locks por scope evitam renovações duplicadas                    |
+| **Logs sanitizados**      | Tokens nunca aparecem em logs                                   |
+| **Validação de key-cert** | Verifica correspondência entre chave e certificado              |
+| **HSM/PKCS#11**           | Assinatura delegada ao hardware (chave nunca sai do HSM)        |
+| **Chaves criptografadas** | Suporte a PKCS#8 e OpenSSL encrypted PEM                        |
+| **KeyStore**              | Integração com JKS, PKCS#12 e keystores customizados            |
 
 ## Arquitetura: SigningStrategy
 
@@ -154,12 +154,12 @@ O padrão **Strategy** permite flexibilidade na fonte de material criptográfico
 
 **Classes principais:**
 
-| Classe | Responsabilidade |
-|--------|------------------|
-| `SigningStrategy` | Interface funcional `sign(byte[]) → byte[]` |
-| `PrivateKeySigningStrategy` | Implementação com `java.security.Signature` |
-| `SigningStrategyFactory` | Factory para criar estratégias de diferentes fontes |
-| `PemLoader` | Utilitário para carregar PEM (com suporte a senha) |
+| Classe                      | Responsabilidade                                    |
+| --------------------------- | --------------------------------------------------- |
+| `SigningStrategy`           | Interface funcional `sign(byte[]) → byte[]`         |
+| `PrivateKeySigningStrategy` | Implementação com `java.security.Signature`         |
+| `SigningStrategyFactory`    | Factory para criar estratégias de diferentes fontes |
+| `PemLoader`                 | Utilitário para carregar PEM (com suporte a senha)  |
 
 ## Dependência Maven
 
@@ -167,7 +167,7 @@ O padrão **Strategy** permite flexibilidade na fonte de material criptográfico
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.0.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -205,10 +205,10 @@ mvn test
 
 Os testes de integração usam arquitetura **Template Method** com duas implementações independentes:
 
-| Classe | Infraestrutura | Tempo | Uso Recomendado |
-|--------|----------------|-------|-----------------|
-| `SmartTokenClientJarIT` | ProcessBuilder | ~5s | Desenvolvimento local |
-| `SmartTokenClientDockerIT` | Testcontainers | ~9s | CI/CD, builds reproduzíveis |
+| Classe                     | Infraestrutura | Tempo | Uso Recomendado             |
+| -------------------------- | -------------- | ----- | --------------------------- |
+| `SmartTokenClientJarIT`    | ProcessBuilder | ~5s   | Desenvolvimento local       |
+| `SmartTokenClientDockerIT` | Testcontainers | ~9s   | CI/CD, builds reproduzíveis |
 
 #### Executar Testes JAR (mais rápido)
 
