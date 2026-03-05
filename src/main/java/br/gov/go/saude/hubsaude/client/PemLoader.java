@@ -35,16 +35,17 @@ import java.util.Objects;
  * Suporta múltiplos formatos de chave privada:
  * </p>
  * <ul>
- *   <li>PKCS#1 RSA (BEGIN RSA PRIVATE KEY)</li>
- *   <li>PKCS#8 não criptografado (BEGIN PRIVATE KEY)</li>
- *   <li>PKCS#8 criptografado (BEGIN ENCRYPTED PRIVATE KEY)</li>
- *   <li>OpenSSL tradicional criptografado (BEGIN RSA PRIVATE KEY + DEK-Info)</li>
+ * <li>PKCS#1 RSA (BEGIN RSA PRIVATE KEY)</li>
+ * <li>PKCS#8 não criptografado (BEGIN PRIVATE KEY)</li>
+ * <li>PKCS#8 criptografado (BEGIN ENCRYPTED PRIVATE KEY)</li>
+ * <li>OpenSSL tradicional criptografado (BEGIN RSA PRIVATE KEY + DEK-Info)</li>
  * </ul>
  *
  * <h2>Segurança</h2>
  * <p>
  * Para chaves protegidas por senha, a senha é recebida como {@code char[]}
- * e deve ser limpa pelo chamador após o uso para minimizar exposição em memória.
+ * e deve ser limpa pelo chamador após o uso para minimizar exposição em
+ * memória.
  * </p>
  *
  * @see SigningStrategyFactory factory methods que utilizam este loader
@@ -60,7 +61,7 @@ public final class PemLoader {
      *
      * @param path caminho para o arquivo PEM
      * @return chave privada carregada
-     * @throws IOException se o arquivo não puder ser lido ou decodificado
+     * @throws IOException         se o arquivo não puder ser lido ou decodificado
      * @throws SmartTokenException se o formato não for suportado
      */
     public static PrivateKey loadPrivateKey(final Path path) throws IOException {
@@ -78,9 +79,9 @@ public final class PemLoader {
      * @param path     caminho para o arquivo PEM
      * @param password senha para chaves criptografadas (null se não criptografada)
      * @return chave privada carregada
-     * @throws IOException se o arquivo não puder ser lido
+     * @throws IOException         se o arquivo não puder ser lido
      * @throws SmartTokenException se a chave requer senha não fornecida,
-     *                            se a senha for incorreta, ou formato inválido
+     *                             se a senha for incorreta, ou formato inválido
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     public static PrivateKey loadPrivateKey(final Path path, final char[] password) throws IOException {
@@ -103,10 +104,10 @@ public final class PemLoader {
             final char[] password,
             final String source) throws IOException {
         Objects.requireNonNull(pem, "pem não pode ser null");
-        
+
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
             final Object obj = parser.readObject();
-            
+
             if (obj == null) {
                 throw new SmartTokenException("Arquivo PEM vazio ou inválido: " + source);
             }
@@ -116,7 +117,8 @@ public final class PemLoader {
                 return decryptPkcs8(encrypted, password, source);
             }
 
-            // OpenSSL tradicional criptografado (BEGIN RSA PRIVATE KEY + Proc-Type/DEK-Info)
+            // OpenSSL tradicional criptografado (BEGIN RSA PRIVATE KEY +
+            // Proc-Type/DEK-Info)
             if (obj instanceof PEMEncryptedKeyPair encryptedKeyPair) {
                 return decryptOpenSslKey(encryptedKeyPair, password, source);
             }
@@ -192,6 +194,7 @@ public final class PemLoader {
      *
      * @param password array de senha a ser limpo (pode ser null)
      */
+    @SuppressWarnings("PMD.UseVarargs")
     static void clearPassword(final char[] password) {
         if (password != null) {
             Arrays.fill(password, '\0');
@@ -203,7 +206,7 @@ public final class PemLoader {
      *
      * @param path caminho para o arquivo PEM do certificado
      * @return certificado X.509
-     * @throws IOException se o arquivo não puder ser lido
+     * @throws IOException         se o arquivo não puder ser lido
      * @throws SmartTokenException se não for um certificado válido
      */
     public static X509Certificate loadCertificate(final Path path) throws IOException {
@@ -224,10 +227,10 @@ public final class PemLoader {
             final String pem,
             final String source) throws IOException {
         Objects.requireNonNull(pem, "pem não pode ser null");
-        
+
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
             final Object obj = parser.readObject();
-            
+
             if (obj instanceof X509CertificateHolder holder) {
                 final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
                 if (cert == null) {
@@ -235,7 +238,7 @@ public final class PemLoader {
                 }
                 return cert;
             }
-            
+
             throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + source);
         } catch (CertificateException ex) {
             throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);

@@ -677,6 +677,7 @@ public final class SmartTokenClient {
      *
      * @return JWT compacto pronto para uso no campo client_assertion
      */
+    @SuppressWarnings("PMD.UseConcurrentHashMap")
     String buildClientAssertion() {
         final Instant now = Instant.now();
         final long iat = now.getEpochSecond();

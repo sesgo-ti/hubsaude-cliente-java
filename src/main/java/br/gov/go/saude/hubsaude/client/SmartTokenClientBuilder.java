@@ -55,7 +55,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * @see SigningStrategy
  * @see SslContextFactory
  */
-@SuppressWarnings("checkstyle:HiddenField") // Padrão Builder usa nomes iguais
+@SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields" }) // Padrão Builder usa nomes iguais e tem muitos
+                                                                     // campos
 public final class SmartTokenClientBuilder {
 
     private String tokenEndpoint;
@@ -319,6 +320,7 @@ public final class SmartTokenClientBuilder {
      * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem
      *                               definidos
      */
+    @SuppressWarnings({ "PMD.CyclomaticComplexity", "PMD.NPathComplexity" })
     public SmartTokenClient build() throws IOException {
         if (tokenEndpoint != null && discoveryBaseUrl != null) {
             throw new IllegalStateException("Defina tokenEndpoint OU fhirBase, não ambos");
@@ -394,18 +396,17 @@ public final class SmartTokenClientBuilder {
                 ? fhirBaseUrl + ".well-known/smart-configuration"
                 : fhirBaseUrl + "/.well-known/smart-configuration";
 
-        final HttpClient client = HttpClient.newBuilder()
+        try (HttpClient client = HttpClient.newBuilder()
                 .sslContext(sslContext)
                 .connectTimeout(connectTimeout)
-                .build();
+                .build()) {
 
-        final HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(wellKnownUrl))
-                .timeout(requestTimeout)
-                .GET()
-                .build();
+            final HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(wellKnownUrl))
+                    .timeout(requestTimeout)
+                    .GET()
+                    .build();
 
-        try {
             final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 throw new SmartTokenException(
