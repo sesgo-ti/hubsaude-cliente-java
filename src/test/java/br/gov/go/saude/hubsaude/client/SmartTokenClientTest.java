@@ -469,6 +469,15 @@ class SmartTokenClientTest {
         }
 
         @Test
+        void deveSanitizarTokenContendoLetrasEContrabarra() {
+                final String response = "token=abcdef\\ghi&other=value";
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+
+                assertThat(sanitized).contains("token=[REDACTED]&other=value");
+                assertThat(sanitized).doesNotContain("def");
+        }
+
+        @Test
         void deveManterRespostaSemTokenIntacta() {
                 final String response = "{\"error\":\"invalid_grant\",\"error_description\":\"Client not found\"}";
                 final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
