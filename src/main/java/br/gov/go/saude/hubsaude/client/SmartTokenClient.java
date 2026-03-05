@@ -1090,6 +1090,7 @@ public final class SmartTokenClient {
         private SigningStrategy signingStrategy;
         private Path certificatePem;
         private Path serverTrustAnchor;
+        private SSLContext customSslContext;
         private String tlsProtocol = DEFAULT_TLS_PROTOCOL;
         private Duration connectTimeout = DEFAULT_CONNECT_TIMEOUT;
         private Duration requestTimeout = DEFAULT_REQUEST_TIMEOUT;
@@ -1220,6 +1221,23 @@ public final class SmartTokenClient {
         }
 
         /**
+         * Define um {@link SSLContext} customizado, substituindo o comportamento
+         * padrão de {@link #serverTrustAnchor(Path)}.
+         *
+         * <p>
+         * Visibilidade package-private — destinado exclusivamente para testes de
+         * integração que necessitam de trust-all com certificados auto-assinados.
+         * </p>
+         *
+         * @param sslContext contexto SSL a ser utilizado
+         * @return este builder
+         */
+        Builder sslContext(final SSLContext sslContext) {
+            this.customSslContext = sslContext;
+            return this;
+        }
+
+        /**
          * Define o timeout de conexão TCP.
          *
          * @param connectTimeout duração positiva
@@ -1332,12 +1350,16 @@ public final class SmartTokenClient {
                     ? validateCertificate(certificatePem)
                     : null;
 
+            final SSLContext effectiveSslContext = customSslContext != null
+                    ? customSslContext
+                    : buildSslContext(serverTrustAnchor, tlsProtocol);
+
             return new SmartTokenClient(
                     tokenEndpoint,
                     clientId,
                     effectiveStrategy,
                     cert,
-                    buildSslContext(serverTrustAnchor, tlsProtocol),
+                    effectiveSslContext,
                     connectTimeout,
                     requestTimeout,
                     assertionTtlSeconds,
