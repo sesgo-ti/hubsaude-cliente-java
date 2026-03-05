@@ -366,8 +366,8 @@ public final class SmartTokenClient {
 
     /**
      * Versão avançada que aceita um certificado público do servidor para ser
-     * utilizado como trust anchor, evitando o uso de SSL permissivo quando o
-     * chamador possui a cadeia correta.
+     * utilizado como trust anchor, permitindo validação TLS específica quando
+     * o chamador possui a cadeia correta.
      *
      * @param tokenEndpoint     URL do endpoint /auth/token do servidor de
      *                          autorização
@@ -377,7 +377,7 @@ public final class SmartTokenClient {
      * @param certificatePem    caminho para o arquivo PEM do certificado do
      *                          cliente
      * @param serverTrustAnchor certificado X.509 confiável do servidor; quando
-     *                          {@code null}, usa-se SSL permissivo para testes
+     *                          {@code null}, usa-se o trust store padrão da JVM
      */
     public SmartTokenClient(
             final String tokenEndpoint,
