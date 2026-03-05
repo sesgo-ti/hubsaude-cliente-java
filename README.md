@@ -17,7 +17,7 @@ Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do flux
 ## Dados necessários 
 
 Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
-- URL do endpoint onde o token é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`). Esta URL pode ser obtida pelo endpoint `[base]/.well-known/smart-configuration` do HubSaúde. Em particular, o campo `token_endpoint` deste endpoint contém a URL necessária para configuração do `SmartTokenClient`.
+- URL do endpoint onde o token de acesso é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`). Esta URL pode ser obtida pelo endpoint `[base]/.well-known/smart-configuration` do HubSaúde. Em particular, o campo `token_endpoint` deste endpoint contém a URL necessária para configuração do `SmartTokenClient`.
 - `client_id` fornecido pela SES-GO no momento do credenciamento (ex.: `meu-sistema`)
 - Chave privada usada para assinar o JWT de client assertion (em formato PEM, PKCS#8 ou via HSM)
 - Certificado ICP-Brasil correspondente à chave privada (em formato PEM)
