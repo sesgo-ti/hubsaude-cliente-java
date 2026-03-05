@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.StringWriter;
 import java.math.BigInteger;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +33,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import javax.net.ssl.SSLContext;
+import com.sun.net.httpserver.HttpServer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -78,14 +81,27 @@ class SmartTokenClientBuilderTest {
     // ==================== Validações obrigatórias ====================
 
     @Test
-    @DisplayName("Deve exigir tokenEndpoint")
+    @DisplayName("Deve exigir tokenEndpoint ou discoverTokenEndpointFrom")
     void deveExigirTokenEndpoint() {
         assertThatThrownBy(() -> SmartTokenClient.builder()
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .build())
-                .isInstanceOf(NullPointerException.class)
-                .hasMessageContaining("tokenEndpoint");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("tokenEndpoint ou discoverTokenEndpointFrom");
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar tokenEndpoint e discoverTokenEndpointFrom simultâneos")
+    void deveRejeitarAmbosTokenEndpoints() {
+        assertThatThrownBy(() -> SmartTokenClient.builder()
+                .tokenEndpoint(TOKEN_ENDPOINT)
+                .discoverTokenEndpointFrom("https://fhir.example.com")
+                .clientId(CLIENT_ID)
+                .privateKeyPem(keyFile)
+                .build())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Defina tokenEndpoint OU discoverTokenEndpointFrom");
     }
 
     @Test
@@ -344,6 +360,7 @@ class SmartTokenClientBuilderTest {
     void deveRetornarMesmaInstancia() {
         final SmartTokenClientBuilder builder = SmartTokenClient.builder();
         assertThat(builder.tokenEndpoint(TOKEN_ENDPOINT)).isSameAs(builder);
+        assertThat(builder.discoverTokenEndpointFrom("http://fhir.local")).isSameAs(builder);
         assertThat(builder.clientId(CLIENT_ID)).isSameAs(builder);
         assertThat(builder.privateKeyPem(keyFile)).isSameAs(builder);
         assertThat(builder.certificatePem(certFile)).isSameAs(builder);
@@ -411,6 +428,38 @@ class SmartTokenClientBuilderTest {
                 .certificatePem(badCert)
                 .build())
                 .isInstanceOf(Exception.class);
+    }
+
+    // ==================== Discovery ====================
+
+    @Test
+    @DisplayName("Deve obter tokenEndpoint via discovery (smart-configuration)")
+    void deveObterTokenEndpointViaDiscovery() throws Exception {
+        final String expectedEndpoint = "https://hub.saude.go.gov.br/auth/token";
+        final String jsonResponse = "{\"token_endpoint\":\"" + expectedEndpoint + "\"}";
+
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            exchange.sendResponseHeaders(200, jsonResponse.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort();
+
+            final SmartTokenClient client = SmartTokenClient.builder()
+                    .discoverTokenEndpointFrom(baseUrl)
+                    .clientId(CLIENT_ID)
+                    .privateKeyPem(keyFile)
+                    .build();
+
+            assertThat(client).isNotNull();
+        } finally {
+            server.stop(0);
+        }
     }
 
     // ==================== Helpers ====================

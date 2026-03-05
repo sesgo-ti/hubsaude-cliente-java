@@ -13,6 +13,13 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Objects;
 import javax.net.ssl.SSLContext;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Builder fluente para construção de instâncias de {@link SmartTokenClient}.
@@ -52,6 +59,7 @@ import javax.net.ssl.SSLContext;
 public final class SmartTokenClientBuilder {
 
     private String tokenEndpoint;
+    private String discoveryBaseUrl;
     private String clientId;
     private Path privateKeyPem;
     private char[] privateKeyPassword;
@@ -78,6 +86,23 @@ public final class SmartTokenClientBuilder {
      */
     public SmartTokenClientBuilder tokenEndpoint(final String tokenEndpoint) {
         this.tokenEndpoint = tokenEndpoint;
+        return this;
+    }
+
+    /**
+     * Define a URL base do servidor FHIR para descobrir o token_endpoint
+     * a partir de /.well-known/smart-configuration.
+     *
+     * <p>
+     * Mutuamente exclusivo com {@link #tokenEndpoint(String)}.
+     * </p>
+     *
+     * @param fhirBaseUrl URL base do servidor FHIR (ex:
+     *                    https://hub.saude.go.gov.br)
+     * @return este builder
+     */
+    public SmartTokenClientBuilder discoverTokenEndpointFrom(final String fhirBaseUrl) {
+        this.discoveryBaseUrl = fhirBaseUrl;
         return this;
     }
 
@@ -295,8 +320,22 @@ public final class SmartTokenClientBuilder {
      *                               definidos
      */
     public SmartTokenClient build() throws IOException {
-        Objects.requireNonNull(tokenEndpoint, "tokenEndpoint é obrigatório");
+        if (tokenEndpoint != null && discoveryBaseUrl != null) {
+            throw new IllegalStateException("Defina tokenEndpoint OU discoverTokenEndpointFrom, não ambos");
+        }
+        if (tokenEndpoint == null && discoveryBaseUrl == null) {
+            throw new IllegalStateException("É obrigatório definir tokenEndpoint ou discoverTokenEndpointFrom");
+        }
         Objects.requireNonNull(clientId, "clientId é obrigatório");
+
+        final SSLContext effectiveSslContext = customSslContext != null
+                ? customSslContext
+                : SslContextFactory.buildSslContext(serverTrustAnchor, tlsProtocol);
+
+        String effectiveTokenEndpoint = this.tokenEndpoint;
+        if (effectiveTokenEndpoint == null) {
+            effectiveTokenEndpoint = discoverTokenEndpoint(effectiveSslContext);
+        }
 
         // Determina a estratégia de assinatura
         final SigningStrategy effectiveStrategy;
@@ -318,21 +357,57 @@ public final class SmartTokenClientBuilder {
                 ? SslContextFactory.validateCertificate(certificatePem)
                 : null;
 
-        final SSLContext effectiveSslContext = customSslContext != null
-                ? customSslContext
-                : SslContextFactory.buildSslContext(serverTrustAnchor, tlsProtocol);
+        final SSLContext effectiveSslContextFinal = effectiveSslContext;
 
         return new SmartTokenClient(
-                tokenEndpoint,
+                effectiveTokenEndpoint,
                 clientId,
                 effectiveStrategy,
                 cert,
-                effectiveSslContext,
+                effectiveSslContextFinal,
                 connectTimeout,
                 requestTimeout,
                 assertionTtlSeconds,
                 enableTokenCache,
                 tokenCacheMarginSeconds,
                 maxRetries);
+    }
+
+    private String discoverTokenEndpoint(final SSLContext sslContext) throws IOException {
+        final String wellKnownUrl = discoveryBaseUrl.endsWith("/")
+                ? discoveryBaseUrl + ".well-known/smart-configuration"
+                : discoveryBaseUrl + "/.well-known/smart-configuration";
+
+        final HttpClient client = HttpClient.newBuilder()
+                .sslContext(sslContext)
+                .connectTimeout(connectTimeout)
+                .build();
+
+        final HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(wellKnownUrl))
+                .timeout(requestTimeout)
+                .GET()
+                .build();
+
+        try {
+            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new SmartTokenException(
+                        "Falha ao obter smart-configuration (" + response.statusCode() + "): "
+                                + SmartTokenClient.sanitizeErrorResponse(response.body()));
+            }
+
+            final ObjectMapper mapper = new ObjectMapper()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            final JsonNode node = mapper.readTree(response.body());
+
+            if (!node.has("token_endpoint")) {
+                throw new SmartTokenException("A resposta de smart-configuration não contém 'token_endpoint'");
+            }
+            return node.get("token_endpoint").asText();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Requisição para smart-configuration interrompida", e);
+        }
     }
 }
