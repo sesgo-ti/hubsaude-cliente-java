@@ -299,6 +299,27 @@ abstract class SmartTokenClientIntegrationTestBase {
                 assertThat(accessToken).isNotBlank();
         }
 
+        @Test
+        @DisplayName("Deve descobrir endpoint dinamicamente e obter token (Discovery)")
+        void deveObterTokenUsandoDiscovery() throws Exception {
+                // Utiliza fhirBase em vez do tokenEndpoint explícito
+                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                                .fhirBase(getSimulatorBaseUrl())
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .build();
+
+                // O tokenClient deve ter extraído ".well-known/smart-configuration" no build
+                // e conseguido resolver a URL apontando para a própria instância do simulador.
+                final String accessToken = tokenClient.obtainToken("system/Patient.rs");
+
+                assertThat(accessToken)
+                                .isNotBlank()
+                                .contains(".");
+        }
+
         // ==================== Métodos Auxiliares ====================
 
         protected static String toPkcs8Pem(final byte[] encoded) {
