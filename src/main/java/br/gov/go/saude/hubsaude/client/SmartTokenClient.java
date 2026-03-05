@@ -854,7 +854,16 @@ public final class SmartTokenClient {
     /**
      * Constrói um {@link SSLContext} configurado com o certificado do servidor.
      *
-     * @param serverTrustAnchor certificado do servidor; se null, usa trust-all
+     * <p>
+     * Quando {@code serverTrustAnchor} é {@code null}, utiliza o trust store padrão
+     * da JVM ({@code $JAVA_HOME/lib/security/cacerts}), que é o comportamento
+     * seguro
+     * por padrão. Para ambientes de teste com certificados auto-assinados, utilize
+     * {@link #buildTrustAllSslContext(String)} explicitamente.
+     * </p>
+     *
+     * @param serverTrustAnchor certificado do servidor; se null, usa trust store
+     *                          padrão da JVM
      * @param tlsProtocol       protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
      * @return contexto SSL configurado
      * @throws SmartTokenException se o protocolo for inválido ou houver erro de
@@ -862,7 +871,11 @@ public final class SmartTokenClient {
      */
     public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
         if (serverTrustAnchor == null) {
-            return buildTrustAllSslContext(tlsProtocol);
+            try {
+                return SSLContext.getDefault();
+            } catch (java.security.NoSuchAlgorithmException ex) {
+                throw new SmartTokenException("Falha ao obter SSLContext padrão da JVM", ex);
+            }
         }
         try {
             final X509Certificate trustedCert = validateCertificate(serverTrustAnchor);
@@ -1008,7 +1021,7 @@ public final class SmartTokenClient {
      * @see #buildSslContext(Path, String) para configuração segura com certificado
      *      específico
      */
-    public static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
+    static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
         LOG.warn("⚠️ Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
         try {
             final TrustManager[] trustAll = {
