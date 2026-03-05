@@ -120,48 +120,6 @@ var tokenClient = SmartTokenClient.builder()
         .build();
 ```
 
-## Observações
-
-| Recurso                   | Descrição                                                       |
-| ------------------------- | --------------------------------------------------------------- |
-| **Cache de tokens**       | Tokens são reutilizados até próximo de expiração                |
-| **Retry com backoff**     | Falhas transitórias tratadas com backoff exponencial (1s→2s→4s) |
-| **Thread-safe**           | Locks por scope evitam renovações duplicadas                    |
-| **Logs sanitizados**      | Tokens nunca aparecem em logs                                   |
-| **Validação de key-cert** | Verifica correspondência entre chave e certificado              |
-| **HSM/PKCS#11**           | Assinatura delegada ao hardware (chave nunca sai do HSM)        |
-| **Chaves criptografadas** | Suporte a PKCS#8 e OpenSSL encrypted PEM                        |
-| **KeyStore**              | Integração com JKS, PKCS#12 e keystores customizados            |
-
-## Arquitetura: SigningStrategy
-
-O padrão **Strategy** permite flexibilidade na fonte de material criptográfico:
-
-```
-┌─────────────────────┐
-│  SmartTokenClient   │
-│  ─────────────────  │
-│  signingStrategy ───┼──► SigningStrategy.sign(byte[])
-└─────────────────────┘              │
-                                     ▼
-                    ┌────────────────────────────────┐
-                    │   PrivateKeySigningStrategy    │
-                    │   ────────────────────────────│
-                    │   - Chave em memória (PEM)     │
-                    │   - Handle PKCS#11 (HSM)       │
-                    │   - KeyStore (JKS/PKCS#12)     │
-                    └────────────────────────────────┘
-```
-
-**Classes principais:**
-
-| Classe                      | Responsabilidade                                    |
-| --------------------------- | --------------------------------------------------- |
-| `SigningStrategy`           | Interface funcional `sign(byte[]) → byte[]`         |
-| `PrivateKeySigningStrategy` | Implementação com `java.security.Signature`         |
-| `SigningStrategyFactory`    | Factory para criar estratégias de diferentes fontes |
-| `PemLoader`                 | Utilitário para carregar PEM (com suporte a senha)  |
-
 ## Dependência Maven
 
 ```xml
