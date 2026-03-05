@@ -462,6 +462,70 @@ class SmartTokenClientBuilderTest {
         }
     }
 
+    @Test
+    @DisplayName("static discoverTokenEndpoint: Deve lançar SmartTokenException quando backend falhar (HTTP != 200)")
+    void deveFalharSeDiscoveryRetornarErroHttp() throws Exception {
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            final String error = "Not Found";
+            exchange.sendResponseHeaders(404, error.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(error.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort();
+            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+            assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
+                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5)))
+                    .isInstanceOf(SmartTokenException.class)
+                    .hasMessageContaining("Falha ao obter smart-configuration (404)");
+
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("static discoverTokenEndpoint: Deve lançar SmartTokenException se faltar token_endpoint")
+    void deveFalharSeNaoHouverTokenEndpointNoDiscovery() throws Exception {
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            final String json = "{\"authorization_endpoint\":\"https://example.com/auth\"}";
+            exchange.sendResponseHeaders(200, json.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort();
+            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+            assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
+                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5)))
+                    .isInstanceOf(SmartTokenException.class)
+                    .hasMessageContaining("não contém 'token_endpoint'");
+
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("static discoverTokenEndpoint: Deve falhar se houver problema de I/O de rede")
+    void deveOcorrerIoExceptionNoNetworkError() {
+        final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+        assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
+                "http://localhost:59999", trustAll, Duration.ofSeconds(1), Duration.ofSeconds(1)))
+                .isInstanceOf(IOException.class);
+    }
+
     // ==================== Helpers ====================
 
     private static String toPkcs8Pem(final byte[] encoded) {
