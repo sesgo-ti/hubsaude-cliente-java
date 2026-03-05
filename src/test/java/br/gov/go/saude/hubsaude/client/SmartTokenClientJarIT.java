@@ -35,14 +35,15 @@ import java.util.concurrent.TimeUnit;
  * </p>
  *
  * <h2>Execução</h2>
+ * 
  * <pre>{@code
  * mvn verify -Dit.test=SmartTokenClientJarIT
  * }</pre>
  *
  * <h2>Pré-requisitos</h2>
  * <ul>
- *   <li>Java 21+ instalado</li>
- *   <li>hubsaude-simulador disponível via Maven</li>
+ * <li>Java 21+ instalado</li>
+ * <li>hubsaude-simulador disponível via Maven</li>
  * </ul>
  *
  * @see SmartTokenClientIntegrationTestBase
@@ -97,8 +98,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
         final ProcessBuilder pb = new ProcessBuilder(
                 "java",
                 "-Djava.security.egd=file:/dev/./urandom",
-                "-jar", jarPath.toString()
-        );
+                "-jar", jarPath.toString());
         pb.redirectErrorStream(true);
 
         simulatorProcess = pb.start();
@@ -126,7 +126,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     private static void waitForSimulator() throws Exception {
         final HttpClient client = HttpClient.newBuilder()
-                .sslContext(SmartTokenClient.buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL))
+                .sslContext(SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL))
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
 

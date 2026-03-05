@@ -71,8 +71,8 @@ abstract class SmartTokenClientIntegrationTestBase {
          * SSLContext trust-all para testes com certificados auto-assinados do
          * simulador.
          */
-        protected static final javax.net.ssl.SSLContext TRUST_ALL_SSL_CONTEXT = SmartTokenClient
-                        .buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL);
+        protected static final javax.net.ssl.SSLContext TRUST_ALL_SSL_CONTEXT = SslContextFactory
+                        .buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL);
 
         protected static Path keyFile;
         protected static Path certFile;

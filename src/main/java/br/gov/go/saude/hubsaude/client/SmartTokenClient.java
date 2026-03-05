@@ -6,14 +6,10 @@
 package br.gov.go.saude.hubsaude.client;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.openssl.PEMParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -21,9 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
@@ -36,12 +30,7 @@ import java.util.UUID;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -311,7 +300,7 @@ public final class SmartTokenClient {
     public static final int DEFAULT_TOKEN_CACHE_MARGIN_SECONDS = 30;
 
     /** Protocolo TLS padrão. */
-    public static final String DEFAULT_TLS_PROTOCOL = "TLSv1.3";
+    public static final String DEFAULT_TLS_PROTOCOL = SslContextFactory.DEFAULT_TLS_PROTOCOL;
 
     /** Header JWT para RS384. */
     private static final String JWT_HEADER_RS384 = "{\"alg\":\"RS384\",\"typ\":\"JWT\"}";
@@ -355,7 +344,7 @@ public final class SmartTokenClient {
                 clientId,
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(null, DEFAULT_TLS_PROTOCOL),
+                SslContextFactory.buildSslContext(null, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
                 DEFAULT_ASSERTION_TTL_SECONDS,
@@ -389,7 +378,7 @@ public final class SmartTokenClient {
                 clientId,
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
                 validateCertificate(certificatePem),
-                buildSslContext(serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
+                SslContextFactory.buildSslContext(serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
                 DEFAULT_ASSERTION_TTL_SECONDS,
@@ -818,83 +807,31 @@ public final class SmartTokenClient {
     }
 
     /**
-     * Realiza um sanity check no certificado PEM associado ao cliente, garantindo
-     * que seja um X.509 válido e dentro do período de validade antes de iniciar
-     * o fluxo de autenticação.
+     * Valida um certificado PEM.
      *
      * @param path caminho absoluto para o certificado PEM
      * @return certificado X.509 decodificado
      * @throws IOException         quando o arquivo não pode ser lido
-     * @throws SmartTokenException quando o conteúdo não representa um
-     *                             certificado X.509 válido ou está expirado
+     * @throws SmartTokenException quando o conteúdo não é válido
+     * @deprecated Use {@link SslContextFactory#validateCertificate(Path)}
      */
+    @Deprecated(forRemoval = true)
     public static X509Certificate validateCertificate(final Path path) throws IOException {
-        final String pem = Files.readString(path, StandardCharsets.UTF_8);
-        try (PEMParser parser = new PEMParser(new StringReader(pem))) {
-            final Object obj = parser.readObject();
-            if (obj instanceof X509CertificateHolder holder) {
-                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-                if (cert == null) {
-                    throw new SmartTokenException("Certificado inválido: " + path);
-                }
-                // Valida período de validade
-                cert.checkValidity();
-                return cert;
-            }
-            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
-        } catch (java.security.cert.CertificateExpiredException ex) {
-            throw new SmartTokenException("Certificado expirado: " + path, ex);
-        } catch (java.security.cert.CertificateNotYetValidException ex) {
-            throw new SmartTokenException("Certificado ainda não é válido: " + path, ex);
-        } catch (CertificateException ex) {
-            throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
-        }
+        return SslContextFactory.validateCertificate(path);
     }
 
     /**
-     * Constrói um {@link SSLContext} configurado com o certificado do servidor.
+     * Constrói um {@link SSLContext}.
      *
-     * <p>
-     * Quando {@code serverTrustAnchor} é {@code null}, utiliza o trust store padrão
-     * da JVM ({@code $JAVA_HOME/lib/security/cacerts}), que é o comportamento
-     * seguro
-     * por padrão. Para ambientes de teste com certificados auto-assinados, utilize
-     * {@link #buildTrustAllSslContext(String)} explicitamente.
-     * </p>
-     *
-     * @param serverTrustAnchor certificado do servidor; se null, usa trust store
-     *                          padrão da JVM
-     * @param tlsProtocol       protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
+     * @param serverTrustAnchor certificado do servidor; se null, usa trust store da
+     *                          JVM
+     * @param tlsProtocol       protocolo TLS
      * @return contexto SSL configurado
-     * @throws SmartTokenException se o protocolo for inválido ou houver erro de
-     *                             configuração
+     * @deprecated Use {@link SslContextFactory#buildSslContext(Path, String)}
      */
+    @Deprecated(forRemoval = true)
     public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
-        if (serverTrustAnchor == null) {
-            try {
-                return SSLContext.getDefault();
-            } catch (java.security.NoSuchAlgorithmException ex) {
-                throw new SmartTokenException("Falha ao obter SSLContext padrão da JVM", ex);
-            }
-        }
-        try {
-            final X509Certificate trustedCert = validateCertificate(serverTrustAnchor);
-            final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-            trustStore.load(null, null);
-            trustStore.setCertificateEntry("trusted-server", trustedCert);
-
-            final TrustManagerFactory tmf = TrustManagerFactory
-                    .getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(trustStore);
-
-            final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
-            ctx.init(null, tmf.getTrustManagers(), new SecureRandom());
-            return ctx;
-        } catch (SmartTokenException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new SmartTokenException("Falha ao construir SSLContext customizado: " + ex.getMessage(), ex);
-        }
+        return SslContextFactory.buildSslContext(serverTrustAnchor, tlsProtocol);
     }
 
     /**
@@ -983,72 +920,15 @@ public final class SmartTokenClient {
     }
 
     /**
-     * Cria um {@link javax.net.ssl.SSLContext} que confia em todos os certificados.
+     * Cria um {@link SSLContext} trust-all.
      *
-     * <p>
-     * <strong>⚠️ ATENÇÃO: USO EXCLUSIVO PARA TESTES E DESENVOLVIMENTO
-     * LOCAL!</strong>
-     * </p>
-     *
-     * <p>
-     * Este método cria um contexto SSL que <strong>DESABILITA
-     * COMPLETAMENTE</strong>
-     * a validação de certificados TLS, tornando a conexão vulnerável a:
-     * </p>
-     * <ul>
-     * <li>Ataques Man-in-the-Middle (MITM)</li>
-     * <li>Interceptação de tráfego</li>
-     * <li>Roubo de credenciais e tokens</li>
-     * <li>Violação de dados sensíveis de saúde</li>
-     * </ul>
-     *
-     * <p>
-     * <strong>NUNCA</strong> utilize este método em:
-     * </p>
-     * <ul>
-     * <li>Ambiente de produção</li>
-     * <li>Ambiente de homologação</li>
-     * <li>Qualquer ambiente que processe dados reais de pacientes</li>
-     * </ul>
-     *
-     * <p>
-     * Para ambientes de produção, utilize SEMPRE um {@link SSLContext} configurado
-     * com a cadeia de certificados correta do servidor de autorização.
-     * </p>
-     *
-     * @param tlsProtocol protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
-     * @return contexto SSL que aceita qualquer certificado (⚠️ INSEGURO)
-     * @see #buildSslContext(Path, String) para configuração segura com certificado
-     *      específico
+     * @param tlsProtocol protocolo TLS
+     * @return contexto SSL inseguro
+     * @deprecated Use {@link SslContextFactory#buildTrustAllSslContext(String)}
      */
+    @Deprecated(forRemoval = true)
     static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
-        LOG.warn("⚠️ Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
-        try {
-            final TrustManager[] trustAll = {
-                    new X509TrustManager() {
-                        @Override
-                        public X509Certificate[] getAcceptedIssuers() {
-                            return new X509Certificate[0];
-                        }
-
-                        @Override
-                        public void checkClientTrusted(
-                                final X509Certificate[] c, final String a) {
-                        }
-
-                        @Override
-                        public void checkServerTrusted(
-                                final X509Certificate[] c, final String a) {
-                        }
-                    }
-            };
-            final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
-            ctx.init(null, trustAll, new SecureRandom());
-            return ctx;
-        } catch (Exception ex) {
-            throw new SmartTokenException("Falha ao criar SSLContext trust-all com protocolo '" + tlsProtocol + "'",
-                    ex);
-        }
+        return SslContextFactory.buildTrustAllSslContext(tlsProtocol);
     }
 
     /**

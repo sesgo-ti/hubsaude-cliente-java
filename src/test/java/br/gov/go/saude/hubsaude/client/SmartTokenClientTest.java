@@ -62,7 +62,7 @@ class SmartTokenClientTest {
                 final String certPem = generateSelfSignedCertPem(pair);
                 Files.writeString(certFile, certPem, StandardCharsets.UTF_8);
 
-                clientCertificate = SmartTokenClient.validateCertificate(certFile);
+                clientCertificate = SslContextFactory.validateCertificate(certFile);
         }
 
         @Test
@@ -123,7 +123,7 @@ class SmartTokenClientTest {
                                 CLIENT_ID,
                                 privateKey,
                                 clientCertificate,
-                                SmartTokenClient.buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL));
+                                SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL));
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
@@ -156,7 +156,7 @@ class SmartTokenClientTest {
                 final String outroCertPem = generateSelfSignedCertPem(outroPar);
                 Files.writeString(outroCertFile, outroCertPem, StandardCharsets.UTF_8);
 
-                final X509Certificate outroCert = SmartTokenClient.validateCertificate(outroCertFile);
+                final X509Certificate outroCert = SslContextFactory.validateCertificate(outroCertFile);
 
                 // Tenta criar cliente com chave privada original + certificado de outro par
                 assertThatThrownBy(() -> new SmartTokenClient(
@@ -164,7 +164,7 @@ class SmartTokenClientTest {
                                 CLIENT_ID,
                                 privateKey,
                                 outroCert,
-                                SmartTokenClient.buildTrustAllSslContext(SmartTokenClient.DEFAULT_TLS_PROTOCOL)))
+                                SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL)))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("não corresponde");
         }
@@ -299,7 +299,7 @@ class SmartTokenClientTest {
                 final Path notCertFile = tempDir.resolve("not-cert.pem");
                 Files.writeString(notCertFile, toPkcs8Pem(privateKey.getEncoded()));
 
-                assertThatThrownBy(() -> SmartTokenClient.validateCertificate(notCertFile))
+                assertThatThrownBy(() -> SslContextFactory.validateCertificate(notCertFile))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("X.509");
         }
@@ -319,21 +319,21 @@ class SmartTokenClientTest {
 
         @Test
         void deveFalharBuildTrustAllSslContextComProtocoloInvalido() {
-                assertThatThrownBy(() -> SmartTokenClient.buildTrustAllSslContext("TLSv99.INVALIDO"))
+                assertThatThrownBy(() -> SslContextFactory.buildTrustAllSslContext("TLSv99.INVALIDO"))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("TLSv99.INVALIDO");
         }
 
         @Test
         void deveFalharBuildSslContextComProtocoloInvalido() {
-                assertThatThrownBy(() -> SmartTokenClient.buildSslContext(certFile, "PROTOCOLO_INVALIDO"))
+                assertThatThrownBy(() -> SslContextFactory.buildSslContext(certFile, "PROTOCOLO_INVALIDO"))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("SSLContext");
         }
 
         @Test
         void deveUsarTlsv13ComoPadrao() {
-                assertThat(SmartTokenClient.DEFAULT_TLS_PROTOCOL).isEqualTo("TLSv1.3");
+                assertThat(SslContextFactory.DEFAULT_TLS_PROTOCOL).isEqualTo("TLSv1.3");
         }
 
         @Test
@@ -630,7 +630,7 @@ class SmartTokenClientTest {
                 final String certPem = generateExpiredCertPem(pair);
                 Files.writeString(certExpirado, certPem, StandardCharsets.UTF_8);
 
-                assertThatThrownBy(() -> SmartTokenClient.validateCertificate(certExpirado))
+                assertThatThrownBy(() -> SslContextFactory.validateCertificate(certExpirado))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("expirado");
         }
@@ -646,7 +646,7 @@ class SmartTokenClientTest {
                 final String certPem = generateFutureCertPem(pair);
                 Files.writeString(certFuturo, certPem, StandardCharsets.UTF_8);
 
-                assertThatThrownBy(() -> SmartTokenClient.validateCertificate(certFuturo))
+                assertThatThrownBy(() -> SslContextFactory.validateCertificate(certFuturo))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("ainda não é válido");
         }
