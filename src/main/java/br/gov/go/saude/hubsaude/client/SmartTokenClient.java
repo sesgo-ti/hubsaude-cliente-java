@@ -797,8 +797,10 @@ public final class SmartTokenClient {
             return responseBody == null ? "<empty>"
                     : responseBody.substring(0, MAX_ERROR_RESPONSE_LENGTH) + "...";
         }
-        // Remove possíveis tokens do erro
-        return responseBody.replaceAll("(access_token|token)[^&\"]*", "$1=[REDACTED]");
+        // Remove possíveis tokens do erro (JSON e form-encoded)
+        return responseBody
+                .replaceAll("(\"(?:access_token|token)\")\\s*:\\s*\"[^\"]*\"", "$1:\"[REDACTED]\"")
+                .replaceAll("(access_token|token)=[^&\\s]*", "$1=[REDACTED]");
     }
 
     /**

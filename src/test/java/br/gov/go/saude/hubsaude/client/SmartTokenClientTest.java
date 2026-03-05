@@ -457,7 +457,7 @@ class SmartTokenClientTest {
                 final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
 
                 assertThat(sanitized).doesNotContain("eyJsecretvalue");
-                assertThat(sanitized).contains("access_token=[REDACTED]");
+                assertThat(sanitized).contains("\"access_token\":\"[REDACTED]\"");
         }
 
         @Test
