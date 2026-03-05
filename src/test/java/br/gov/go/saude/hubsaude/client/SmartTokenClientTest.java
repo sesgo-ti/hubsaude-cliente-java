@@ -352,6 +352,132 @@ class SmartTokenClientTest {
                                 .hasMessageContaining("Falha após 1 tentativas");
         }
 
+        @Test
+        void deveRespeitarBackoffExponencialNoRetry() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint("https://host-inexistente.local:9999/auth/token")
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .connectTimeout(Duration.ofMillis(200))
+                                .maxRetries(2)
+                                .build();
+
+                final long start = System.currentTimeMillis();
+
+                assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("Falha após 2 tentativas");
+
+                final long elapsed = System.currentTimeMillis() - start;
+                // Com maxRetries=2, deve haver 1 retry com delay base de 1000ms
+                assertThat(elapsed).isGreaterThanOrEqualTo(900L);
+        }
+
+        @Test
+        void deveFalharComHttp429RateLimit() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        final byte[] resp = "{\"error\":\"rate_limit_exceeded\"}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(429, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .maxRetries(1)
+                                        .build();
+
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("429");
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveFalharComHttpErroGenerico() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        final byte[] resp = "{\"error\":\"server_error\"}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(500, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .maxRetries(1)
+                                        .build();
+
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("HTTP 500");
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        // ---------- Testes de sanitizeErrorResponse ----------
+
+        @Test
+        void deveSanitizarRespostaDeErroNula() {
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(null);
+                assertThat(sanitized).isEqualTo("<empty>");
+        }
+
+        @Test
+        void deveTruncarRespostaDeErroGrande() {
+                final String longResponse = "x".repeat(600);
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(longResponse);
+
+                assertThat(sanitized).hasSize(503); // 500 + "..."
+                assertThat(sanitized).endsWith("...");
+        }
+
+        @Test
+        void deveSanitizarRespostaComAccessToken() {
+                final String response = "{\"access_token\":\"eyJsecretvalue\",\"error\":\"invalid\"}";
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+
+                assertThat(sanitized).doesNotContain("eyJsecretvalue");
+                assertThat(sanitized).contains("access_token=[REDACTED]");
+        }
+
+        @Test
+        void deveSanitizarRespostaComTokenGenerico() {
+                final String response = "token=eyJhbGciOi&other=value";
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+
+                assertThat(sanitized).doesNotContain("eyJhbGciOi");
+                assertThat(sanitized).contains("token=[REDACTED]");
+        }
+
+        @Test
+        void deveManterRespostaSemTokenIntacta() {
+                final String response = "{\"error\":\"invalid_grant\",\"error_description\":\"Client not found\"}";
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+
+                assertThat(sanitized).contains("invalid_grant");
+                assertThat(sanitized).contains("Client not found");
+        }
+
         // ---------- Testes do record CachedToken ----------
 
         @Test
@@ -421,13 +547,13 @@ class SmartTokenClientTest {
                                 .build();
 
                 final int numThreads = 10;
-                final java.util.concurrent.ExecutorService executor = 
-                        java.util.concurrent.Executors.newFixedThreadPool(numThreads);
+                final java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors
+                                .newFixedThreadPool(numThreads);
                 final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(numThreads);
                 final java.util.List<String> assertions = java.util.Collections.synchronizedList(
-                        new java.util.ArrayList<>());
-                final java.util.concurrent.atomic.AtomicInteger errors = 
-                        new java.util.concurrent.atomic.AtomicInteger(0);
+                                new java.util.ArrayList<>());
+                final java.util.concurrent.atomic.AtomicInteger errors = new java.util.concurrent.atomic.AtomicInteger(
+                                0);
 
                 for (int i = 0; i < numThreads; i++) {
                         executor.submit(() -> {
@@ -462,11 +588,11 @@ class SmartTokenClientTest {
                                 .build();
 
                 final int numThreads = 20;
-                final java.util.concurrent.ExecutorService executor = 
-                        java.util.concurrent.Executors.newFixedThreadPool(numThreads);
+                final java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors
+                                .newFixedThreadPool(numThreads);
                 final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(numThreads);
-                final java.util.concurrent.atomic.AtomicInteger errors = 
-                        new java.util.concurrent.atomic.AtomicInteger(0);
+                final java.util.concurrent.atomic.AtomicInteger errors = new java.util.concurrent.atomic.AtomicInteger(
+                                0);
 
                 for (int i = 0; i < numThreads; i++) {
                         final int idx = i;
@@ -542,19 +668,18 @@ class SmartTokenClientTest {
                 final java.util.Date notAfter = new java.util.Date(
                                 System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
 
-                final org.bouncycastle.cert.X509v3CertificateBuilder builder = 
-                        new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
+                final org.bouncycastle.cert.X509v3CertificateBuilder builder = new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
                                 subject, serial, notBefore, notAfter, subject, ecPair.getPublic());
 
-                final org.bouncycastle.operator.ContentSigner signer = 
-                        new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder("SHA256withECDSA")
+                final org.bouncycastle.operator.ContentSigner signer = new org.bouncycastle.operator.jcajce.JcaContentSignerBuilder(
+                                "SHA256withECDSA")
                                 .build(ecPair.getPrivate());
 
                 final byte[] certDer = builder.build(signer).getEncoded();
-                final java.security.cert.CertificateFactory cf = 
-                        java.security.cert.CertificateFactory.getInstance("X.509");
+                final java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory
+                                .getInstance("X.509");
                 final X509Certificate ecCert = (X509Certificate) cf.generateCertificate(
-                        new java.io.ByteArrayInputStream(certDer));
+                                new java.io.ByteArrayInputStream(certDer));
 
                 // Deve passar - verifyKeyPairConsistency agora suporta EC
                 SmartTokenClient.verifyKeyPairConsistency(ecPair.getPrivate(), ecCert);

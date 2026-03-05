@@ -30,6 +30,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Objects;
@@ -41,6 +42,7 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,6 +76,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * }</pre>
  *
  * <h2>Uso avançado com Builder:</h2>
+ * 
  * <pre>{@code
  * var tokenClient = SmartTokenClient.builder()
  *         .tokenEndpoint("https://localhost:8443/auth/token")
@@ -91,66 +94,77 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <h2>Recursos Enterprise:</h2>
  * <ul>
- * <li><strong>Cache de tokens:</strong> Tokens são cacheados e reutilizados até próximo
- *     de sua expiração, reduzindo carga no authorization server</li>
- * <li><strong>Retry com backoff:</strong> Falhas transitórias são tratadas com retry
- *     exponencial (1s, 2s, 4s) até o limite configurado</li>
- * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em aplicações multi-thread</li>
+ * <li><strong>Cache de tokens:</strong> Tokens são cacheados e reutilizados até
+ * próximo
+ * de sua expiração, reduzindo carga no authorization server</li>
+ * <li><strong>Retry com backoff:</strong> Falhas transitórias são tratadas com
+ * retry
+ * exponencial (1s, 2s, 4s) até o limite configurado</li>
+ * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em
+ * aplicações multi-thread</li>
  * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
  * </ul>
  *
  * <h2>Integração com Infraestrutura Enterprise</h2>
  *
  * <p>
- * Esta classe implementa resiliência básica (retry com backoff) internamente. Para cenários
- * de produção com requisitos avançados de observabilidade e tolerância a falhas, recomenda-se
- * integrar com frameworks especializados <strong>na camada de orquestração</strong>, não
- * diretamente nesta classe. Isso mantém a separação de responsabilidades e permite configuração
+ * Esta classe implementa resiliência básica (retry com backoff) internamente.
+ * Para cenários
+ * de produção com requisitos avançados de observabilidade e tolerância a
+ * falhas, recomenda-se
+ * integrar com frameworks especializados <strong>na camada de
+ * orquestração</strong>, não
+ * diretamente nesta classe. Isso mantém a separação de responsabilidades e
+ * permite configuração
  * centralizada.
  * </p>
  *
  * <h3>Circuit Breaker (Resilience4j)</h3>
  *
  * <p>
- * Para proteger o sistema contra falhas em cascata quando o authorization server estiver
- * degradado, decore as chamadas ao {@link #obtainToken(String)} com um Circuit Breaker:
+ * Para proteger o sistema contra falhas em cascata quando o authorization
+ * server estiver
+ * degradado, decore as chamadas ao {@link #obtainToken(String)} com um Circuit
+ * Breaker:
  * </p>
  *
  * <pre>{@code
  * // Configuração do Circuit Breaker
  * CircuitBreakerConfig config = CircuitBreakerConfig.custom()
- *     .failureRateThreshold(50)
- *     .waitDurationInOpenState(Duration.ofSeconds(30))
- *     .slidingWindowSize(10)
- *     .permittedNumberOfCallsInHalfOpenState(3)
- *     .build();
+ *         .failureRateThreshold(50)
+ *         .waitDurationInOpenState(Duration.ofSeconds(30))
+ *         .slidingWindowSize(10)
+ *         .permittedNumberOfCallsInHalfOpenState(3)
+ *         .build();
  *
  * CircuitBreaker circuitBreaker = CircuitBreaker.of("smartToken", config);
  *
  * // Uso decorado
  * Supplier<String> decoratedSupplier = CircuitBreaker
- *     .decorateSupplier(circuitBreaker, () -> {
- *         try {
- *             return tokenClient.obtainToken(scope);
- *         } catch (Exception e) {
- *             throw new RuntimeException(e);
- *         }
- *     });
+ *         .decorateSupplier(circuitBreaker, () -> {
+ *             try {
+ *                 return tokenClient.obtainToken(scope);
+ *             } catch (Exception e) {
+ *                 throw new RuntimeException(e);
+ *             }
+ *         });
  *
  * String token = Try.ofSupplier(decoratedSupplier)
- *     .recover(CallNotPermittedException.class, e -> handleCircuitOpen())
- *     .get();
+ *         .recover(CallNotPermittedException.class, e -> handleCircuitOpen())
+ *         .get();
  * }</pre>
  *
  * <h3>Métricas (Micrometer)</h3>
  *
  * <p>
- * Para monitoramento em tempo real da obtenção de tokens, instrumente as chamadas com
+ * Para monitoramento em tempo real da obtenção de tokens, instrumente as
+ * chamadas com
  * Micrometer. Métricas recomendadas:
  * </p>
  *
  * <ul>
- * <li>{@code smart.token.requests} — contador de requisições (tags: status, scope)</li>
+ * <li>{@code smart.token.requests} — contador de requisições (tags: status,
+ * scope)</li>
  * <li>{@code smart.token.latency} — histograma de latência</li>
  * <li>{@code smart.token.cache.hits} — taxa de acerto do cache</li>
  * <li>{@code smart.token.retries} — contador de retries</li>
@@ -181,8 +195,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <h3>Distributed Tracing (OpenTelemetry)</h3>
  *
  * <p>
- * Para rastreamento de requisições distribuídas, propague o contexto de trace nas chamadas
- * HTTP. O {@link SmartTokenClient} utiliza {@link java.net.http.HttpClient} internamente,
+ * Para rastreamento de requisições distribuídas, propague o contexto de trace
+ * nas chamadas
+ * HTTP. O {@link SmartTokenClient} utiliza {@link java.net.http.HttpClient}
+ * internamente,
  * que pode ser instrumentado via OpenTelemetry Java Agent ou manualmente:
  * </p>
  *
@@ -196,10 +212,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * public String obtainTokenWithTracing(String scope) throws Exception {
  *     Span span = tracer.spanBuilder("SmartTokenClient.obtainToken")
- *         .setSpanKind(SpanKind.CLIENT)
- *         .setAttribute("smart.client_id", clientId)
- *         .setAttribute("smart.scope", scope)
- *         .startSpan();
+ *             .setSpanKind(SpanKind.CLIENT)
+ *             .setAttribute("smart.client_id", clientId)
+ *             .setAttribute("smart.scope", scope)
+ *             .startSpan();
  *
  *     try (Scope ignored = span.makeCurrent()) {
  *         String token = tokenClient.obtainToken(scope);
@@ -218,7 +234,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <h3>Arquitetura Recomendada</h3>
  *
  * <p>
- * Para aplicações Spring Boot, encapsule o {@link SmartTokenClient} em um {@code @Service}
+ * Para aplicações Spring Boot, encapsule o {@link SmartTokenClient} em um
+ * {@code @Service}
  * que centraliza as integrações enterprise:
  * </p>
  *
@@ -242,9 +259,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * }
  * }</pre>
  *
- * @see <a href="https://resilience4j.readme.io/docs/circuitbreaker">Resilience4j Circuit Breaker</a>
+ * @see <a href=
+ *      "https://resilience4j.readme.io/docs/circuitbreaker">Resilience4j
+ *      Circuit Breaker</a>
  * @see <a href="https://micrometer.io/docs">Micrometer Documentation</a>
- * @see <a href="https://opentelemetry.io/docs/instrumentation/java/">OpenTelemetry Java</a>
+ * @see <a href=
+ *      "https://opentelemetry.io/docs/instrumentation/java/">OpenTelemetry
+ *      Java</a>
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
 @SuppressWarnings("PMD.CouplingBetweenObjects")
@@ -318,7 +339,8 @@ public final class SmartTokenClient {
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
      *
      * @param tokenEndpoint  URL do endpoint /auth/token do servidor de autorização
-     * @param clientId       identificador do cliente (fornecido pelo Ganesha no credenciamento)
+     * @param clientId       identificador do cliente (fornecido pelo Ganesha no
+     *                       credenciamento)
      * @param privateKeyPem  caminho para o arquivo PEM da chave privada
      * @param certificatePem caminho para o arquivo PEM do certificado (não usado na
      *                       assinatura,
@@ -347,13 +369,15 @@ public final class SmartTokenClient {
      * utilizado como trust anchor, evitando o uso de SSL permissivo quando o
      * chamador possui a cadeia correta.
      *
-     * @param tokenEndpoint        URL do endpoint /auth/token do servidor de autorização
-     * @param clientId             identificador do cliente (fornecido pelo Ganesha no credenciamento)
-     * @param privateKeyPem        caminho para o arquivo PEM da chave privada
-     * @param certificatePem       caminho para o arquivo PEM do certificado do
-     *                             cliente
+     * @param tokenEndpoint     URL do endpoint /auth/token do servidor de
+     *                          autorização
+     * @param clientId          identificador do cliente (fornecido pelo Ganesha no
+     *                          credenciamento)
+     * @param privateKeyPem     caminho para o arquivo PEM da chave privada
+     * @param certificatePem    caminho para o arquivo PEM do certificado do
+     *                          cliente
      * @param serverTrustAnchor certificado X.509 confiável do servidor; quando
-     *                             {@code null}, usa-se SSL permissivo para testes
+     *                          {@code null}, usa-se SSL permissivo para testes
      */
     public SmartTokenClient(
             final String tokenEndpoint,
@@ -379,7 +403,8 @@ public final class SmartTokenClient {
      * já foram carregados (ex: Vault, Secret Manager).
      *
      * @param tokenEndpoint URL do endpoint /auth/token do servidor de autorização
-     * @param clientId      identificador do cliente (fornecido pelo Ganesha no credenciamento)
+     * @param clientId      identificador do cliente (fornecido pelo Ganesha no
+     *                      credenciamento)
      * @param privateKey    chave privada previamente carregada
      * @param certificate   certificado X.509 correspondente à chave
      * @param sslContext    contexto SSL a ser utilizado pelo {@link HttpClient}
@@ -398,19 +423,23 @@ public final class SmartTokenClient {
     /**
      * Construtor completo com todas as configurações disponíveis (retrocompatível).
      *
-     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
-     * @param clientId                identificador do cliente (fornecido pelo Ganesha no credenciamento)
+     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de
+     *                                autorização
+     * @param clientId                identificador do cliente (fornecido pelo
+     *                                Ganesha no credenciamento)
      * @param privateKey              chave privada previamente carregada
      * @param certificate             certificado X.509 correspondente à chave
-     * @param sslContext              contexto SSL a ser utilizado pelo {@link HttpClient}
+     * @param sslContext              contexto SSL a ser utilizado pelo
+     *                                {@link HttpClient}
      * @param connectTimeout          timeout de conexão
      * @param requestTimeout          timeout de requisição HTTP
      * @param assertionTtlSeconds     TTL do client_assertion em segundos
      * @param enableTokenCache        habilita cache de tokens
      * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
-     * @param maxRetries              número máximo de tentativas em falhas transitórias
+     * @param maxRetries              número máximo de tentativas em falhas
+     *                                transitórias
      */
-    @SuppressWarnings({"PMD.ExcessiveParameterList", "checkstyle:ParameterNumber"}) // Builder é a API recomendada
+    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" }) // Builder é a API recomendada
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
@@ -453,19 +482,24 @@ public final class SmartTokenClient {
      * do material criptográfico pode variar (arquivo, HSM, Vault, etc.).
      * </p>
      *
-     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de autorização
-     * @param clientId                identificador do cliente (fornecido pelo Ganesha no credenciamento)
+     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de
+     *                                autorização
+     * @param clientId                identificador do cliente (fornecido pelo
+     *                                Ganesha no credenciamento)
      * @param signingStrategy         estratégia de assinatura configurada
-     * @param certificate             certificado X.509 para validação (pode ser null se não houver validação)
-     * @param sslContext              contexto SSL a ser utilizado pelo {@link HttpClient}
+     * @param certificate             certificado X.509 para validação (pode ser
+     *                                null se não houver validação)
+     * @param sslContext              contexto SSL a ser utilizado pelo
+     *                                {@link HttpClient}
      * @param connectTimeout          timeout de conexão
      * @param requestTimeout          timeout de requisição HTTP
      * @param assertionTtlSeconds     TTL do client_assertion em segundos
      * @param enableTokenCache        habilita cache de tokens
      * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
-     * @param maxRetries              número máximo de tentativas em falhas transitórias
+     * @param maxRetries              número máximo de tentativas em falhas
+     *                                transitórias
      */
-    @SuppressWarnings({"PMD.ExcessiveParameterList", "checkstyle:ParameterNumber"}) // Builder é a API recomendada
+    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" }) // Builder é a API recomendada
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
@@ -481,14 +515,16 @@ public final class SmartTokenClient {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
         this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
-        // certificate pode ser null para estratégias onde verificação não é aplicável (ex: Vault)
+        // certificate pode ser null para estratégias onde verificação não é aplicável
+        // (ex: Vault)
         final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
         final Duration connTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
         this.assertionTtlSeconds = assertionTtlSeconds > 0 ? assertionTtlSeconds : DEFAULT_ASSERTION_TTL_SECONDS;
         this.enableTokenCache = enableTokenCache;
         this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
-                ? tokenCacheMarginSeconds : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+                ? tokenCacheMarginSeconds
+                : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
         this.maxRetries = maxRetries > 0 ? maxRetries : DEFAULT_MAX_RETRIES;
 
         this.httpClient = HttpClient.newBuilder()
@@ -526,7 +562,8 @@ public final class SmartTokenClient {
      * @param scope scopes separados por espaço (ex: {@code "system/Patient.rs"})
      * @return access token JWT emitido pelo servidor de autorização
      * @throws IOException          em caso de erro de I/O na comunicação
-     * @throws InterruptedException se a thread for interrompida durante a requisição
+     * @throws InterruptedException se a thread for interrompida durante a
+     *                              requisição
      * @throws SmartTokenException  se o servidor retornar erro ou resposta inválida
      */
     public String obtainToken(final String scope) throws IOException, InterruptedException {
@@ -658,15 +695,21 @@ public final class SmartTokenClient {
         final String jti = UUID.randomUUID().toString();
         LOG.trace("Construindo client_assertion ttl={}s", assertionTtlSeconds);
 
-        // Constrói o payload JSON manualmente para independência de bibliotecas JWT
-        final String payload = String.format(
-                "{\"iss\":\"%s\",\"sub\":\"%s\",\"aud\":\"%s\",\"iat\":%d,\"exp\":%d,\"jti\":\"%s\"}",
-                escapeJson(clientId),
-                escapeJson(clientId),
-                escapeJson(tokenEndpoint),
-                iat,
-                exp,
-                jti);
+        // Constrói o payload JSON usando ObjectMapper para escape correto e seguro
+        final Map<String, Object> claims = new LinkedHashMap<>();
+        claims.put("iss", clientId);
+        claims.put("sub", clientId);
+        claims.put("aud", tokenEndpoint);
+        claims.put("iat", iat);
+        claims.put("exp", exp);
+        claims.put("jti", jti);
+
+        final String payload;
+        try {
+            payload = OBJECT_MAPPER.writeValueAsString(claims);
+        } catch (JsonProcessingException e) {
+            throw new SmartTokenException("Falha ao serializar payload do JWT", e);
+        }
 
         // Codifica header e payload em Base64Url
         final String headerB64 = BASE64_URL_ENCODER.encodeToString(
@@ -682,23 +725,6 @@ public final class SmartTokenClient {
         final String signatureB64 = BASE64_URL_ENCODER.encodeToString(signature);
 
         return dataToSign + "." + signatureB64;
-    }
-
-    /**
-     * Escapa caracteres especiais para JSON.
-     *
-     * @param value valor a escapar
-     * @return valor escapado
-     */
-    private static String escapeJson(final String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
     /**
@@ -766,7 +792,7 @@ public final class SmartTokenClient {
      * @param responseBody corpo da resposta HTTP
      * @return resposta sanitizada
      */
-    private static String sanitizeErrorResponse(final String responseBody) {
+    static String sanitizeErrorResponse(final String responseBody) {
         if (responseBody == null || responseBody.length() > MAX_ERROR_RESPONSE_LENGTH) {
             return responseBody == null ? "<empty>"
                     : responseBody.substring(0, MAX_ERROR_RESPONSE_LENGTH) + "...";
@@ -796,7 +822,7 @@ public final class SmartTokenClient {
      *
      * @param path caminho absoluto para o certificado PEM
      * @return certificado X.509 decodificado
-     * @throws IOException quando o arquivo não pode ser lido
+     * @throws IOException         quando o arquivo não pode ser lido
      * @throws SmartTokenException quando o conteúdo não representa um
      *                             certificado X.509 válido ou está expirado
      */
@@ -827,9 +853,10 @@ public final class SmartTokenClient {
      * Constrói um {@link SSLContext} configurado com o certificado do servidor.
      *
      * @param serverTrustAnchor certificado do servidor; se null, usa trust-all
-     * @param tlsProtocol          protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
+     * @param tlsProtocol       protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
      * @return contexto SSL configurado
-     * @throws SmartTokenException se o protocolo for inválido ou houver erro de configuração
+     * @throws SmartTokenException se o protocolo for inválido ou houver erro de
+     *                             configuração
      */
     public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
         if (serverTrustAnchor == null) {
@@ -875,21 +902,22 @@ public final class SmartTokenClient {
      * <h3>Quando é executado</h3>
      * <p>
      * Automaticamente durante a construção do {@link SmartTokenClient} quando
-     * são fornecidos objetos {@link PrivateKey} e {@link X509Certificate} diretamente
+     * são fornecidos objetos {@link PrivateKey} e {@link X509Certificate}
+     * diretamente
      * (não via arquivo PEM ou {@link SigningStrategy}).
      * </p>
      *
      * <h3>Cenários detectados</h3>
      * <ul>
-     *   <li>Arquivos trocados (certificado de um sistema, chave de outro)</li>
-     *   <li>Chave privada corrompida ou truncada</li>
-     *   <li>Certificado regenerado sem atualizar a chave</li>
+     * <li>Arquivos trocados (certificado de um sistema, chave de outro)</li>
+     * <li>Chave privada corrompida ou truncada</li>
+     * <li>Certificado regenerado sem atualizar a chave</li>
      * </ul>
      *
      * @param privateKey  chave privada a validar
      * @param certificate certificado X.509 contendo a chave pública correspondente
      * @throws SmartTokenException se a assinatura de teste falhar, indicando
-     *         que chave e certificado não formam um par válido
+     *                             que chave e certificado não formam um par válido
      */
     public static void verifyKeyPairConsistency(
             final PrivateKey privateKey,
@@ -897,7 +925,7 @@ public final class SmartTokenClient {
         try {
             // Determina o algoritmo de assinatura baseado no tipo da chave
             final String signatureAlgorithm = determineSignatureAlgorithm(privateKey);
-            
+
             final byte[] challenge = "key-pair-consistency-check".getBytes(StandardCharsets.UTF_8);
             final Signature signer = Signature.getInstance(signatureAlgorithm);
             signer.initSign(privateKey);
@@ -943,11 +971,13 @@ public final class SmartTokenClient {
      * Cria um {@link javax.net.ssl.SSLContext} que confia em todos os certificados.
      *
      * <p>
-     * <strong>⚠️ ATENÇÃO: USO EXCLUSIVO PARA TESTES E DESENVOLVIMENTO LOCAL!</strong>
+     * <strong>⚠️ ATENÇÃO: USO EXCLUSIVO PARA TESTES E DESENVOLVIMENTO
+     * LOCAL!</strong>
      * </p>
      *
      * <p>
-     * Este método cria um contexto SSL que <strong>DESABILITA COMPLETAMENTE</strong>
+     * Este método cria um contexto SSL que <strong>DESABILITA
+     * COMPLETAMENTE</strong>
      * a validação de certificados TLS, tornando a conexão vulnerável a:
      * </p>
      * <ul>
@@ -973,34 +1003,36 @@ public final class SmartTokenClient {
      *
      * @param tlsProtocol protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
      * @return contexto SSL que aceita qualquer certificado (⚠️ INSEGURO)
-     * @see #buildSslContext(Path, String) para configuração segura com certificado específico
+     * @see #buildSslContext(Path, String) para configuração segura com certificado
+     *      específico
      */
     public static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
         LOG.warn("⚠️ Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
         try {
             final TrustManager[] trustAll = {
-                new X509TrustManager() {
-                    @Override
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return new X509Certificate[0];
-                    }
+                    new X509TrustManager() {
+                        @Override
+                        public X509Certificate[] getAcceptedIssuers() {
+                            return new X509Certificate[0];
+                        }
 
-                    @Override
-                    public void checkClientTrusted(
-                            final X509Certificate[] c, final String a) {
-                    }
+                        @Override
+                        public void checkClientTrusted(
+                                final X509Certificate[] c, final String a) {
+                        }
 
-                    @Override
-                    public void checkServerTrusted(
-                            final X509Certificate[] c, final String a) {
+                        @Override
+                        public void checkServerTrusted(
+                                final X509Certificate[] c, final String a) {
+                        }
                     }
-                }
             };
             final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
             ctx.init(null, trustAll, new SecureRandom());
             return ctx;
         } catch (Exception ex) {
-            throw new SmartTokenException("Falha ao criar SSLContext trust-all com protocolo '" + tlsProtocol + "'", ex);
+            throw new SmartTokenException("Falha ao criar SSLContext trust-all com protocolo '" + tlsProtocol + "'",
+                    ex);
         }
     }
 
@@ -1013,23 +1045,25 @@ public final class SmartTokenClient {
      * </p>
      *
      * <h2>Exemplo com arquivo PEM</h2>
+     * 
      * <pre>{@code
      * var client = SmartTokenClient.builder()
-     *     .tokenEndpoint("https://auth.example.com/token")
-     *     .clientId("my-app")
-     *     .privateKeyPem(Path.of("key.pem"))
-     *     .certificatePem(Path.of("cert.pem"))
-     *     .build();
+     *         .tokenEndpoint("https://auth.example.com/token")
+     *         .clientId("my-app")
+     *         .privateKeyPem(Path.of("key.pem"))
+     *         .certificatePem(Path.of("cert.pem"))
+     *         .build();
      * }</pre>
      *
      * <h2>Exemplo com SigningStrategy (HSM, Vault, etc.)</h2>
+     * 
      * <pre>{@code
      * var client = SmartTokenClient.builder()
-     *     .tokenEndpoint("https://auth.example.com/token")
-     *     .clientId("my-app")
-     *     .signingStrategy(SigningStrategyFactory.fromPkcs11(provider, "alias", pin))
-     *     .certificatePem(Path.of("cert.pem"))
-     *     .build();
+     *         .tokenEndpoint("https://auth.example.com/token")
+     *         .clientId("my-app")
+     *         .signingStrategy(SigningStrategyFactory.fromPkcs11(provider, "alias", pin))
+     *         .certificatePem(Path.of("cert.pem"))
+     *         .build();
      * }</pre>
      */
     @SuppressWarnings("checkstyle:HiddenField") // Padrão Builder usa nomes iguais
@@ -1106,8 +1140,7 @@ public final class SmartTokenClient {
          * @return este builder
          */
         @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
-        @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-                justification = "Não copiar char[] minimiza exposição de senha em memória")
+        @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Não copiar char[] minimiza exposição de senha em memória")
         public Builder privateKeyPassword(final char[] password) {
             this.privateKeyPassword = password;
             return this;
@@ -1256,8 +1289,9 @@ public final class SmartTokenClient {
          * Constrói a instância de {@link SmartTokenClient}.
          *
          * @return cliente configurado
-         * @throws IOException se os arquivos PEM não puderem ser lidos
-         * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem definidos
+         * @throws IOException           se os arquivos PEM não puderem ser lidos
+         * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem
+         *                               definidos
          */
         public SmartTokenClient build() throws IOException {
             Objects.requireNonNull(tokenEndpoint, "tokenEndpoint é obrigatório");
