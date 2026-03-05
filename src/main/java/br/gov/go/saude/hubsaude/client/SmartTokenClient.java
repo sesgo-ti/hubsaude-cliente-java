@@ -343,7 +343,7 @@ public final class SmartTokenClient {
         this(tokenEndpoint,
                 clientId,
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
-                validateCertificate(certificatePem),
+                SslContextFactory.validateCertificate(certificatePem),
                 SslContextFactory.buildSslContext(null, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
@@ -377,7 +377,7 @@ public final class SmartTokenClient {
         this(tokenEndpoint,
                 clientId,
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
-                validateCertificate(certificatePem),
+                SslContextFactory.validateCertificate(certificatePem),
                 SslContextFactory.buildSslContext(serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
@@ -789,49 +789,7 @@ public final class SmartTokenClient {
         // Remove possíveis tokens do erro (JSON e form-encoded)
         return responseBody
                 .replaceAll("(\"(?:access_token|token)\")\\s*:\\s*\"[^\"]*\"", "$1:\"[REDACTED]\"")
-                .replaceAll("(access_token|token)=[^&\\s]*", "$1=[REDACTED]");
-    }
-
-    /**
-     * Converte um arquivo PEM (PKCS#1 ou PKCS#8) em {@link PrivateKey}, aceitando
-     * chaves RSA geradas para o HubSaúde.
-     *
-     * @param path caminho absoluto para o arquivo PEM
-     * @return chave privada pronta para assinar o {@code client_assertion}
-     * @throws IOException caso o arquivo não possa ser lido ou decodificado
-     * @deprecated Use {@link PemLoader#loadPrivateKey(Path)} em vez deste método.
-     */
-    @Deprecated(since = "1.0.0", forRemoval = true)
-    public static PrivateKey loadPrivateKey(final Path path) throws IOException {
-        return PemLoader.loadPrivateKey(path);
-    }
-
-    /**
-     * Valida um certificado PEM.
-     *
-     * @param path caminho absoluto para o certificado PEM
-     * @return certificado X.509 decodificado
-     * @throws IOException         quando o arquivo não pode ser lido
-     * @throws SmartTokenException quando o conteúdo não é válido
-     * @deprecated Use {@link SslContextFactory#validateCertificate(Path)}
-     */
-    @Deprecated(forRemoval = true)
-    public static X509Certificate validateCertificate(final Path path) throws IOException {
-        return SslContextFactory.validateCertificate(path);
-    }
-
-    /**
-     * Constrói um {@link SSLContext}.
-     *
-     * @param serverTrustAnchor certificado do servidor; se null, usa trust store da
-     *                          JVM
-     * @param tlsProtocol       protocolo TLS
-     * @return contexto SSL configurado
-     * @deprecated Use {@link SslContextFactory#buildSslContext(Path, String)}
-     */
-    @Deprecated(forRemoval = true)
-    public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
-        return SslContextFactory.buildSslContext(serverTrustAnchor, tlsProtocol);
+                .replaceAll("(access_token|token)=[^&\\\\s]*", "$1=[REDACTED]");
     }
 
     /**
@@ -917,18 +875,6 @@ public final class SmartTokenClient {
             default -> throw new SmartTokenException(
                     "Tipo de chave não suportado para validação: " + keyAlgorithm);
         };
-    }
-
-    /**
-     * Cria um {@link SSLContext} trust-all.
-     *
-     * @param tlsProtocol protocolo TLS
-     * @return contexto SSL inseguro
-     * @deprecated Use {@link SslContextFactory#buildTrustAllSslContext(String)}
-     */
-    @Deprecated(forRemoval = true)
-    static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
-        return SslContextFactory.buildTrustAllSslContext(tlsProtocol);
     }
 
     /**
@@ -1227,12 +1173,12 @@ public final class SmartTokenClient {
 
             // Certificado é opcional quando usando SigningStrategy diretamente
             final X509Certificate cert = certificatePem != null
-                    ? validateCertificate(certificatePem)
+                    ? SslContextFactory.validateCertificate(certificatePem)
                     : null;
 
             final SSLContext effectiveSslContext = customSslContext != null
                     ? customSslContext
-                    : buildSslContext(serverTrustAnchor, tlsProtocol);
+                    : SslContextFactory.buildSslContext(serverTrustAnchor, tlsProtocol);
 
             return new SmartTokenClient(
                     tokenEndpoint,

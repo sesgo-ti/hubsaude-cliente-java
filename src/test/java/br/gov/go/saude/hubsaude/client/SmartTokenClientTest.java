@@ -284,12 +284,11 @@ class SmartTokenClientTest {
         }
 
         @Test
-        @SuppressWarnings("removal") // Testando método deprecated
         void deveFalharLoadPrivateKeyComArquivoPemInvalido(@TempDir final Path tempDir) throws Exception {
                 final Path invalidPem = tempDir.resolve("invalid.pem");
                 Files.writeString(invalidPem, "-----BEGIN PUBLIC KEY-----\nINVALID\n-----END PUBLIC KEY-----\n");
 
-                assertThatThrownBy(() -> SmartTokenClient.loadPrivateKey(invalidPem))
+                assertThatThrownBy(() -> PemLoader.loadPrivateKey(invalidPem))
                                 .isInstanceOf(Exception.class);
         }
 
