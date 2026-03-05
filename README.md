@@ -5,7 +5,7 @@ usufruir dos serviços oferecidos pelo HubSaúde.
 
 ## Descrição
 
-Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do fluxo de autenticação SMART Backend Services (RFC 7523):
+Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do fluxo de autenticação SMART Backend Services (RFC 7523). Isso inclui:
 
 - Leitura de chaves privadas e certificados PEM
 - Montagem do `client_assertion` JWT (RS384)
@@ -14,7 +14,7 @@ Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do flux
 - Retry com backoff exponencial para resiliência
 - Thread-safety para uso concorrente
 
-## Uso 
+## Dados necessários 
 
 Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
 - URL do endpoint onde o token é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`). Esta URL pode ser obtida pelo endpoint `[base]/.well-known/smart-configuration` do HubSaúde. Em particular, o campo `token_endpoint` deste endpoint contém a URL necessária para configuração do `SmartTokenClient`.
@@ -23,8 +23,9 @@ Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
 - Certificado ICP-Brasil correspondente à chave privada (em formato PEM)
 - Vários outros parâmetros podem ser fornecidos para controle de timeouts, cache, retries e validação de certificados.
 
+
+## Uso básico
 ```java
-// Uso básico
 var tokenClient = new SmartTokenClient(
         "https://hub.saude.go.gov.br/auth/token",
         "meu-sistema",
@@ -34,7 +35,7 @@ var tokenClient = new SmartTokenClient(
 String accessToken = tokenClient.obtainToken("system/Patient.rs");
 ```
 
-## Uso Avançado (Builder)
+## Uso com Builder
 
 ```java
 var tokenClient = SmartTokenClient.builder()
@@ -42,7 +43,7 @@ var tokenClient = SmartTokenClient.builder()
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
-        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // Opcional: trust anchor
+        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // Opcional
         .connectTimeout(Duration.ofSeconds(10))
         .requestTimeout(Duration.ofSeconds(30))
         .assertionTtlSeconds(120)
