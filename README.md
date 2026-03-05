@@ -17,7 +17,7 @@ Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do flux
 ## Dados necessários 
 
 Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
-- URL do endpoint onde o token de acesso é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`). Esta URL pode ser obtida pelo endpoint `[base]/.well-known/smart-configuration` do HubSaúde. Em particular, o campo `token_endpoint` deste endpoint contém a URL necessária para configuração do `SmartTokenClient`.
+- URL do endpoint onde o token de acesso é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`). Esta URL pode ser configurada manualmente via `tokenEndpoint(url)` ou descoberta dinamicamente via `.discoverTokenEndpointFrom(fhirBaseUrl)`.
 - `client_id` fornecido pela SES-GO no momento do credenciamento (ex.: `meu-sistema`)
 - Chave privada usada para assinar o JWT de client assertion (em formato PEM, PKCS#8 ou via HSM)
 - Certificado ICP-Brasil correspondente à chave privada (em formato PEM)
@@ -50,6 +50,19 @@ var tokenClient = SmartTokenClient.builder()
         .enableTokenCache(true)
         .tokenCacheMarginSeconds(30)
         .maxRetries(3)
+        .build();
+```
+
+### Descoberta Dinâmica (OIDC / SMART Discovery)
+
+O SDK permite buscar o endpoint de tokens automaticamente a partir do endpoint FHIR via `.well-known/smart-configuration`, seguindo as diretrizes de compliance do SMART Backend Services.
+
+```java
+var tokenClient = SmartTokenClient.builder()
+        .fhirBase("https://hub.saude.go.gov.br") // URL base do FHIR
+        .clientId("meu-sistema")
+        .privateKeyPem(Path.of("chave-privada.pem"))
+        .certificatePem(Path.of("certificado.pem"))
         .build();
 ```
 

@@ -81,14 +81,14 @@ class SmartTokenClientBuilderTest {
     // ==================== Validações obrigatórias ====================
 
     @Test
-    @DisplayName("Deve exigir tokenEndpoint ou discoverTokenEndpointFrom")
+    @DisplayName("Deve exigir tokenEndpoint ou fhirBase")
     void deveExigirTokenEndpoint() {
         assertThatThrownBy(() -> SmartTokenClient.builder()
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .build())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("tokenEndpoint ou discoverTokenEndpointFrom");
+                .hasMessageContaining("tokenEndpoint ou fhirBase");
     }
 
     @Test
@@ -96,12 +96,12 @@ class SmartTokenClientBuilderTest {
     void deveRejeitarAmbosTokenEndpoints() {
         assertThatThrownBy(() -> SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
-                .discoverTokenEndpointFrom("https://fhir.example.com")
+                .fhirBase("https://fhir.example.com")
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .build())
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Defina tokenEndpoint OU discoverTokenEndpointFrom");
+                .hasMessageContaining("Defina tokenEndpoint OU fhirBase");
     }
 
     @Test
@@ -360,7 +360,7 @@ class SmartTokenClientBuilderTest {
     void deveRetornarMesmaInstancia() {
         final SmartTokenClientBuilder builder = SmartTokenClient.builder();
         assertThat(builder.tokenEndpoint(TOKEN_ENDPOINT)).isSameAs(builder);
-        assertThat(builder.discoverTokenEndpointFrom("http://fhir.local")).isSameAs(builder);
+        assertThat(builder.fhirBase("http://fhir.local")).isSameAs(builder);
         assertThat(builder.clientId(CLIENT_ID)).isSameAs(builder);
         assertThat(builder.privateKeyPem(keyFile)).isSameAs(builder);
         assertThat(builder.certificatePem(certFile)).isSameAs(builder);
@@ -451,7 +451,7 @@ class SmartTokenClientBuilderTest {
             final String baseUrl = "http://localhost:" + server.getAddress().getPort();
 
             final SmartTokenClient client = SmartTokenClient.builder()
-                    .discoverTokenEndpointFrom(baseUrl)
+                    .fhirBase(baseUrl)
                     .clientId(CLIENT_ID)
                     .privateKeyPem(keyFile)
                     .build();

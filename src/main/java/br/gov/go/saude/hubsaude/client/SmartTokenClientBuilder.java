@@ -101,7 +101,7 @@ public final class SmartTokenClientBuilder {
      *                    https://hub.saude.go.gov.br)
      * @return este builder
      */
-    public SmartTokenClientBuilder discoverTokenEndpointFrom(final String fhirBaseUrl) {
+    public SmartTokenClientBuilder fhirBase(final String fhirBaseUrl) {
         this.discoveryBaseUrl = fhirBaseUrl;
         return this;
     }
@@ -321,10 +321,10 @@ public final class SmartTokenClientBuilder {
      */
     public SmartTokenClient build() throws IOException {
         if (tokenEndpoint != null && discoveryBaseUrl != null) {
-            throw new IllegalStateException("Defina tokenEndpoint OU discoverTokenEndpointFrom, não ambos");
+            throw new IllegalStateException("Defina tokenEndpoint OU fhirBase, não ambos");
         }
         if (tokenEndpoint == null && discoveryBaseUrl == null) {
-            throw new IllegalStateException("É obrigatório definir tokenEndpoint ou discoverTokenEndpointFrom");
+            throw new IllegalStateException("É obrigatório definir tokenEndpoint ou fhirBase");
         }
         Objects.requireNonNull(clientId, "clientId é obrigatório");
 
@@ -334,7 +334,8 @@ public final class SmartTokenClientBuilder {
 
         String effectiveTokenEndpoint = this.tokenEndpoint;
         if (effectiveTokenEndpoint == null) {
-            effectiveTokenEndpoint = discoverTokenEndpoint(effectiveSslContext);
+            effectiveTokenEndpoint = discoverTokenEndpoint(discoveryBaseUrl, effectiveSslContext, connectTimeout,
+                    requestTimeout);
         }
 
         // Determina a estratégia de assinatura
@@ -373,10 +374,25 @@ public final class SmartTokenClientBuilder {
                 maxRetries);
     }
 
-    private String discoverTokenEndpoint(final SSLContext sslContext) throws IOException {
-        final String wellKnownUrl = discoveryBaseUrl.endsWith("/")
-                ? discoveryBaseUrl + ".well-known/smart-configuration"
-                : discoveryBaseUrl + "/.well-known/smart-configuration";
+    /**
+     * Descobre o token_endpoint consultando o /.well-known/smart-configuration
+     * a partir de uma URL base FHIR.
+     *
+     * @param fhirBaseUrl    URL base do servidor FHIR
+     * @param sslContext     contexto SSL a ser utilizado
+     * @param connectTimeout timeout de conexão HTTP
+     * @param requestTimeout timeout de requisição HTTP
+     * @return a URL do token_endpoint resolvida dinamicamente
+     * @throws IOException em caso de erro de rede ou falha de protocolo
+     */
+    public static String discoverTokenEndpoint(
+            final String fhirBaseUrl,
+            final SSLContext sslContext,
+            final Duration connectTimeout,
+            final Duration requestTimeout) throws IOException {
+        final String wellKnownUrl = fhirBaseUrl.endsWith("/")
+                ? fhirBaseUrl + ".well-known/smart-configuration"
+                : fhirBaseUrl + "/.well-known/smart-configuration";
 
         final HttpClient client = HttpClient.newBuilder()
                 .sslContext(sslContext)
