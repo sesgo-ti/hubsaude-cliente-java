@@ -19,6 +19,8 @@ import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -48,7 +50,7 @@ import javax.net.ssl.X509TrustManager;
  * </ul>
  *
  * @see SmartTokenClient
- * @see SmartTokenClient.Builder#serverTrustAnchor(Path)
+ * @see SmartTokenClientBuilder#serverTrustAnchor(Path)
  */
 public final class SslContextFactory {
 
@@ -189,24 +191,46 @@ public final class SslContextFactory {
      */
     public static X509Certificate validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
-        try (PEMParser parser = new PEMParser(new StringReader(pem))) {
+        return validateCertificate(path, pem);
+    }
+
+    private static X509Certificate validateCertificate(Path path, String pem) throws IOException {
+        PEMParser parser = new PEMParser(new StringReader(pem));
+        return validateCertificate(path, parser);
+    }
+
+    private static X509Certificate validateCertificate(Path path, PEMParser parser) throws IOException {
+        try (parser) {
             final Object obj = parser.readObject();
-            if (obj instanceof X509CertificateHolder holder) {
-                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-                if (cert == null) {
-                    throw new SmartTokenException("Certificado inválido: " + path);
-                }
-                // Valida período de validade
-                cert.checkValidity();
-                return cert;
-            }
-            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
-        } catch (java.security.cert.CertificateExpiredException ex) {
-            throw new SmartTokenException("Certificado expirado: " + path, ex);
-        } catch (java.security.cert.CertificateNotYetValidException ex) {
-            throw new SmartTokenException("Certificado ainda não é válido: " + path, ex);
+            return validateCertificate(path, obj);
         } catch (CertificateException ex) {
             throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static X509Certificate validateCertificate(Path path, Object obj) throws CertificateException {
+        if (obj instanceof X509CertificateHolder holder) {
+            return validateCertificate(path, holder);
+        }
+        throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
+    }
+
+    private static X509Certificate validateCertificate(Path path, X509CertificateHolder holder) throws CertificateException {
+        final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
+        if (cert == null) {
+            throw new SmartTokenException("Certificado inválido: " + path);
+        }
+        validateCertificate(path, cert);
+        return cert;
+    }
+
+    private static void validateCertificate(Path path, X509Certificate cert) {
+        try {
+            cert.checkValidity();
+        } catch (CertificateExpiredException ex) {
+            throw new SmartTokenException("Certificado expirado: " + path, ex);
+        } catch (CertificateNotYetValidException ex) {
+            throw new SmartTokenException("Certificado ainda não é válido: " + path, ex);
         }
     }
 }

@@ -526,6 +526,62 @@ class SmartTokenClientBuilderTest {
                 .isInstanceOf(IOException.class);
     }
 
+    @Test
+    @DisplayName("static discoverTokenEndpoint: Deve construir URL correta quando fhirBase termina com /")
+    void deveDescobriTokenEndpointComBarraFinal() throws Exception {
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        final String expectedTokenEndpoint = "https://auth.example.com/token";
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            final String json = "{\"token_endpoint\":\"" + expectedTokenEndpoint + "\"}";
+            exchange.sendResponseHeaders(200, json.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            // URL com barra final
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort() + "/";
+            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+            final String tokenEndpoint = SmartTokenClientBuilder.discoverTokenEndpoint(
+                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5));
+
+            assertThat(tokenEndpoint).isEqualTo(expectedTokenEndpoint);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("static discoverTokenEndpoint: Deve construir URL correta quando fhirBase NÃO termina com /")
+    void deveDescobriTokenEndpointSemBarraFinal() throws Exception {
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        final String expectedTokenEndpoint = "https://auth.example.com/token";
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            final String json = "{\"token_endpoint\":\"" + expectedTokenEndpoint + "\"}";
+            exchange.sendResponseHeaders(200, json.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            // URL sem barra final
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort();
+            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+            final String tokenEndpoint = SmartTokenClientBuilder.discoverTokenEndpoint(
+                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5));
+
+            assertThat(tokenEndpoint).isEqualTo(expectedTokenEndpoint);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     // ==================== Helpers ====================
 
     private static String toPkcs8Pem(final byte[] encoded) {
