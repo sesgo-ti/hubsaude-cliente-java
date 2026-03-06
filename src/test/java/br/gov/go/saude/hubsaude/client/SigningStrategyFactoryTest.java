@@ -149,12 +149,17 @@ class SigningStrategyFactoryTest {
         sha384Verifier.update(dados);
         assertThat(sha384Verifier.verify(assinatura)).isTrue();
 
-        // Verificar com SHA256withRSA - deve falhar (lança exceção por mismatch de OID)
+        // Verificar com SHA256withRSA - deve falhar
+        // Comportamento varia entre JVMs: pode lançar SignatureException ou retornar false
         final Signature sha256Verifier = Signature.getInstance("SHA256withRSA");
         sha256Verifier.initVerify(publicKey);
         sha256Verifier.update(dados);
-        assertThatThrownBy(() -> sha256Verifier.verify(assinatura))
-                .isInstanceOf(java.security.SignatureException.class);
+        try {
+            final boolean result = sha256Verifier.verify(assinatura);
+            assertThat(result).isFalse();
+        } catch (java.security.SignatureException e) {
+            // Algumas JVMs lançam exceção ao invés de retornar false - também é válido
+        }
     }
 
     @Test
