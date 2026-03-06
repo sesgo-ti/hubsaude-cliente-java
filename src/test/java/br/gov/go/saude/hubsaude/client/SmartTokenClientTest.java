@@ -20,6 +20,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
+import javax.net.ssl.SSLContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -691,6 +692,175 @@ class SmartTokenClientTest {
 
                 // Deve passar - verifyKeyPairConsistency agora suporta EC
                 SmartTokenClient.verifyKeyPairConsistency(ecPair.getPrivate(), ecCert);
+        }
+
+        // ==================== Testes de valores padrão do construtor ====================
+
+        @Test
+        void deveUsarAssertionTtlSecondsQuandoValorPositivo() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                120, true, 30, 3); // assertionTtlSeconds = 120
+
+                final String assertion = client.buildClientAssertion();
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+
+                final long ttlSeconds = (claims.getExpiration().getTime() - claims.getIssuedAt().getTime()) / 1000;
+                assertThat(ttlSeconds).isEqualTo(120);
+        }
+
+        @Test
+        void deveUsarAssertionTtlPadraoQuandoValorZero() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                0, true, 30, 3); // assertionTtlSeconds = 0
+
+                final String assertion = client.buildClientAssertion();
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+
+                final long ttlSeconds = (claims.getExpiration().getTime() - claims.getIssuedAt().getTime()) / 1000;
+                assertThat(ttlSeconds).isEqualTo(SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS);
+        }
+
+        @Test
+        void deveUsarAssertionTtlPadraoQuandoValorNegativo() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                -10, true, 30, 3); // assertionTtlSeconds = -10
+
+                final String assertion = client.buildClientAssertion();
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+
+                final long ttlSeconds = (claims.getExpiration().getTime() - claims.getIssuedAt().getTime()) / 1000;
+                assertThat(ttlSeconds).isEqualTo(SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS);
+        }
+
+        @Test
+        void deveUsarTokenCacheMarginSecondsQuandoValorPositivo() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, 45, 3); // tokenCacheMarginSeconds = 45
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveUsarTokenCacheMarginPadraoQuandoValorZero() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, 0, 3); // tokenCacheMarginSeconds = 0
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveUsarTokenCacheMarginPadraoQuandoValorNegativo() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, -15, 3); // tokenCacheMarginSeconds = -15
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveUsarMaxRetriesQuandoValorPositivo() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, 30, 5); // maxRetries = 5
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveUsarMaxRetriesPadraoQuandoValorZero() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, 30, 0); // maxRetries = 0
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveUsarMaxRetriesPadraoQuandoValorNegativo() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, 30, -2); // maxRetries = -2
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveAceitarEnableTokenCacheTrue() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, true, 30, 3); // enableTokenCache = true
+
+                assertThat(client).isNotNull();
+        }
+
+        @Test
+        void deveAceitarEnableTokenCacheFalse() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+                final SSLContext sslContext = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, sslContext,
+                                Duration.ofSeconds(10), Duration.ofSeconds(30),
+                                60, false, 30, 3); // enableTokenCache = false
+
+                assertThat(client).isNotNull();
         }
 
         // ---------- helpers ----------
