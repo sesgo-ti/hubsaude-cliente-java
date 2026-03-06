@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
@@ -85,7 +86,7 @@ public final class SslContextFactory {
         if (serverTrustAnchor == null) {
             try {
                 return SSLContext.getDefault();
-            } catch (java.security.NoSuchAlgorithmException ex) {
+            } catch (NoSuchAlgorithmException ex) {
                 throw new SmartTokenException("Falha ao obter SSLContext padrão da JVM", ex);
             }
         }
@@ -217,14 +218,14 @@ public final class SslContextFactory {
 
     static X509Certificate validateCertificate(Path path, X509CertificateHolder holder) throws CertificateException {
         final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-        if (cert == null) {
-            throw new SmartTokenException("Certificado inválido: " + path);
-        }
         validateCertificate(path, cert);
         return cert;
     }
 
     static void validateCertificate(Path path, X509Certificate cert) {
+        if (cert == null) {
+            throw new SmartTokenException("Certificado inválido: " + path);
+        }
         try {
             cert.checkValidity();
         } catch (CertificateExpiredException ex) {

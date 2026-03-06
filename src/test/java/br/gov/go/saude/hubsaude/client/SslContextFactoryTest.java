@@ -281,6 +281,16 @@ class SslContextFactoryTest {
                 .hasMessageContaining("Certificado ainda não é válido");
     }
 
+    @Test
+    @DisplayName("validateCertificate(Path, X509Certificate): Deve lançar exceção para certificado null")
+    void deveLancarExcecaoParaCertificadoNull() {
+        final Path dummyPath = tempDir.resolve("cert-null.pem");
+
+        assertThatThrownBy(() -> SslContextFactory.validateCertificate(dummyPath, (X509Certificate) null))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado inválido");
+    }
+
     // ==================== buildSslContext ====================
 
     @Test
