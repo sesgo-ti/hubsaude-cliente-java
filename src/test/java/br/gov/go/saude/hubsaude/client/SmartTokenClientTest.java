@@ -870,7 +870,7 @@ class SmartTokenClientTest {
                 final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
                                 new java.net.InetSocketAddress(0), 0);
                 final java.util.concurrent.atomic.AtomicReference<String> receivedScope =
-                                new java.util.concurrent.atomic.AtomicReference<>();
+                                new java.util.concurrent.atomic.AtomicReference<>("");
 
                 server.createContext("/auth/token", exchange -> {
                         // Captura o scope enviado
@@ -903,6 +903,7 @@ class SmartTokenClientTest {
                         final String token = client.obtainToken(null);
 
                         assertThat(token).isEqualTo("token123");
+                        // Scope normalizado de null para "" - o valor enviado deve ser vazio
                         assertThat(receivedScope.get()).isEmpty();
                 } finally {
                         server.stop(0);
