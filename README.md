@@ -4,17 +4,15 @@
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
 [![License](https://img.shields.io/badge/License-SES--GO%2FUFG-green)](#licença)
 
-Cliente Java para autenticação no HubSaúde via **SMART Backend Services**, implementando OAuth 2.0 com JWT Bearer Assertion (RFCs 6749, 7521, 7523).
+Biblioteca Java de conveniência para autenticação no HubSaúde.
+A classe principal, `SmartTokenClient`, facilita a obtenção de tokens de acesso
+via **SMART Backend Services**, implementando OAuth 2.0 com
+JWT Bearer Assertion (RFCs 6749, 7521, 7523). A assinatura (client_assertion)
+pode ser gerada a partir de arquivo local (PEM ou PKCS#12) ou 
+por dispositivo criptográfico via PKCS#11 (HSM).
 
-## Recursos
 
-- Assinatura JWT com RS384 (chave RSA + SHA-384)
-- Suporte a PEM, PKCS#12 (.pfx/.p12), HSM/PKCS#11 e HashiCorp Vault
-- Cache de tokens com renovação automática (thread-safe)
-- Retry com backoff exponencial e circuit breaker
-- Descoberta automática de endpoint via `.well-known/smart-configuration`
-
-## Instalação
+## Dependência Maven
 
 ```xml
 <dependency>
@@ -26,7 +24,7 @@ Cliente Java para autenticação no HubSaúde via **SMART Backend Services**, im
 
 **Requisitos:** Java 21+, Maven 3.9+
 
-## Quick Start
+## Início rápido
 
 ```java
 var client = SmartTokenClient.builder()
@@ -41,9 +39,9 @@ String token = client.obtainToken("system/Patient.rs");
 
 ---
 
-## Como Funciona (curl)
+## Como funciona (curl)
 
-O cliente abstrai a seguinte requisição HTTP:
+A biblioteca abstrai a seguinte requisição HTTPs:
 
 ```bash
 curl -X POST https://hub.saude.go.gov.br/auth/token \
@@ -54,10 +52,28 @@ curl -X POST https://hub.saude.go.gov.br/auth/token \
   -d "client_assertion=eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCIsIng1YyI6WyJNSUlELi4uIl19.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS384"
 ```
 
-**Estrutura do JWT (`client_assertion`):** `header.payload.signature` onde:
-- **Header:** `{"alg":"RS384","typ":"JWT","x5c":["cert-base64"]}`
-- **Payload:** `{"iss":"client_id", "sub":"client_id", "aud":"token_endpoint", "exp":..., "iat":..., "jti":"uuid"}`  
-- **Signature:** RS384 (RSA + SHA-384) com chave privada ICP-Brasil
+Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
+
+- *header* 
+```json
+{  
+  "alg" : "RS384",
+  "typ" : "JWT",
+  "x5c" : [ "cert-base64" ]
+}
+```
+- *payload*
+```json
+{
+  "iss" : "client_id",
+  "sub" : "client_id",
+  "aud" : "token_endpoint",
+  "exp" : 1709740000,
+  "iat" : 1709739880,
+  "jti" : "uuid"
+}
+```
+- *signature*: RS384 (RSA + SHA-384) com chave privada ICP-Brasil
 
 **Resposta esperada:**
 
