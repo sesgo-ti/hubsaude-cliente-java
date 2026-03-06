@@ -36,7 +36,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Classe de conveniência para obtenção de access tokens SMART Backend Services.
+ * Classe de conveniência para obtenção de access tokens 
+ * SMART Backend Services.
  *
  * <p>
  * Abstrai toda a complexidade de:

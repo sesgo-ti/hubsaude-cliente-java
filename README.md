@@ -4,7 +4,7 @@
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
 [![License](https://img.shields.io/badge/License-SES--GO%2FUFG-green)](#licença)
 
-Cliente Java para autenticação no HubSaúde via **SMART Backend Services** (RFC 7523).
+Cliente Java para autenticação no HubSaúde via **SMART Backend Services**, implementando OAuth 2.0 com JWT Bearer Assertion (RFCs 6749, 7521, 7523).
 
 ## Recursos
 
@@ -54,27 +54,10 @@ curl -X POST https://hub.saude.go.gov.br/auth/token \
   -d "client_assertion=eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCIsIng1YyI6WyJNSUlELi4uIl19.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS384"
 ```
 
-**Estrutura do JWT (`client_assertion`):**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Header (Base64URL)                                          │
-│ {"alg":"RS384","typ":"JWT","x5c":["MIID..."]}               │
-├─────────────────────────────────────────────────────────────┤
-│ Payload (Base64URL)                                         │
-│ {                                                           │
-│   "iss": "meu-sistema",           // client_id              │
-│   "sub": "meu-sistema",           // client_id              │
-│   "aud": "https://.../auth/token",// URL do endpoint        │
-│   "exp": 1709740000,              // Expiração (Unix)       │
-│   "iat": 1709739880,              // Emissão (Unix)         │
-│   "jti": "uuid-único"             // ID único do JWT        │
-│ }                                                           │
-├─────────────────────────────────────────────────────────────┤
-│ Signature (RS384 = RSA + SHA-384)                           │
-│ Assinado com a chave privada ICP-Brasil                     │
-└─────────────────────────────────────────────────────────────┘
-```
+**Estrutura do JWT (`client_assertion`):** `header.payload.signature` onde:
+- **Header:** `{"alg":"RS384","typ":"JWT","x5c":["cert-base64"]}`
+- **Payload:** `{"iss":"client_id", "sub":"client_id", "aud":"token_endpoint", "exp":..., "iat":..., "jti":"uuid"}`  
+- **Signature:** RS384 (RSA + SHA-384) com chave privada ICP-Brasil
 
 **Resposta esperada:**
 
@@ -148,31 +131,17 @@ Os arquivos `test-key.pem` e `test-cert.pem` podem ser usados diretamente com o 
 
 ```java
 var client = SmartTokenClient.builder()
-        // Endpoint (obrigatório: tokenEndpoint OU fhirBase)
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
-        
-        // Credenciais (obrigatório)
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")  // ou .fhirBase() para descoberta
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
-        
-        // TLS/mTLS (opcional)
-        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))
-        
-        // Timeouts (opcional)
-        .connectTimeout(Duration.ofSeconds(10))
-        .requestTimeout(Duration.ofSeconds(30))
-        
-        // JWT Assertion (opcional)
-        .assertionTtlSeconds(120)  // Validade do JWT (padrão: 120s)
-        
-        // Cache de Tokens (opcional)
-        .enableTokenCache(true)           // Habilita cache (padrão: true)
-        .tokenCacheMarginSeconds(30)      // Margem antes de expirar (padrão: 30s)
-        
-        // Resiliência (opcional)
-        .maxRetries(3)                    // Tentativas em caso de falha
-        
+        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // opcional: CA customizada
+        .connectTimeout(Duration.ofSeconds(10))          // opcional
+        .requestTimeout(Duration.ofSeconds(30))          // opcional
+        .assertionTtlSeconds(120)                        // opcional: TTL do JWT
+        .enableTokenCache(true)                          // opcional: cache habilitado
+        .tokenCacheMarginSeconds(30)                     // opcional: margem de renovação
+        .maxRetries(3)                                   // opcional: retries
         .build();
 ```
 
