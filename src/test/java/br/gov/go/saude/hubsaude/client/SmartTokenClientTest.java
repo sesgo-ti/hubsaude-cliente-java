@@ -1185,6 +1185,150 @@ class SmartTokenClientTest {
                 }
         }
 
+        // ==================== Testes de invalidateCache - normalização de scope ====================
+
+        @Test
+        void invalidateCacheDeveNormalizarScopeNullParaStringVazia() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger requestCount =
+                                new java.util.concurrent.atomic.AtomicInteger(0);
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        requestCount.incrementAndGet();
+                        final byte[] resp = "{\"access_token\":\"token-abc\",\"expires_in\":3600}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(true)
+                                        .build();
+
+                        // Obtém token com scope vazio (normalizado de null)
+                        client.obtainToken(null);
+                        assertThat(requestCount.get()).isEqualTo(1);
+
+                        // Verifica que está em cache
+                        client.obtainToken(null);
+                        assertThat(requestCount.get()).isEqualTo(1);
+
+                        // Invalida cache com scope null (deve normalizar para "")
+                        client.invalidateCache(null);
+
+                        // Próxima chamada deve fazer novo request
+                        client.obtainToken(null);
+                        assertThat(requestCount.get()).isEqualTo(2);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void invalidateCacheDeveNormalizarScopeComEspacos() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger requestCount =
+                                new java.util.concurrent.atomic.AtomicInteger(0);
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        requestCount.incrementAndGet();
+                        final byte[] resp = "{\"access_token\":\"token-xyz\",\"expires_in\":3600}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(true)
+                                        .build();
+
+                        // Obtém token com scope normal
+                        client.obtainToken("system/Patient.rs");
+                        assertThat(requestCount.get()).isEqualTo(1);
+
+                        // Verifica que está em cache
+                        client.obtainToken("system/Patient.rs");
+                        assertThat(requestCount.get()).isEqualTo(1);
+
+                        // Invalida cache com scope com espaços (deve aplicar trim)
+                        client.invalidateCache("  system/Patient.rs  ");
+
+                        // Próxima chamada deve fazer novo request
+                        client.obtainToken("system/Patient.rs");
+                        assertThat(requestCount.get()).isEqualTo(2);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void invalidateCacheDeveInvalidarApenasOScopeEspecificado() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger requestCount =
+                                new java.util.concurrent.atomic.AtomicInteger(0);
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        requestCount.incrementAndGet();
+                        final byte[] resp = ("{\"access_token\":\"token-" + requestCount.get() + "\",\"expires_in\":3600}")
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(true)
+                                        .build();
+
+                        // Obtém tokens para dois scopes diferentes
+                        final String tokenA = client.obtainToken("system/Patient.rs");
+                        final String tokenB = client.obtainToken("system/Observation.rs");
+                        assertThat(requestCount.get()).isEqualTo(2);
+
+                        // Invalida apenas o scope A
+                        client.invalidateCache("system/Patient.rs");
+
+                        // Scope B ainda deve estar em cache
+                        final String tokenB2 = client.obtainToken("system/Observation.rs");
+                        assertThat(tokenB2).isEqualTo(tokenB);
+                        assertThat(requestCount.get()).isEqualTo(2); // Não fez novo request
+
+                        // Scope A deve fazer novo request
+                        final String tokenA2 = client.obtainToken("system/Patient.rs");
+                        assertThat(tokenA2).isNotEqualTo(tokenA);
+                        assertThat(requestCount.get()).isEqualTo(3); // Fez novo request
+                } finally {
+                        server.stop(0);
+                }
+        }
+
         // ---------- helpers ----------
 
         private static String toPkcs8Pem(final byte[] encoded) {
