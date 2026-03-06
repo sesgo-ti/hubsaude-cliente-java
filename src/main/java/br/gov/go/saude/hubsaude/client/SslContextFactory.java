@@ -192,10 +192,6 @@ public final class SslContextFactory {
      */
     public static X509Certificate validateCertificate(final Path path) throws IOException {
         final String pem = Files.readString(path, StandardCharsets.UTF_8);
-        return validateCertificate(path, pem);
-    }
-
-    static X509Certificate validateCertificate(Path path, String pem) throws IOException {
         PEMParser parser = new PEMParser(new StringReader(pem));
         return validateCertificate(path, parser);
     }
@@ -203,23 +199,15 @@ public final class SslContextFactory {
     static X509Certificate validateCertificate(Path path, PEMParser parser) throws IOException {
         try (parser) {
             final Object obj = parser.readObject();
-            return validateCertificate(path, obj);
+            if (obj instanceof X509CertificateHolder holder) {
+                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
+                validateCertificate(path, cert);
+                return cert;
+            }
+            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
         } catch (CertificateException ex) {
             throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
         }
-    }
-
-    static X509Certificate validateCertificate(Path path, Object obj) throws CertificateException {
-        if (obj instanceof X509CertificateHolder holder) {
-            return validateCertificate(path, holder);
-        }
-        throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
-    }
-
-    static X509Certificate validateCertificate(Path path, X509CertificateHolder holder) throws CertificateException {
-        final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-        validateCertificate(path, cert);
-        return cert;
     }
 
     static void validateCertificate(Path path, X509Certificate cert) {
