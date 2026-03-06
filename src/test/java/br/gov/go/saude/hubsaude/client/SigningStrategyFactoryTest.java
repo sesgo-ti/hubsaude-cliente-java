@@ -149,11 +149,12 @@ class SigningStrategyFactoryTest {
         sha384Verifier.update(dados);
         assertThat(sha384Verifier.verify(assinatura)).isTrue();
 
-        // Verificar com SHA256withRSA - deve falhar
+        // Verificar com SHA256withRSA - deve falhar (lança exceção por mismatch de OID)
         final Signature sha256Verifier = Signature.getInstance("SHA256withRSA");
         sha256Verifier.initVerify(publicKey);
         sha256Verifier.update(dados);
-        assertThat(sha256Verifier.verify(assinatura)).isFalse();
+        assertThatThrownBy(() -> sha256Verifier.verify(assinatura))
+                .isInstanceOf(java.security.SignatureException.class);
     }
 
     @Test
