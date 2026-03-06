@@ -194,12 +194,12 @@ public final class SslContextFactory {
         return validateCertificate(path, pem);
     }
 
-    private static X509Certificate validateCertificate(Path path, String pem) throws IOException {
+    static X509Certificate validateCertificate(Path path, String pem) throws IOException {
         PEMParser parser = new PEMParser(new StringReader(pem));
         return validateCertificate(path, parser);
     }
 
-    private static X509Certificate validateCertificate(Path path, PEMParser parser) throws IOException {
+    static X509Certificate validateCertificate(Path path, PEMParser parser) throws IOException {
         try (parser) {
             final Object obj = parser.readObject();
             return validateCertificate(path, obj);
@@ -208,14 +208,14 @@ public final class SslContextFactory {
         }
     }
 
-    private static X509Certificate validateCertificate(Path path, Object obj) throws CertificateException {
+    static X509Certificate validateCertificate(Path path, Object obj) throws CertificateException {
         if (obj instanceof X509CertificateHolder holder) {
             return validateCertificate(path, holder);
         }
         throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
     }
 
-    private static X509Certificate validateCertificate(Path path, X509CertificateHolder holder) throws CertificateException {
+    static X509Certificate validateCertificate(Path path, X509CertificateHolder holder) throws CertificateException {
         final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
         if (cert == null) {
             throw new SmartTokenException("Certificado inválido: " + path);
@@ -224,7 +224,7 @@ public final class SslContextFactory {
         return cert;
     }
 
-    private static void validateCertificate(Path path, X509Certificate cert) {
+    static void validateCertificate(Path path, X509Certificate cert) {
         try {
             cert.checkValidity();
         } catch (CertificateExpiredException ex) {
