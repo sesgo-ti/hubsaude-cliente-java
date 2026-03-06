@@ -1,139 +1,20 @@
-# hubsaude-cliente-java
+# HubSaúde Cliente Java
 
-Cliente Java para obtenção de token de acesso exigido para 
-usufruir dos serviços oferecidos pelo HubSaúde.
+[![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
+[![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
+[![License](https://img.shields.io/badge/License-SES--GO%2FUFG-green)](#licença)
 
-## Descrição
+Cliente Java para autenticação no HubSaúde via **SMART Backend Services** (RFC 7523).
 
-Este módulo fornece a classe `SmartTokenClient` que abstrai os detalhes do fluxo de autenticação SMART Backend Services (RFC 7523). Isso inclui:
+## Recursos
 
-- Leitura de chaves privadas e certificados PEM
-- Montagem do `client_assertion` JWT (RS384)
-- Comunicação HTTPS com o endpoint `/auth/token`
-- Cache de tokens com renovação proativa
-- Retry com backoff exponencial para resiliência
-- Thread-safety para uso concorrente
+- Assinatura JWT com RS384 (chave RSA + SHA-384)
+- Suporte a PEM, PKCS#12 (.pfx/.p12), HSM/PKCS#11 e HashiCorp Vault
+- Cache de tokens com renovação automática (thread-safe)
+- Retry com backoff exponencial e circuit breaker
+- Descoberta automática de endpoint via `.well-known/smart-configuration`
 
-## Dados necessários 
-
-Para acesso ao HubSaúde é preciso obter o token de acesso, o que exige:
-- URL do endpoint onde o token de acesso é emitido (ex.: `https://hub.saude.go.gov.br/auth/token`). Esta URL pode ser configurada manualmente via `tokenEndpoint(url)` ou descoberta dinamicamente via `.discoverTokenEndpointFrom(fhirBaseUrl)`.
-- `client_id` fornecido pela SES-GO no momento do credenciamento (ex.: `meu-sistema`)
-- Chave privada usada para assinar o JWT de client assertion (em formato PEM, PKCS#8 ou via HSM)
-- Certificado ICP-Brasil correspondente à chave privada (em formato PEM)
-- Vários outros parâmetros podem ser fornecidos para controle de timeouts, cache, retries e validação de certificados.
-
-
-## Uso básico
-```java
-var tokenClient = new SmartTokenClient(
-        "https://hub.saude.go.gov.br/auth/token",
-        "meu-sistema",
-        Path.of("chave-privada.pem"),
-        Path.of("certificado.pem"));
-
-String accessToken = tokenClient.obtainToken("system/Patient.rs");
-```
-
-## Uso com Builder
-
-```java
-var tokenClient = SmartTokenClient.builder()
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
-        .clientId("meu-sistema")
-        .privateKeyPem(Path.of("chave-privada.pem"))
-        .certificatePem(Path.of("certificado.pem"))
-        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // Opcional
-        .connectTimeout(Duration.ofSeconds(10))
-        .requestTimeout(Duration.ofSeconds(30))
-        .assertionTtlSeconds(120)
-        .enableTokenCache(true)
-        .tokenCacheMarginSeconds(30)
-        .maxRetries(3)
-        .build();
-```
-
-### Descoberta Dinâmica (OIDC / SMART Discovery)
-
-O SDK permite buscar o endpoint de tokens automaticamente a partir do endpoint FHIR via `.well-known/smart-configuration`, seguindo as diretrizes de compliance do SMART Backend Services.
-
-```java
-var tokenClient = SmartTokenClient.builder()
-        .fhirBase("https://hub.saude.go.gov.br") // URL base do FHIR
-        .clientId("meu-sistema")
-        .privateKeyPem(Path.of("chave-privada.pem"))
-        .certificatePem(Path.of("certificado.pem"))
-        .build();
-```
-
-### Chave Privada com Senha (PKCS#8 Criptografada)
-
-```java
-var tokenClient = SmartTokenClient.builder()
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
-        .clientId("meu-sistema")
-        .privateKeyPem(Path.of("chave-privada-encrypted.pem"))
-        .privateKeyPassword("minha-senha".toCharArray())  // Senha da chave
-        .certificatePem(Path.of("certificado.pem"))
-        .build();
-```
-
-### HSM via PKCS#11 (Chave Nunca Sai do Hardware)
-
-```java
-// Configurar provider PKCS#11
-Provider pkcs11Provider = SigningStrategyFactory.configurePkcs11Provider("/etc/pkcs11/hsm.cfg");
-
-// Criar estratégia de assinatura que delega ao HSM
-SigningStrategy hsmStrategy = SigningStrategyFactory.fromPkcs11(
-        pkcs11Provider,
-        "minha-chave-alias",
-        "123456".toCharArray());  // PIN do token
-
-var tokenClient = SmartTokenClient.builder()
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
-        .clientId("meu-sistema")
-        .signingStrategy(hsmStrategy)  // Usa HSM em vez de arquivo PEM
-        .certificatePem(Path.of("certificado.pem"))
-        .build();
-```
-
-### KeyStore (JKS/PKCS#12)
-
-```java
-KeyStore ks = KeyStore.getInstance("PKCS12");
-ks.load(new FileInputStream("keystore.p12"), "senha-keystore".toCharArray());
-
-SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(
-        ks, 
-        "alias-da-chave", 
-        "senha-da-chave".toCharArray());
-
-var tokenClient = SmartTokenClient.builder()
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
-        .clientId("meu-sistema")
-        .signingStrategy(strategy)
-        .certificatePem(Path.of("certificado.pem"))
-        .build();
-```
-
-### HashiCorp Vault (via API)
-
-```java
-// Obter chave do Vault (exemplo simplificado)
-PrivateKey vaultKey = vaultClient.getPrivateKey("secret/data/hubsaude/key");
-
-SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(vaultKey);
-
-var tokenClient = SmartTokenClient.builder()
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
-        .clientId("meu-sistema")
-        .signingStrategy(strategy)
-        .certificatePem(Path.of("certificado.pem"))
-        .build();
-```
-
-## Dependência Maven
+## Instalação
 
 ```xml
 <dependency>
@@ -143,69 +24,304 @@ var tokenClient = SmartTokenClient.builder()
 </dependency>
 ```
 
-## Integração com Circuit Breaker
+**Requisitos:** Java 21+, Maven 3.9+
 
-Para cenários de produção, recomenda-se decorar com Resilience4j:
+## Quick Start
 
 ```java
-CircuitBreaker circuitBreaker = CircuitBreaker.of("smartToken", CircuitBreakerConfig.custom()
-    .failureRateThreshold(50)
-    .waitDurationInOpenState(Duration.ofSeconds(30))
-    .slidingWindowSize(10)
-    .build());
+var client = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .privateKeyPem(Path.of("chave-privada.pem"))
+        .certificatePem(Path.of("certificado.pem"))
+        .build();
 
-String token = circuitBreaker.executeSupplier(() -> {
-    try {
-        return tokenClient.obtainToken(scope);
-    } catch (Exception e) {
-        throw new RuntimeException(e);
-    }
-});
+String token = client.obtainToken("system/Patient.rs");
 ```
+
+---
+
+## Como Funciona (curl)
+
+O cliente abstrai a seguinte requisição HTTP:
+
+```bash
+curl -X POST https://hub.saude.go.gov.br/auth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "scope=system/Patient.rs" \
+  -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+  -d "client_assertion=eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCIsIng1YyI6WyJNSUlELi4uIl19.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS384"
+```
+
+**Estrutura do JWT (`client_assertion`):**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Header (Base64URL)                                          │
+│ {"alg":"RS384","typ":"JWT","x5c":["MIID..."]}               │
+├─────────────────────────────────────────────────────────────┤
+│ Payload (Base64URL)                                         │
+│ {                                                           │
+│   "iss": "meu-sistema",           // client_id              │
+│   "sub": "meu-sistema",           // client_id              │
+│   "aud": "https://.../auth/token",// URL do endpoint        │
+│   "exp": 1709740000,              // Expiração (Unix)       │
+│   "iat": 1709739880,              // Emissão (Unix)         │
+│   "jti": "uuid-único"             // ID único do JWT        │
+│ }                                                           │
+├─────────────────────────────────────────────────────────────┤
+│ Signature (RS384 = RSA + SHA-384)                           │
+│ Assinado com a chave privada ICP-Brasil                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Resposta esperada:**
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "system/Patient.rs"
+}
+```
+
+---
+
+## Preparação de Certificados
+
+### Converter PFX/P12 (ICP-Brasil) para PEM
+
+Certificados ICP-Brasil geralmente são distribuídos em formato PKCS#12 (`.pfx` ou `.p12`). Para extrair chave e certificado em PEM:
+
+```bash
+# 1. Extrair chave privada (será solicitada a senha do PFX)
+openssl pkcs12 -in certificado.pfx -nocerts -nodes -out chave-privada.pem
+
+# 2. Extrair certificado
+openssl pkcs12 -in certificado.pfx -clcerts -nokeys -out certificado.pem
+
+# 3. (Opcional) Converter chave para PKCS#8 explícito
+openssl pkcs8 -topk8 -nocrypt -in chave-privada.pem -out chave-pkcs8.pem
+```
+
+> **Segurança:** Use `-nodes` apenas em ambientes seguros. Para produção, considere manter a chave criptografada ou usar HSM.
+
+### Chave Privada com Senha
+
+```bash
+# Converter para PKCS#8 criptografado (AES-256)
+openssl pkcs8 -topk8 -v2 aes-256-cbc -in chave-privada.pem -out chave-encrypted.pem
+```
+
+```java
+var client = SmartTokenClient.builder()
+        .privateKeyPem(Path.of("chave-encrypted.pem"))
+        .privateKeyPassword("minha-senha".toCharArray())
+        // ...
+        .build();
+```
+
+### Gerar Certificados de Teste (para hubsaude-simulador)
+
+Para desenvolvimento e testes locais com o `hubsaude-simulador`:
+
+```bash
+# Gerar par de chaves RSA 2048-bit
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out test-key.pem
+
+# Gerar certificado autoassinado (válido por 365 dias)
+openssl req -new -x509 -key test-key.pem -out test-cert.pem -days 365 \
+    -subj "/CN=teste-local/O=Desenvolvimento/C=BR"
+
+# (Opcional) Verificar arquivos gerados
+openssl rsa -in test-key.pem -check -noout
+openssl x509 -in test-cert.pem -text -noout | head -20
+```
+
+Os arquivos `test-key.pem` e `test-cert.pem` podem ser usados diretamente com o cliente.
+
+---
+
+## Configuração Completa
+
+```java
+var client = SmartTokenClient.builder()
+        // Endpoint (obrigatório: tokenEndpoint OU fhirBase)
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        
+        // Credenciais (obrigatório)
+        .clientId("meu-sistema")
+        .privateKeyPem(Path.of("chave-privada.pem"))
+        .certificatePem(Path.of("certificado.pem"))
+        
+        // TLS/mTLS (opcional)
+        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))
+        
+        // Timeouts (opcional)
+        .connectTimeout(Duration.ofSeconds(10))
+        .requestTimeout(Duration.ofSeconds(30))
+        
+        // JWT Assertion (opcional)
+        .assertionTtlSeconds(120)  // Validade do JWT (padrão: 120s)
+        
+        // Cache de Tokens (opcional)
+        .enableTokenCache(true)           // Habilita cache (padrão: true)
+        .tokenCacheMarginSeconds(30)      // Margem antes de expirar (padrão: 30s)
+        
+        // Resiliência (opcional)
+        .maxRetries(3)                    // Tentativas em caso de falha
+        
+        .build();
+```
+
+### Descoberta Automática de Endpoint
+
+```java
+var client = SmartTokenClient.builder()
+        .fhirBase("https://hub.saude.go.gov.br")  // Descobre via .well-known
+        .clientId("meu-sistema")
+        .privateKeyPem(Path.of("chave-privada.pem"))
+        .certificatePem(Path.of("certificado.pem"))
+        .build();
+```
+
+---
+
+## Fontes de Chave Alternativas
+
+### PKCS#12 Direto (sem conversão para PEM)
+
+```java
+KeyStore ks = KeyStore.getInstance("PKCS12");
+try (var fis = new FileInputStream("certificado.pfx")) {
+    ks.load(fis, "senha-pfx".toCharArray());
+}
+
+SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(
+        ks, "alias-da-chave", "senha-chave".toCharArray());
+
+var client = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .signingStrategy(strategy)
+        .certificatePem(Path.of("certificado.pem"))
+        .build();
+```
+
+> **Dica:** Use `keytool -list -keystore certificado.pfx -storetype PKCS12` para descobrir o alias.
+
+### HSM via PKCS#11
+
+```java
+Provider pkcs11 = SigningStrategyFactory.configurePkcs11Provider("/etc/pkcs11/hsm.cfg");
+
+SigningStrategy strategy = SigningStrategyFactory.fromPkcs11(
+        pkcs11,
+        "alias-chave-hsm",
+        "123456".toCharArray());  // PIN
+
+var client = SmartTokenClient.builder()
+        .signingStrategy(strategy)  // Assinatura no hardware
+        // ...
+        .build();
+```
+
+### HashiCorp Vault
+
+```java
+PrivateKey vaultKey = vaultClient.getPrivateKey("secret/data/hubsaude/key");
+SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(vaultKey);
+
+var client = SmartTokenClient.builder()
+        .signingStrategy(strategy)
+        // ...
+        .build();
+```
+
+---
+
+## Resiliência em Produção
+
+### Integração com Resilience4j
+
+```java
+CircuitBreaker cb = CircuitBreaker.of("hubsaude", CircuitBreakerConfig.custom()
+        .failureRateThreshold(50)
+        .waitDurationInOpenState(Duration.ofSeconds(30))
+        .slidingWindowSize(10)
+        .build());
+
+String token = cb.executeSupplier(() -> client.obtainToken(scope));
+```
+
+---
 
 ## Testes
 
-### Testes Unitários
-
-Os testes unitários são autocontidos e não dependem de serviços externos:
+### Unitários
 
 ```bash
 mvn test
 ```
 
-### Testes de Integração
+### Integração
 
-Os testes de integração usam arquitetura **Template Method** com duas implementações independentes:
+| Modo     | Comando                                     | Pré-requisito | Tempo |
+|----------|---------------------------------------------|---------------|-------|
+| JAR      | `mvn verify -Dit.test=SmartTokenClientJarIT`    | Java 21+      | ~5s   |
+| Docker   | `mvn verify -Dit.test=SmartTokenClientDockerIT` | Docker        | ~9s   |
+| Todos    | `mvn verify`                                    | Ambos         | ~14s  |
 
-| Classe                     | Infraestrutura | Tempo | Uso Recomendado             |
-| -------------------------- | -------------- | ----- | --------------------------- |
-| `SmartTokenClientJarIT`    | ProcessBuilder | ~5s   | Desenvolvimento local       |
-| `SmartTokenClientDockerIT` | Testcontainers | ~9s   | CI/CD, builds reproduzíveis |
+Os testes de integração utilizam o `hubsaude-simulador` automaticamente.
 
-#### Executar Testes JAR (mais rápido)
+---
 
-```bash
-mvn verify -Dit.test=SmartTokenClientJarIT
+## Troubleshooting
+
+| Erro | Causa Provável | Solução |
+|------|----------------|---------|
+| `PKCS8 key spec not recognized` | Chave em formato PKCS#1 (tradicional) | Converter: `openssl pkcs8 -topk8 -nocrypt -in key.pem -out key-pkcs8.pem` |
+| `unable to find valid certification path` | CA do servidor não confiável | Configurar `.serverTrustAnchor()` ou importar CA no truststore |
+| `signature verification failed` | Certificado não corresponde à chave | Verificar: `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5` |
+| `connection timed out` | Firewall ou endpoint incorreto | Verificar conectividade e URL |
+
+---
+
+## Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     SmartTokenClient                        │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ TokenCache  │  │ RetryPolicy │  │ SigningStrategy     │  │
+│  │ (thread-    │  │ (exp.       │  │ ┌─────────────────┐ │  │
+│  │  safe)      │  │  backoff)   │  │ │ PEM │ P12 │ HSM │ │  │
+│  └─────────────┘  └─────────────┘  │ └─────────────────┘ │  │
+│                                     └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    POST /auth/token
+                    (client_assertion JWT RS384)
 ```
 
-**Pré-requisitos:** Java 21+ instalado
+---
 
-#### Executar Testes Docker
+## Referências
 
-```bash
-mvn verify -Dit.test=SmartTokenClientDockerIT
-```
+| Especificação | Descrição |
+|---------------|-----------|
+| [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) | OAuth 2.0 — define `client_credentials` grant para comunicação M2M (sem usuário) |
+| [RFC 7515](https://datatracker.ietf.org/doc/html/rfc7515) | JSON Web Signature (JWS) — estrutura e serialização de assinaturas digitais |
+| [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) | JSON Web Token (JWT) — formato do token com claims `iss`, `sub`, `aud`, `exp`, `iat`, `jti` |
+| [RFC 7521](https://datatracker.ietf.org/doc/html/rfc7521) | Assertion Framework — uso de assertions como credenciais de cliente |
+| [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523) | JWT Bearer Assertion — perfil específico para `client_assertion` com JWT assinado |
+| [SMART Backend Services](https://hl7.org/fhir/smart-app-launch/backend-services.html) | Guia HL7 FHIR para autenticação backend-to-backend em sistemas de saúde |
 
-**Pré-requisitos:** Docker instalado e em execução
-
-#### Executar Todos os Testes de Integração
-
-```bash
-mvn verify
-```
-
-> **Arquitetura:** Os testes estão em `SmartTokenClientIntegrationTestBase` (classe abstrata).
-> Cada implementação (`*JarIT`, `*DockerIT`) apenas define como iniciar/parar o simulador.
+---
 
 ## Licença
 
