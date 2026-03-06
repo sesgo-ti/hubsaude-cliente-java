@@ -6,10 +6,12 @@
 
 Biblioteca Java de conveniência para autenticação no HubSaúde.
 A classe principal, `SmartTokenClient`, facilita a obtenção de tokens de acesso
-via **SMART Backend Services**, implementando OAuth 2.0 com
+em conformidade com o **SMART Backend Services**, implementando OAuth 2.0 com
 JWT Bearer Assertion (RFCs 6749, 7521, 7523). A assinatura (client_assertion)
 pode ser gerada a partir de arquivo local (PEM ou PKCS#12) ou 
-por dispositivo criptográfico via PKCS#11 (HSM).
+por dispositivo criptográfico via PKCS#11 (HSM). Dessa forma,
+contempla tanto certificados autoassinados para testes quanto
+certificados ICP-Brasil para produção (A1 em arquivo, A3/A4 via HSM).
 
 
 ## Dependência Maven
