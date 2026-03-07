@@ -477,10 +477,9 @@ class SmartTokenClientBuilderTest {
 
         try {
             final String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
 
             assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
-                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5)))
+                    baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5)))
                     .isInstanceOf(SmartTokenException.class)
                     .hasMessageContaining("Falha ao obter smart-configuration (404)");
 
@@ -504,10 +503,9 @@ class SmartTokenClientBuilderTest {
 
         try {
             final String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
 
             assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
-                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5)))
+                    baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5)))
                     .isInstanceOf(SmartTokenException.class)
                     .hasMessageContaining("não contém 'token_endpoint'");
 
@@ -519,10 +517,8 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("static discoverTokenEndpoint: Deve falhar se houver problema de I/O de rede")
     void deveOcorrerIoExceptionNoNetworkError() {
-        final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
-
         assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
-                "http://localhost:59999", trustAll, Duration.ofSeconds(1), Duration.ofSeconds(1)))
+                "http://localhost:59999", SSLContext.getDefault(), Duration.ofSeconds(1), Duration.ofSeconds(1)))
                 .isInstanceOf(IOException.class);
     }
 
@@ -543,10 +539,9 @@ class SmartTokenClientBuilderTest {
         try {
             // URL com barra final
             final String baseUrl = "http://localhost:" + server.getAddress().getPort() + "/";
-            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
 
             final String tokenEndpoint = SmartTokenClientBuilder.discoverTokenEndpoint(
-                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5));
+                    baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5));
 
             assertThat(tokenEndpoint).isEqualTo(expectedTokenEndpoint);
         } finally {
@@ -571,10 +566,9 @@ class SmartTokenClientBuilderTest {
         try {
             // URL sem barra final
             final String baseUrl = "http://localhost:" + server.getAddress().getPort();
-            final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
 
             final String tokenEndpoint = SmartTokenClientBuilder.discoverTokenEndpoint(
-                    baseUrl, trustAll, Duration.ofSeconds(5), Duration.ofSeconds(5));
+                    baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5));
 
             assertThat(tokenEndpoint).isEqualTo(expectedTokenEndpoint);
         } finally {
