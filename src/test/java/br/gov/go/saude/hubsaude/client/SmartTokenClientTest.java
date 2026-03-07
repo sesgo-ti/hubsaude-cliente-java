@@ -689,6 +689,18 @@ class SmartTokenClientTest {
                 SmartTokenClient.verifyKeyPairConsistency(ecPair.getPrivate(), ecCert);
         }
 
+        @Test
+        void deveFalharVerifyKeyPairConsistencyComChaveDsa() throws Exception {
+                final KeyPairGenerator dsaGen = KeyPairGenerator.getInstance("DSA");
+                dsaGen.initialize(2048);
+                final KeyPair dsaPair = dsaGen.generateKeyPair();
+
+                assertThatThrownBy(() -> SmartTokenClient.verifyKeyPairConsistency(
+                                dsaPair.getPrivate(), clientCertificate))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("Tipo de chave não suportado");
+        }
+
         // ==================== Testes de valores padrão do construtor ====================
 
         @Test

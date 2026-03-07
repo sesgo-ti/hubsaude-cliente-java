@@ -64,6 +64,16 @@ class SigningStrategyFactoryTest {
     }
 
     @Test
+    void deveAssinarComOverloadSemSenha() throws Exception {
+        final SigningStrategy strategy = SigningStrategyFactory.fromPemFile(keyFile);
+        final byte[] dados = "overload sem senha".getBytes(StandardCharsets.UTF_8);
+
+        final byte[] assinatura = strategy.sign(dados);
+
+        assertThat(assinatura).isNotNull();
+    }
+
+    @Test
     void deveAssinarComArquivoPemSemSenha() throws Exception {
         final SigningStrategy strategy = SigningStrategyFactory.fromPemFile(keyFile, null);
         final byte[] dados = "mensagem de teste".getBytes(StandardCharsets.UTF_8);

@@ -506,6 +506,46 @@ class SslContextFactoryTest {
                 .hasMessageContaining("Protocolo TLS não suportado");
     }
 
+    // ==================== buildSslContext mTLS com trust anchor expirado ====================
+
+    @Test
+    @DisplayName("buildSslContext mTLS: Deve relançar SmartTokenException para trust anchor expirado")
+    void deveLancarExcecaoMtlsParaTrustAnchorExpirado() throws Exception {
+        final Path expiredCert = createCertFile(
+                Instant.now().minus(365, ChronoUnit.DAYS),
+                Instant.now().minus(1, ChronoUnit.DAYS));
+        final X509Certificate clientCert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        assertThatThrownBy(() -> SslContextFactory.buildSslContext(
+                expiredCert, "TLSv1.3",
+                keyPair.getPrivate(), clientCert))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado expirado");
+    }
+
+    @Test
+    @DisplayName("buildSslContext KeyStore mTLS: Deve relançar SmartTokenException para trust anchor expirado")
+    void deveLancarExcecaoKeyStoreMtlsParaTrustAnchorExpirado() throws Exception {
+        final Path expiredCert = createCertFile(
+                Instant.now().minus(365, ChronoUnit.DAYS),
+                Instant.now().minus(1, ChronoUnit.DAYS));
+        final X509Certificate clientCert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{clientCert});
+
+        assertThatThrownBy(() -> SslContextFactory.buildSslContext(
+                expiredCert, "TLSv1.3", ks, "client", "changeit".toCharArray()))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado expirado");
+    }
+
     // ==================== buildSslContext (2-param) protocolo inválido sem trust anchor ====================
 
     @Test

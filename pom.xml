@@ -148,6 +148,7 @@
                     <excludes>
                         <exclude>**/SigningStrategyFactory$*Pkcs11*</exclude>
                         <exclude>**/cli/VerificarAcesso.class</exclude>
+                        <exclude>**/cli/VerificarAcesso$Config.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>
