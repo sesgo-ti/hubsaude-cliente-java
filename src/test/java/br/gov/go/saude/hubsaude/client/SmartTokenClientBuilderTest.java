@@ -28,7 +28,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
 import java.security.Security;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -460,6 +462,40 @@ class SmartTokenClientBuilderTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    // ==================== build com clientKeyStore (mTLS via KeyStore) ====================
+
+    @Test
+    @DisplayName("build: Deve construir SmartTokenClient com clientKeyStore (mTLS via KeyStore)")
+    void deveConstruirComClientKeyStore() throws Exception {
+        final X509Certificate cert = new JcaX509CertificateConverter()
+                .setProvider(new BouncyCastleProvider())
+                .getCertificate(
+                        new JcaX509v3CertificateBuilder(
+                                new X500Name("CN=KeyStore-Test"),
+                                BigInteger.valueOf(System.nanoTime()),
+                                Date.from(Instant.now()),
+                                Date.from(Instant.now().plusSeconds(86400)),
+                                new X500Name("CN=KeyStore-Test"),
+                                keyPair.getPublic())
+                                .build(new JcaContentSignerBuilder("SHA256withRSA")
+                                        .build(keyPair.getPrivate())));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new java.security.cert.Certificate[]{cert});
+
+        final SmartTokenClient client = SmartTokenClient.builder()
+                .tokenEndpoint(TOKEN_ENDPOINT)
+                .clientId(CLIENT_ID)
+                .privateKeyPem(keyFile)
+                .certificatePem(certFile)
+                .clientKeyStore(ks, "client", "changeit".toCharArray())
+                .build();
+
+        assertThat(client).isNotNull();
     }
 
     @Test

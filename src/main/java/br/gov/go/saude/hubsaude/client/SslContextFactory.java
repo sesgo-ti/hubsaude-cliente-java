@@ -233,6 +233,7 @@ public final class SslContextFactory {
      *         não houver material para mTLS
      * @throws SmartTokenException se houver erro ao configurar o KeyStore
      */
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull") // null é semanticamente necessário para SSLContext.init()
     static KeyManager[] buildKeyManagers(
             final PrivateKey clientKey,
             final X509Certificate clientCert) {
@@ -272,7 +273,7 @@ public final class SslContextFactory {
      * @return array de KeyManagers configurados
      * @throws SmartTokenException se houver erro ao configurar o KeyManager
      */
-    @SuppressWarnings("PMD.UseVarargs")
+    @SuppressWarnings({"PMD.UseVarargs", "PMD.ReturnEmptyCollectionRatherThanNull"}) // null é semanticamente necessário para SSLContext.init()
     static KeyManager[] buildKeyManagers(
             final KeyStore keyStore,
             final String keyAlias,

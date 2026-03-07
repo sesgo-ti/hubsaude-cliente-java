@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
@@ -503,6 +504,114 @@ class SslContextFactoryTest {
                 keyPair.getPrivate(), clientCert))
                 .isInstanceOf(SmartTokenException.class)
                 .hasMessageContaining("Protocolo TLS não suportado");
+    }
+
+    // ==================== buildSslContext (2-param) protocolo inválido sem trust anchor ====================
+
+    @Test
+    @DisplayName("buildSslContext: Deve lançar exceção para protocolo inválido sem trust anchor")
+    void deveLancarExcecaoParaProtocoloInvalidoSemTrustAnchor() {
+        assertThatThrownBy(() -> SslContextFactory.buildSslContext((Path) null, "TLSv99.9"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Protocolo TLS não suportado");
+    }
+
+    // ==================== buildKeyManagers (KeyStore) ====================
+
+    @Test
+    @DisplayName("buildKeyManagers(KeyStore): Deve retornar null quando KeyStore é null")
+    void deveRetornarNullQuandoKeyStoreNull() {
+        final KeyManager[] result = SslContextFactory.buildKeyManagers(null, "alias", new char[0]);
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("buildKeyManagers(KeyStore): Deve retornar KeyManagers com KeyStore válido")
+    void deveRetornarKeyManagersComKeyStoreValido() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{cert});
+
+        final KeyManager[] result = SslContextFactory.buildKeyManagers(ks, "client", "changeit".toCharArray());
+
+        assertThat(result).isNotNull().isNotEmpty();
+    }
+
+    // ==================== buildSslContext (KeyStore mTLS) ====================
+
+    @Test
+    @DisplayName("buildSslContext KeyStore mTLS: Deve construir SSLContext sem trust anchor")
+    void deveConstruirSslContextKeyStoreMtlsSemTrustAnchor() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{cert});
+
+        final SSLContext ctx = SslContextFactory.buildSslContext(
+                (Path) null, "TLSv1.3", ks, "client", "changeit".toCharArray());
+
+        assertThat(ctx).isNotNull();
+        assertThat(ctx.getProtocol()).isEqualTo("TLSv1.3");
+    }
+
+    @Test
+    @DisplayName("buildSslContext KeyStore mTLS: Deve construir SSLContext com trust anchor")
+    void deveConstruirSslContextKeyStoreMtlsComTrustAnchor() throws Exception {
+        final Path serverCertFile = createCertFile(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+        final X509Certificate clientCert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{clientCert});
+
+        final SSLContext ctx = SslContextFactory.buildSslContext(
+                serverCertFile, "TLSv1.3", ks, "client", "changeit".toCharArray());
+
+        assertThat(ctx).isNotNull();
+        assertThat(ctx.getProtocol()).isEqualTo("TLSv1.3");
+    }
+
+    @Test
+    @DisplayName("buildSslContext KeyStore mTLS: Deve lançar exceção para protocolo inválido")
+    void deveLancarExcecaoParaProtocoloInvalidoComKeyStoreMtls() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{cert});
+
+        assertThatThrownBy(() -> SslContextFactory.buildSslContext(
+                (Path) null, "TLSv99.9", ks, "client", "changeit".toCharArray()))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Protocolo TLS não suportado");
+    }
+
+    @Test
+    @DisplayName("buildSslContext KeyStore mTLS: Deve funcionar com KeyStore null (TLS unidirecional)")
+    void deveFuncionarSemMtlsQuandoKeyStoreNull() {
+        final SSLContext ctx = SslContextFactory.buildSslContext(
+                (Path) null, "TLSv1.3", (KeyStore) null, null, null);
+
+        assertThat(ctx).isNotNull();
+        assertThat(ctx.getProtocol()).isEqualTo("TLSv1.3");
     }
 
     // ==================== Helpers ====================
