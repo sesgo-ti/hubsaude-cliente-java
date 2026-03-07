@@ -232,15 +232,25 @@ var client = SmartTokenClient.builder()
 > - **Homologação:** Se o ambiente usa CA interna não presente no trust store da JVM
 > - **Desenvolvimento:** Para aceitar certificados de desenvolvimento
 >
-> Exemplo com simulador local:
+> **Extraindo o certificado do simulador:**
+>
+> O `hubsaude-simulador` usa certificado autoassinado gerado dinamicamente. Para extraí-lo:
+> ```bash
+> # Inicie o simulador primeiro: java -jar hubsaude-simulador.jar
+> # Em outro terminal, extraia o certificado SSL:
+> openssl s_client -connect localhost:8443 < /dev/null 2>/dev/null | openssl x509 > simulador-cert.pem
+> ```
+>
+> Exemplo de uso com o certificado extraído:
 > ```java
-> // Extrair certificado do simulador: openssl s_client -connect localhost:8443 < /dev/null 2>/dev/null | openssl x509 > simulador-cert.pem
 > var client = SmartTokenClient.builder()
 >         .tokenEndpoint("https://localhost:8443/auth/token")
 >         .serverTrustAnchor(Path.of("simulador-cert.pem"))
 >         // ...demais configurações
 >         .build();
 > ```
+>
+> *Nota: O simulador não expõe endpoint HTTP para download do certificado PEM. A extração via `openssl s_client` é a forma recomendada.*
 
 ### Descoberta automática de endpoint
 
