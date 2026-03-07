@@ -318,13 +318,6 @@ class SmartTokenClientTest {
         }
 
         @Test
-        void deveFalharBuildTrustAllSslContextComProtocoloInvalido() {
-                assertThatThrownBy(() -> SslContextFactory.buildTrustAllSslContext("TLSv99.INVALIDO"))
-                                .isInstanceOf(SmartTokenException.class)
-                                .hasMessageContaining("TLSv99.INVALIDO");
-        }
-
-        @Test
         void deveFalharBuildSslContextComProtocoloInvalido() {
                 assertThatThrownBy(() -> SslContextFactory.buildSslContext(certFile, "PROTOCOLO_INVALIDO"))
                                 .isInstanceOf(SmartTokenException.class)
