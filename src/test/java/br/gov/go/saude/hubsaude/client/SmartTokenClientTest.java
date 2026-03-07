@@ -5,6 +5,8 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import br.gov.go.saude.hubsaude.client.FaultToleranceConfig;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeAll;
@@ -695,8 +697,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                120, true, 30, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 120, 3),
+                                true, 30);
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -715,8 +717,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                0, true, 30, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 0, 3),
+                                true, 30);
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -735,8 +737,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                -10, true, 30, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), -10, 3),
+                                true, 30);
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -755,8 +757,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 45, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 45);
 
                 assertThat(client).isNotNull();
         }
@@ -767,8 +769,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 0, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 0);
 
                 assertThat(client).isNotNull();
         }
@@ -779,8 +781,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, -15, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, -15);
 
                 assertThat(client).isNotNull();
         }
@@ -791,8 +793,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, 5);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 5),
+                                true, 30);
 
                 assertThat(client).isNotNull();
         }
@@ -803,8 +805,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, 0);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 0),
+                                true, 30);
 
                 assertThat(client).isNotNull();
         }
@@ -815,8 +817,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, -2);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, -2),
+                                true, 30);
 
                 assertThat(client).isNotNull();
         }
@@ -827,8 +829,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 30);
 
                 assertThat(client).isNotNull();
         }
@@ -839,8 +841,8 @@ class SmartTokenClientTest {
 
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, false, 30, 3);
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                false, 30);
 
                 assertThat(client).isNotNull();
         }

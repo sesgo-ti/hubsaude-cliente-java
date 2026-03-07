@@ -425,50 +425,6 @@ public final class SmartTokenClient {
     }
 
     /**
-     * Construtor completo com parâmetros individuais (retrocompatível).
-     */
-    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" })
-    public SmartTokenClient(
-            final String tokenEndpoint,
-            final String clientId,
-            final PrivateKey privateKey,
-            final X509Certificate certificate,
-            final SSLContext sslContext,
-            final Duration connectTimeout,
-            final Duration requestTimeout,
-            final int assertionTtlSeconds,
-            final boolean enableTokenCache,
-            final int tokenCacheMarginSeconds,
-            final int maxRetries) {
-        this(tokenEndpoint, clientId,
-                createValidatedSigningStrategy(privateKey, certificate),
-                certificate, sslContext,
-                new FaultToleranceConfig(connectTimeout, requestTimeout, assertionTtlSeconds, maxRetries),
-                enableTokenCache, tokenCacheMarginSeconds);
-    }
-
-    /**
-     * Construtor completo com SigningStrategy e parâmetros individuais (retrocompatível).
-     */
-    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" })
-    public SmartTokenClient(
-            final String tokenEndpoint,
-            final String clientId,
-            final SigningStrategy signingStrategy,
-            final X509Certificate certificate,
-            final SSLContext sslContext,
-            final Duration connectTimeout,
-            final Duration requestTimeout,
-            final int assertionTtlSeconds,
-            final boolean enableTokenCache,
-            final int tokenCacheMarginSeconds,
-            final int maxRetries) {
-        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
-                new FaultToleranceConfig(connectTimeout, requestTimeout, assertionTtlSeconds, maxRetries),
-                enableTokenCache, tokenCacheMarginSeconds);
-    }
-
-    /**
      * Cria SigningStrategy validando a consistência entre chave e certificado.
      */
     private static SigningStrategy createValidatedSigningStrategy(
