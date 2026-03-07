@@ -40,12 +40,8 @@ import java.util.Objects;
  * @see SmartTokenClientBuilder
  * @since 0.0.0
  */
-public final class FaultToleranceConfig {
-    private final Duration connectTimeout;
-    private final Duration requestTimeout;
-    private final int assertionTtlSeconds;
-    private final int maxRetries;
-
+public record FaultToleranceConfig(Duration connectTimeout, Duration requestTimeout,
+                                   int assertionTtlSeconds, int maxRetries) {
     /**
      * Cria configuração de tolerância a falhas.
      *
@@ -74,42 +70,6 @@ public final class FaultToleranceConfig {
         this.maxRetries = maxRetries > 0
                 ? maxRetries
                 : SmartTokenClient.DEFAULT_MAX_RETRIES;
-    }
-
-    /**
-     * Retorna o timeout de conexão TCP.
-     *
-     * @return duração do timeout de conexão
-     */
-    public Duration getConnectTimeout() {
-        return connectTimeout;
-    }
-
-    /**
-     * Retorna o timeout de requisição HTTP.
-     *
-     * @return duração do timeout de requisição
-     */
-    public Duration getRequestTimeout() {
-        return requestTimeout;
-    }
-
-    /**
-     * Retorna o TTL do client_assertion JWT em segundos.
-     *
-     * @return TTL em segundos (sempre positivo)
-     */
-    public int getAssertionTtlSeconds() {
-        return assertionTtlSeconds;
-    }
-
-    /**
-     * Retorna o número máximo de tentativas em caso de falha transitória.
-     *
-     * @return número de retries (sempre positivo)
-     */
-    public int getMaxRetries() {
-        return maxRetries;
     }
 }
 

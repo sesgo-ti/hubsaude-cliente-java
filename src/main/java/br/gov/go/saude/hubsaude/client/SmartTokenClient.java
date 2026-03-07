@@ -479,10 +479,10 @@ public final class SmartTokenClient {
                 : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
         this.httpClient = HttpClient.newBuilder()
                 .sslContext(context)
-                .connectTimeout(faultToleranceConfig.getConnectTimeout())
+                .connectTimeout(faultToleranceConfig.connectTimeout())
                 .build();
         LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={}",
-                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.getMaxRetries());
+                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries());
     }
 
     /**
@@ -574,23 +574,23 @@ public final class SmartTokenClient {
         LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
 
         IOException lastException = null;
-        for (int attempt = 1; attempt <= faultToleranceConfig.getMaxRetries(); attempt++) {
+        for (int attempt = 1; attempt <= faultToleranceConfig.maxRetries(); attempt++) {
             try {
                 return doObtainToken(scope);
             } catch (HttpTimeoutException | java.net.ConnectException ex) {
                 lastException = ex;
-                if (attempt < faultToleranceConfig.getMaxRetries()) {
+                if (attempt < faultToleranceConfig.maxRetries()) {
                     final long delayMs = RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
                     LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
-                            attempt, faultToleranceConfig.getMaxRetries(), clientId, ex.getMessage(), delayMs);
+                            attempt, faultToleranceConfig.maxRetries(), clientId, ex.getMessage(), delayMs);
                     Thread.sleep(delayMs);
                 } else {
-                    LOG.error("Todas as {} tentativas falharam para clientId={}", faultToleranceConfig.getMaxRetries(), clientId);
+                    LOG.error("Todas as {} tentativas falharam para clientId={}", faultToleranceConfig.maxRetries(), clientId);
                 }
             }
         }
         throw new SmartTokenException(
-                "Falha após " + faultToleranceConfig.getMaxRetries() + " tentativas: " + lastException.getMessage(), lastException);
+                "Falha após " + faultToleranceConfig.maxRetries() + " tentativas: " + lastException.getMessage(), lastException);
     }
 
     private String doObtainToken(final String scope) throws IOException, InterruptedException {
@@ -600,7 +600,7 @@ public final class SmartTokenClient {
         final HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(tokenEndpoint))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(faultToleranceConfig.getRequestTimeout())
+                .timeout(faultToleranceConfig.requestTimeout())
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
@@ -642,9 +642,9 @@ public final class SmartTokenClient {
     String buildClientAssertion() {
         final Instant now = Instant.now();
         final long iat = now.getEpochSecond();
-        final long exp = now.plusSeconds(faultToleranceConfig.getAssertionTtlSeconds()).getEpochSecond();
+        final long exp = now.plusSeconds(faultToleranceConfig.assertionTtlSeconds()).getEpochSecond();
         final String jti = UUID.randomUUID().toString();
-        LOG.trace("Construindo client_assertion ttl={}s", faultToleranceConfig.getAssertionTtlSeconds());
+        LOG.trace("Construindo client_assertion ttl={}s", faultToleranceConfig.assertionTtlSeconds());
 
         // Constrói o payload JSON usando ObjectMapper para escape correto e seguro
         final Map<String, Object> claims = new LinkedHashMap<>();

@@ -246,9 +246,9 @@ public final class SmartTokenClientBuilder {
     public SmartTokenClientBuilder connectTimeout(final Duration connectTimeout) {
         this.faultToleranceConfig = new FaultToleranceConfig(
             connectTimeout,
-            faultToleranceConfig.getRequestTimeout(),
-            faultToleranceConfig.getAssertionTtlSeconds(),
-            faultToleranceConfig.getMaxRetries()
+            faultToleranceConfig.requestTimeout(),
+            faultToleranceConfig.assertionTtlSeconds(),
+            faultToleranceConfig.maxRetries()
         );
         return this;
     }
@@ -261,10 +261,10 @@ public final class SmartTokenClientBuilder {
      */
     public SmartTokenClientBuilder requestTimeout(final Duration requestTimeout) {
         this.faultToleranceConfig = new FaultToleranceConfig(
-            faultToleranceConfig.getConnectTimeout(),
+            faultToleranceConfig.connectTimeout(),
             requestTimeout,
-            faultToleranceConfig.getAssertionTtlSeconds(),
-            faultToleranceConfig.getMaxRetries()
+            faultToleranceConfig.assertionTtlSeconds(),
+            faultToleranceConfig.maxRetries()
         );
         return this;
     }
@@ -277,10 +277,10 @@ public final class SmartTokenClientBuilder {
      */
     public SmartTokenClientBuilder assertionTtlSeconds(final int assertionTtlSeconds) {
         this.faultToleranceConfig = new FaultToleranceConfig(
-            faultToleranceConfig.getConnectTimeout(),
-            faultToleranceConfig.getRequestTimeout(),
+            faultToleranceConfig.connectTimeout(),
+            faultToleranceConfig.requestTimeout(),
             assertionTtlSeconds,
-            faultToleranceConfig.getMaxRetries()
+            faultToleranceConfig.maxRetries()
         );
         return this;
     }
@@ -298,9 +298,9 @@ public final class SmartTokenClientBuilder {
      */
     public SmartTokenClientBuilder maxRetries(final int maxRetries) {
         this.faultToleranceConfig = new FaultToleranceConfig(
-            faultToleranceConfig.getConnectTimeout(),
-            faultToleranceConfig.getRequestTimeout(),
-            faultToleranceConfig.getAssertionTtlSeconds(),
+            faultToleranceConfig.connectTimeout(),
+            faultToleranceConfig.requestTimeout(),
+            faultToleranceConfig.assertionTtlSeconds(),
             maxRetries
         );
         return this;
@@ -355,8 +355,8 @@ public final class SmartTokenClientBuilder {
             effectiveTokenEndpoint = discoverTokenEndpoint(
                 discoveryBaseUrl,
                 effectiveSslContext,
-                faultToleranceConfig.getConnectTimeout(),
-                faultToleranceConfig.getRequestTimeout()
+                faultToleranceConfig.connectTimeout(),
+                faultToleranceConfig.requestTimeout()
             );
         }
 

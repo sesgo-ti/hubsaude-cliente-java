@@ -31,10 +31,10 @@ class FaultToleranceConfigTest {
                 5
         );
 
-        assertThat(config.getConnectTimeout()).isEqualTo(Duration.ofSeconds(5));
-        assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofSeconds(15));
-        assertThat(config.getAssertionTtlSeconds()).isEqualTo(120);
-        assertThat(config.getMaxRetries()).isEqualTo(5);
+        assertThat(config.connectTimeout()).isEqualTo(Duration.ofSeconds(5));
+        assertThat(config.requestTimeout()).isEqualTo(Duration.ofSeconds(15));
+        assertThat(config.assertionTtlSeconds()).isEqualTo(120);
+        assertThat(config.maxRetries()).isEqualTo(5);
     }
 
     @Test
@@ -46,7 +46,7 @@ class FaultToleranceConfigTest {
                 3
         );
 
-        assertThat(config.getAssertionTtlSeconds())
+        assertThat(config.assertionTtlSeconds())
                 .isEqualTo(SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS);
     }
 
@@ -60,7 +60,7 @@ class FaultToleranceConfigTest {
                 3
         );
 
-        assertThat(config.getAssertionTtlSeconds())
+        assertThat(config.assertionTtlSeconds())
                 .isEqualTo(SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS);
     }
 
@@ -73,7 +73,7 @@ class FaultToleranceConfigTest {
                 0
         );
 
-        assertThat(config.getMaxRetries())
+        assertThat(config.maxRetries())
                 .isEqualTo(SmartTokenClient.DEFAULT_MAX_RETRIES);
     }
 
@@ -87,7 +87,7 @@ class FaultToleranceConfigTest {
                 retries
         );
 
-        assertThat(config.getMaxRetries())
+        assertThat(config.maxRetries())
                 .isEqualTo(SmartTokenClient.DEFAULT_MAX_RETRIES);
     }
 
@@ -124,10 +124,10 @@ class FaultToleranceConfigTest {
                 1
         );
 
-        assertThat(config.getConnectTimeout()).isEqualTo(Duration.ofMillis(1));
-        assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofMillis(1));
-        assertThat(config.getAssertionTtlSeconds()).isEqualTo(1);
-        assertThat(config.getMaxRetries()).isEqualTo(1);
+        assertThat(config.connectTimeout()).isEqualTo(Duration.ofMillis(1));
+        assertThat(config.requestTimeout()).isEqualTo(Duration.ofMillis(1));
+        assertThat(config.assertionTtlSeconds()).isEqualTo(1);
+        assertThat(config.maxRetries()).isEqualTo(1);
     }
 
     @Test
@@ -139,10 +139,10 @@ class FaultToleranceConfigTest {
                 100
         );
 
-        assertThat(config.getConnectTimeout()).isEqualTo(Duration.ofHours(1));
-        assertThat(config.getRequestTimeout()).isEqualTo(Duration.ofHours(2));
-        assertThat(config.getAssertionTtlSeconds()).isEqualTo(3600);
-        assertThat(config.getMaxRetries()).isEqualTo(100);
+        assertThat(config.connectTimeout()).isEqualTo(Duration.ofHours(1));
+        assertThat(config.requestTimeout()).isEqualTo(Duration.ofHours(2));
+        assertThat(config.assertionTtlSeconds()).isEqualTo(3600);
+        assertThat(config.maxRetries()).isEqualTo(100);
     }
 
     @Test
@@ -155,26 +155,26 @@ class FaultToleranceConfigTest {
         );
 
         // Guarda referências para verificar que os getters retornam valores consistentes
-        Duration connectTimeout1 = config.getConnectTimeout();
-        Duration connectTimeout2 = config.getConnectTimeout();
-        Duration requestTimeout1 = config.getRequestTimeout();
-        Duration requestTimeout2 = config.getRequestTimeout();
+        Duration connectTimeout1 = config.connectTimeout();
+        Duration connectTimeout2 = config.connectTimeout();
+        Duration requestTimeout1 = config.requestTimeout();
+        Duration requestTimeout2 = config.requestTimeout();
 
         // Verifica que os getters retornam a mesma instância (Duration é imutável)
         assertThat(connectTimeout1).isSameAs(connectTimeout2);
         assertThat(requestTimeout1).isSameAs(requestTimeout2);
 
         // Primitivos são sempre consistentes
-        assertThat(config.getAssertionTtlSeconds()).isEqualTo(60);
-        assertThat(config.getMaxRetries()).isEqualTo(3);
+        assertThat(config.assertionTtlSeconds()).isEqualTo(60);
+        assertThat(config.maxRetries()).isEqualTo(3);
     }
 
     @Test
     void valoresPadraoDevemSerConsistentesComSmartTokenClient() {
         assertThat(SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS).isEqualTo(60);
         assertThat(SmartTokenClient.DEFAULT_MAX_RETRIES).isEqualTo(3);
-        assertThat(SmartTokenClient.DEFAULT_CONNECT_TIMEOUT).isEqualTo(Duration.ofSeconds(10));
-        assertThat(SmartTokenClient.DEFAULT_REQUEST_TIMEOUT).isEqualTo(Duration.ofSeconds(30));
+        assertThat(Duration.ofSeconds(10)).isEqualTo(SmartTokenClient.DEFAULT_CONNECT_TIMEOUT);
+        assertThat(Duration.ofSeconds(30)).isEqualTo(SmartTokenClient.DEFAULT_REQUEST_TIMEOUT);
     }
 }
 
