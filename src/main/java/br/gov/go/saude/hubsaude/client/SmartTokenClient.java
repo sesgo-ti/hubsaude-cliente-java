@@ -325,33 +325,42 @@ public final class SmartTokenClient {
     /**
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
      *
+     * <p>
+     * O {@link SSLContext} é configurado automaticamente com a chave privada
+     * e o certificado do cliente como {@code KeyManager}, habilitando mTLS
+     * quando o servidor solicitar autenticação mútua. Quando o servidor não
+     * exige certificado do cliente, a conexão se comporta como TLS
+     * unidirecional — totalmente retrocompatível.
+     * </p>
+     *
      * @param tokenEndpoint  URL do endpoint /auth/token do servidor de autorização
      * @param clientId       identificador do cliente (fornecido pelo Ganesha no
      *                       credenciamento)
      * @param privateKeyPem  caminho para o arquivo PEM da chave privada
-     * @param certificatePem caminho para o arquivo PEM do certificado (não usado na
-     *                       assinatura,
-     *                       mas validado para garantir consistência do par)
+     * @param certificatePem caminho para o arquivo PEM do certificado do cliente
      */
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
             final Path privateKeyPem,
             final Path certificatePem) throws IOException {
-        this(tokenEndpoint,
-                clientId,
-                SigningStrategyFactory.fromPemFile(privateKeyPem),
-                SslContextFactory.validateCertificate(certificatePem),
-                SslContextFactory.buildSslContext((Path) null, DEFAULT_TLS_PROTOCOL),
-                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
-                true,
-                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
+        this(tokenEndpoint, clientId,
+                loadFromPem(privateKeyPem, certificatePem, null, DEFAULT_TLS_PROTOCOL),
+                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT,
+                        DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
+                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
     }
 
     /**
      * Versão avançada que aceita um certificado público do servidor para ser
      * utilizado como trust anchor, permitindo validação TLS específica quando
      * o chamador possui a cadeia correta.
+     *
+     * <p>
+     * O {@link SSLContext} é configurado automaticamente com a chave privada
+     * e o certificado do cliente como {@code KeyManager}, habilitando mTLS
+     * quando o servidor solicitar autenticação mútua.
+     * </p>
      *
      * @param tokenEndpoint     URL do endpoint /auth/token do servidor de
      *                          autorização
@@ -369,14 +378,26 @@ public final class SmartTokenClient {
             final Path privateKeyPem,
             final Path certificatePem,
             final Path serverTrustAnchor) throws IOException {
-        this(tokenEndpoint,
-                clientId,
-                SigningStrategyFactory.fromPemFile(privateKeyPem),
-                SslContextFactory.validateCertificate(certificatePem),
-                SslContextFactory.buildSslContext(serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
-                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
-                true,
-                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
+        this(tokenEndpoint, clientId,
+                loadFromPem(privateKeyPem, certificatePem, serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
+                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT,
+                        DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
+                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
+    }
+
+    /**
+     * Construtor privado que delega a partir do contexto de inicialização PEM.
+     */
+    private SmartTokenClient(
+            final String tokenEndpoint,
+            final String clientId,
+            final PemInitContext init,
+            final FaultToleranceConfig faultToleranceConfig,
+            final boolean enableTokenCache,
+            final int tokenCacheMarginSeconds) {
+        this(tokenEndpoint, clientId,
+                init.signingStrategy(), init.certificate(), init.sslContext(),
+                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds);
     }
 
     /**
@@ -837,6 +858,51 @@ public final class SmartTokenClient {
             default -> throw new SmartTokenException(
                     "Tipo de chave não suportado para validação: " + keyAlgorithm);
         };
+    }
+
+    /**
+     * Carrega material criptográfico de arquivos PEM e constrói o contexto
+     * de inicialização com suporte a mTLS.
+     *
+     * <p>
+     * A chave privada é carregada uma única vez e reutilizada tanto para a
+     * {@link SigningStrategy} (assinatura do JWT) quanto para o
+     * {@link javax.net.ssl.KeyManager} (apresentação do certificado no TLS).
+     * </p>
+     *
+     * @param privateKeyPem     caminho para a chave privada PEM
+     * @param certificatePem    caminho para o certificado PEM do cliente
+     * @param serverTrustAnchor trust anchor do servidor (null = JVM default)
+     * @param tlsProtocol       protocolo TLS
+     * @return contexto de inicialização com signing strategy, certificado e SSLContext
+     * @throws IOException se os arquivos não puderem ser lidos
+     */
+    private static PemInitContext loadFromPem(
+            final Path privateKeyPem,
+            final Path certificatePem,
+            final Path serverTrustAnchor,
+            final String tlsProtocol) throws IOException {
+        final PrivateKey key = PemLoader.loadPrivateKey(privateKeyPem);
+        final X509Certificate cert = SslContextFactory.validateCertificate(certificatePem);
+        final SSLContext ssl = SslContextFactory.buildSslContext(
+                serverTrustAnchor, tlsProtocol, key, cert);
+        return new PemInitContext(
+                SigningStrategyFactory.fromPrivateKey(key), cert, ssl);
+    }
+
+    /**
+     * Contexto de inicialização a partir de arquivos PEM.
+     *
+     * <p>
+     * Agrupa os artefatos construídos a partir de PEM (signing strategy,
+     * certificado validado e SSLContext com mTLS) para passagem eficiente
+     * entre métodos estáticos e construtores.
+     * </p>
+     */
+    private record PemInitContext(
+            SigningStrategy signingStrategy,
+            X509Certificate certificate,
+            SSLContext sslContext) {
     }
 
     /**

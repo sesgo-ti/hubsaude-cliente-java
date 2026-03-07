@@ -14,6 +14,16 @@ por dispositivo criptográfico via PKCS#11 (HSM). Dessa forma,
 contempla tanto certificados autoassinados para testes quanto
 certificados ICP-Brasil para produção (A1 em arquivo, A3/A4 via HSM).
 
+A biblioteca também suporta **mTLS (mutual TLS)**: quando o servidor exige 
+autenticação mútua no nível de transporte, o cliente apresenta
+automaticamente o certificado durante o handshake TLS. A configuração
+de mTLS é habilitada de forma transparente a partir do mesmo material
+criptográfico já fornecido (chave privada e certificado), independentemente
+da origem — arquivo PEM, PKCS#12, KeyStore JKS ou dispositivo 
+criptográfico via PKCS#11 (smartcard, USB token, HSM). Quando o servidor
+não solicita certificado do cliente, a conexão se comporta como TLS 
+unidirecional, sem nenhuma alteração necessária.
+
 
 ## Dependência Maven
 

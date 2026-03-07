@@ -9,6 +9,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Objects;
@@ -68,6 +70,9 @@ public final class SmartTokenClientBuilder {
     private Path certificatePem;
     private Path serverTrustAnchor;
     private SSLContext customSslContext;
+    private KeyStore clientKeyStore;
+    private String clientKeyAlias;
+    private char[] clientKeyPassword;
     private String tlsProtocol = SslContextFactory.DEFAULT_TLS_PROTOCOL;
     private FaultToleranceConfig faultToleranceConfig = new FaultToleranceConfig(
         SmartTokenClient.DEFAULT_CONNECT_TIMEOUT,
@@ -190,6 +195,38 @@ public final class SmartTokenClientBuilder {
      */
     public SmartTokenClientBuilder certificatePem(final Path certificatePem) {
         this.certificatePem = certificatePem;
+        return this;
+    }
+
+    /**
+     * Define o {@link KeyStore} do cliente para mTLS.
+     *
+     * <p>
+     * Indicado para dispositivos criptográficos (smartcard, USB token, HSM)
+     * via PKCS#11, ou para KeyStores PKCS#12/JKS. A chave privada é usada
+     * pelo {@link javax.net.ssl.KeyManager} para apresentar o certificado
+     * do cliente durante o handshake TLS, sem nunca extraí-la do dispositivo.
+     * </p>
+     *
+     * <p>
+     * Quando usado com {@link #signingStrategy(SigningStrategy)}, permite
+     * que a mesma chave criptográfica seja utilizada tanto para assinatura
+     * do JWT quanto para mTLS, mantendo o material no hardware.
+     * </p>
+     *
+     * @param keyStore    KeyStore já carregado (PKCS#11, PKCS#12, JKS)
+     * @param keyAlias    alias da chave privada no KeyStore
+     * @param keyPassword senha/PIN da chave
+     * @return este builder
+     */
+    @SuppressWarnings("PMD.UseVarargs")
+    public SmartTokenClientBuilder clientKeyStore(
+            final KeyStore keyStore,
+            final String keyAlias,
+            final char[] keyPassword) {
+        this.clientKeyStore = keyStore;
+        this.clientKeyAlias = keyAlias;
+        this.clientKeyPassword = keyPassword;
         return this;
     }
 
@@ -346,30 +383,19 @@ public final class SmartTokenClientBuilder {
         }
         Objects.requireNonNull(clientId, "clientId é obrigatório");
 
-        final SSLContext effectiveSslContext = customSslContext != null
-                ? customSslContext
-                : SslContextFactory.buildSslContext(serverTrustAnchor, tlsProtocol);
-
-        String effectiveTokenEndpoint = this.tokenEndpoint;
-        if (effectiveTokenEndpoint == null) {
-            effectiveTokenEndpoint = discoverTokenEndpoint(
-                discoveryBaseUrl,
-                effectiveSslContext,
-                faultToleranceConfig.connectTimeout(),
-                faultToleranceConfig.requestTimeout()
-            );
-        }
-
-        // Determina a estratégia de assinatura
+        // === Carrega credenciais do cliente primeiro (necessário para mTLS) ===
         final SigningStrategy effectiveStrategy;
+        final PrivateKey clientKey;
         if (signingStrategy != null) {
             if (privateKeyPem != null) {
                 throw new IllegalStateException(
                         "Defina signingStrategy OU privateKeyPem, não ambos");
             }
             effectiveStrategy = signingStrategy;
+            clientKey = null;
         } else if (privateKeyPem != null) {
-            effectiveStrategy = SigningStrategyFactory.fromPemFile(privateKeyPem, privateKeyPassword);
+            clientKey = PemLoader.loadPrivateKey(privateKeyPem, privateKeyPassword);
+            effectiveStrategy = SigningStrategyFactory.fromPrivateKey(clientKey);
         } else {
             throw new IllegalStateException(
                     "É obrigatório definir signingStrategy ou privateKeyPem");
@@ -379,6 +405,36 @@ public final class SmartTokenClientBuilder {
         final X509Certificate cert = certificatePem != null
                 ? SslContextFactory.validateCertificate(certificatePem)
                 : null;
+
+        // === Constrói SSLContext (com mTLS quando material está disponível) ===
+        final SSLContext effectiveSslContext;
+        if (customSslContext != null) {
+            effectiveSslContext = customSslContext;
+        } else if (clientKeyStore != null) {
+            // mTLS via KeyStore (PKCS#11/smartcard/USB token, PKCS#12, JKS)
+            effectiveSslContext = SslContextFactory.buildSslContext(
+                    serverTrustAnchor, tlsProtocol,
+                    clientKeyStore, clientKeyAlias, clientKeyPassword);
+        } else if (clientKey != null && cert != null) {
+            // mTLS via chave em memória (PEM)
+            effectiveSslContext = SslContextFactory.buildSslContext(
+                    serverTrustAnchor, tlsProtocol, clientKey, cert);
+        } else {
+            // TLS unidirecional (sem mTLS)
+            effectiveSslContext = SslContextFactory.buildSslContext(
+                    serverTrustAnchor, tlsProtocol);
+        }
+
+        // === Descobre token endpoint (usando SSLContext com mTLS) ===
+        String effectiveTokenEndpoint = this.tokenEndpoint;
+        if (effectiveTokenEndpoint == null) {
+            effectiveTokenEndpoint = discoverTokenEndpoint(
+                discoveryBaseUrl,
+                effectiveSslContext,
+                faultToleranceConfig.connectTimeout(),
+                faultToleranceConfig.requestTimeout()
+            );
+        }
 
         return new SmartTokenClient(
                 effectiveTokenEndpoint,
