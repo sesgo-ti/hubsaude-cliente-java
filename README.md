@@ -276,6 +276,42 @@ Os testes de integração utilizam o `hubsaude-simulador` automaticamente.
 
 ---
 
+## Notas Técnicas
+
+### Por que RS384 (e não PS384)?
+
+O algoritmo padrão é **RS384** (RSA PKCS#1 v1.5 + SHA-384) pelos seguintes motivos:
+
+| Critério | RS384 | PS384 (RSA-PSS) |
+|----------|-------|-----------------|
+| **SMART Backend Services** | ✅ Obrigatório | ⚠️ Opcional |
+| **ICP-Brasil (HSM)** | ✅ Universal | ⚠️ Parcial (HSMs antigos) |
+| **Interoperabilidade** | ✅ Máxima | ⚠️ Variável |
+| **Segurança** | ✅ Adequada | ✅ Superior |
+
+Embora PS384 seja tecnicamente mais robusto contra ataques teóricos de padding oracle, RS384:
+- É **obrigatório** pela especificação SMART Backend Services
+- É **universalmente suportado** por HSMs e tokens ICP-Brasil
+- Oferece segurança **adequada** para o caso de uso (comunicação M2M com TLS 1.3)
+
+**Se precisar usar PS384**, configure manualmente:
+
+```java
+SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(
+        privateKey, 
+        "SHA384withRSAandMGF1"  // PS384
+);
+
+var client = SmartTokenClient.builder()
+        .signingStrategy(strategy)
+        // ...
+        .build();
+```
+
+> **Nota:** Verifique se o authorization server suporta PS384 antes de usar.
+
+---
+
 ## Arquitetura
 
 ```
