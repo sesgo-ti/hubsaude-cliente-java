@@ -312,11 +312,9 @@ public final class SmartTokenClient {
     private final String clientId;
     private final SigningStrategy signingStrategy;
     private final HttpClient httpClient;
-    private final int assertionTtlSeconds;
-    private final Duration requestTimeout;
+    private final FaultToleranceConfig faultToleranceConfig;
     private final boolean enableTokenCache;
     private final int tokenCacheMarginSeconds;
-    private final int maxRetries;
 
     /** Cache de tokens por scope. */
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
@@ -345,12 +343,9 @@ public final class SmartTokenClient {
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
                 SslContextFactory.validateCertificate(certificatePem),
                 SslContextFactory.buildSslContext((Path) null, DEFAULT_TLS_PROTOCOL),
-                DEFAULT_CONNECT_TIMEOUT,
-                DEFAULT_REQUEST_TIMEOUT,
-                DEFAULT_ASSERTION_TTL_SECONDS,
+                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
                 true,
-                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
-                DEFAULT_MAX_RETRIES);
+                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
     }
 
     /**
@@ -379,12 +374,9 @@ public final class SmartTokenClient {
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
                 SslContextFactory.validateCertificate(certificatePem),
                 SslContextFactory.buildSslContext(serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
-                DEFAULT_CONNECT_TIMEOUT,
-                DEFAULT_REQUEST_TIMEOUT,
-                DEFAULT_ASSERTION_TTL_SECONDS,
+                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
                 true,
-                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
-                DEFAULT_MAX_RETRIES);
+                DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
     }
 
     /**
@@ -404,31 +396,17 @@ public final class SmartTokenClient {
             final PrivateKey privateKey,
             final X509Certificate certificate,
             final SSLContext sslContext) {
-        this(tokenEndpoint, clientId, privateKey, certificate, sslContext,
-                DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS,
-                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS, DEFAULT_MAX_RETRIES);
+        this(tokenEndpoint, clientId,
+                createValidatedSigningStrategy(privateKey, certificate),
+                certificate, sslContext,
+                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
+                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
     }
 
     /**
-     * Construtor completo com todas as configurações disponíveis (retrocompatível).
-     *
-     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de
-     *                                autorização
-     * @param clientId                identificador do cliente (fornecido pelo
-     *                                Ganesha no credenciamento)
-     * @param privateKey              chave privada previamente carregada
-     * @param certificate             certificado X.509 correspondente à chave
-     * @param sslContext              contexto SSL a ser utilizado pelo
-     *                                {@link HttpClient}
-     * @param connectTimeout          timeout de conexão
-     * @param requestTimeout          timeout de requisição HTTP
-     * @param assertionTtlSeconds     TTL do client_assertion em segundos
-     * @param enableTokenCache        habilita cache de tokens
-     * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
-     * @param maxRetries              número máximo de tentativas em falhas
-     *                                transitórias
+     * Construtor completo com parâmetros individuais (retrocompatível).
      */
-    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" }) // Builder é a API recomendada
+    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" })
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
@@ -444,51 +422,14 @@ public final class SmartTokenClient {
         this(tokenEndpoint, clientId,
                 createValidatedSigningStrategy(privateKey, certificate),
                 certificate, sslContext,
-                connectTimeout, requestTimeout, assertionTtlSeconds, enableTokenCache,
-                tokenCacheMarginSeconds, maxRetries);
+                new FaultToleranceConfig(connectTimeout, requestTimeout, assertionTtlSeconds, maxRetries),
+                enableTokenCache, tokenCacheMarginSeconds);
     }
 
     /**
-     * Cria SigningStrategy validando a consistência entre chave e certificado.
-     *
-     * @param privateKey  chave privada
-     * @param certificate certificado X.509
-     * @return SigningStrategy validado
-     * @throws SmartTokenException se a chave não corresponder ao certificado
+     * Construtor completo com SigningStrategy e parâmetros individuais (retrocompatível).
      */
-    private static SigningStrategy createValidatedSigningStrategy(
-            final PrivateKey privateKey,
-            final X509Certificate certificate) {
-        verifyKeyPairConsistency(privateKey, certificate);
-        return SigningStrategyFactory.fromPrivateKey(privateKey);
-    }
-
-    /**
-     * Construtor principal que aceita {@link SigningStrategy}.
-     *
-     * <p>
-     * Este é o construtor recomendado para cenários enterprise onde a fonte
-     * do material criptográfico pode variar (arquivo, HSM, Vault, etc.).
-     * </p>
-     *
-     * @param tokenEndpoint           URL do endpoint /auth/token do servidor de
-     *                                autorização
-     * @param clientId                identificador do cliente (fornecido pelo
-     *                                Ganesha no credenciamento)
-     * @param signingStrategy         estratégia de assinatura configurada
-     * @param certificate             certificado X.509 para validação (pode ser
-     *                                null se não houver validação)
-     * @param sslContext              contexto SSL a ser utilizado pelo
-     *                                {@link HttpClient}
-     * @param connectTimeout          timeout de conexão
-     * @param requestTimeout          timeout de requisição HTTP
-     * @param assertionTtlSeconds     TTL do client_assertion em segundos
-     * @param enableTokenCache        habilita cache de tokens
-     * @param tokenCacheMarginSeconds margem para renovar token antes de expirar
-     * @param maxRetries              número máximo de tentativas em falhas
-     *                                transitórias
-     */
-    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" }) // Builder é a API recomendada
+    @SuppressWarnings({ "PMD.ExcessiveParameterList", "checkstyle:ParameterNumber" })
     public SmartTokenClient(
             final String tokenEndpoint,
             final String clientId,
@@ -501,28 +442,47 @@ public final class SmartTokenClient {
             final boolean enableTokenCache,
             final int tokenCacheMarginSeconds,
             final int maxRetries) {
+        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
+                new FaultToleranceConfig(connectTimeout, requestTimeout, assertionTtlSeconds, maxRetries),
+                enableTokenCache, tokenCacheMarginSeconds);
+    }
+
+    /**
+     * Cria SigningStrategy validando a consistência entre chave e certificado.
+     */
+    private static SigningStrategy createValidatedSigningStrategy(
+            final PrivateKey privateKey,
+            final X509Certificate certificate) {
+        verifyKeyPairConsistency(privateKey, certificate);
+        return SigningStrategyFactory.fromPrivateKey(privateKey);
+    }
+
+    // === Construtor principal ===
+    public SmartTokenClient(
+        String tokenEndpoint,
+        String clientId,
+        SigningStrategy signingStrategy,
+        X509Certificate certificate,
+        SSLContext sslContext,
+        FaultToleranceConfig faultToleranceConfig,
+        boolean enableTokenCache,
+        int tokenCacheMarginSeconds
+    ) {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
         this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
-        // certificate pode ser null para estratégias onde verificação não é aplicável
-        // (ex: Vault)
         final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
-        final Duration connTimeout = Objects.requireNonNull(connectTimeout, "connectTimeout");
-        this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
-        this.assertionTtlSeconds = assertionTtlSeconds > 0 ? assertionTtlSeconds : DEFAULT_ASSERTION_TTL_SECONDS;
+        this.faultToleranceConfig = Objects.requireNonNull(faultToleranceConfig, "faultToleranceConfig");
         this.enableTokenCache = enableTokenCache;
         this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
                 ? tokenCacheMarginSeconds
                 : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
-        this.maxRetries = maxRetries > 0 ? maxRetries : DEFAULT_MAX_RETRIES;
-
         this.httpClient = HttpClient.newBuilder()
                 .sslContext(context)
-                .connectTimeout(connTimeout)
+                .connectTimeout(faultToleranceConfig.getConnectTimeout())
                 .build();
-
         LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={}",
-                clientId, tokenEndpoint, enableTokenCache, this.maxRetries);
+                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.getMaxRetries());
     }
 
     /**
@@ -614,23 +574,23 @@ public final class SmartTokenClient {
         LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
 
         IOException lastException = null;
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        for (int attempt = 1; attempt <= faultToleranceConfig.getMaxRetries(); attempt++) {
             try {
                 return doObtainToken(scope);
             } catch (HttpTimeoutException | java.net.ConnectException ex) {
                 lastException = ex;
-                if (attempt < maxRetries) {
+                if (attempt < faultToleranceConfig.getMaxRetries()) {
                     final long delayMs = RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
                     LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
-                            attempt, maxRetries, clientId, ex.getMessage(), delayMs);
+                            attempt, faultToleranceConfig.getMaxRetries(), clientId, ex.getMessage(), delayMs);
                     Thread.sleep(delayMs);
                 } else {
-                    LOG.error("Todas as {} tentativas falharam para clientId={}", maxRetries, clientId);
+                    LOG.error("Todas as {} tentativas falharam para clientId={}", faultToleranceConfig.getMaxRetries(), clientId);
                 }
             }
         }
         throw new SmartTokenException(
-                "Falha após " + maxRetries + " tentativas: " + lastException.getMessage(), lastException);
+                "Falha após " + faultToleranceConfig.getMaxRetries() + " tentativas: " + lastException.getMessage(), lastException);
     }
 
     private String doObtainToken(final String scope) throws IOException, InterruptedException {
@@ -640,7 +600,7 @@ public final class SmartTokenClient {
         final HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(tokenEndpoint))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(requestTimeout)
+                .timeout(faultToleranceConfig.getRequestTimeout())
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
@@ -682,9 +642,9 @@ public final class SmartTokenClient {
     String buildClientAssertion() {
         final Instant now = Instant.now();
         final long iat = now.getEpochSecond();
-        final long exp = now.plusSeconds(assertionTtlSeconds).getEpochSecond();
+        final long exp = now.plusSeconds(faultToleranceConfig.getAssertionTtlSeconds()).getEpochSecond();
         final String jti = UUID.randomUUID().toString();
-        LOG.trace("Construindo client_assertion ttl={}s", assertionTtlSeconds);
+        LOG.trace("Construindo client_assertion ttl={}s", faultToleranceConfig.getAssertionTtlSeconds());
 
         // Constrói o payload JSON usando ObjectMapper para escape correto e seguro
         final Map<String, Object> claims = new LinkedHashMap<>();

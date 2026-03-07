@@ -69,12 +69,18 @@ public final class SmartTokenClientBuilder {
     private Path serverTrustAnchor;
     private SSLContext customSslContext;
     private String tlsProtocol = SslContextFactory.DEFAULT_TLS_PROTOCOL;
-    private Duration connectTimeout = SmartTokenClient.DEFAULT_CONNECT_TIMEOUT;
-    private Duration requestTimeout = SmartTokenClient.DEFAULT_REQUEST_TIMEOUT;
-    private int assertionTtlSeconds = SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS;
+    private FaultToleranceConfig faultToleranceConfig = new FaultToleranceConfig(
+        SmartTokenClient.DEFAULT_CONNECT_TIMEOUT,
+        SmartTokenClient.DEFAULT_REQUEST_TIMEOUT,
+        SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS,
+        SmartTokenClient.DEFAULT_MAX_RETRIES
+    );
+    // Os campos enableTokenCache e tokenCacheMarginSeconds podem ser finais, mas são mutáveis via métodos do builder.
+    // Para evitar warnings, suprimimos a sugestão de torná-los finais.
+    @SuppressWarnings({"PMD.ImmutableField", "java:S1104"})
     private boolean enableTokenCache = true;
+    @SuppressWarnings({"PMD.ImmutableField", "java:S1104"})
     private int tokenCacheMarginSeconds = SmartTokenClient.DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
-    private int maxRetries = SmartTokenClient.DEFAULT_MAX_RETRIES;
 
     SmartTokenClientBuilder() {
     }
@@ -238,7 +244,12 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder connectTimeout(final Duration connectTimeout) {
-        this.connectTimeout = connectTimeout;
+        this.faultToleranceConfig = new FaultToleranceConfig(
+            connectTimeout,
+            faultToleranceConfig.getRequestTimeout(),
+            faultToleranceConfig.getAssertionTtlSeconds(),
+            faultToleranceConfig.getMaxRetries()
+        );
         return this;
     }
 
@@ -249,7 +260,12 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder requestTimeout(final Duration requestTimeout) {
-        this.requestTimeout = requestTimeout;
+        this.faultToleranceConfig = new FaultToleranceConfig(
+            faultToleranceConfig.getConnectTimeout(),
+            requestTimeout,
+            faultToleranceConfig.getAssertionTtlSeconds(),
+            faultToleranceConfig.getMaxRetries()
+        );
         return this;
     }
 
@@ -260,39 +276,12 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder assertionTtlSeconds(final int assertionTtlSeconds) {
-        this.assertionTtlSeconds = assertionTtlSeconds;
-        return this;
-    }
-
-    /**
-     * Habilita ou desabilita o cache de tokens.
-     *
-     * <p>
-     * Quando habilitado (padrão), tokens são reutilizados até próximo
-     * de sua expiração, reduzindo carga no authorization server.
-     * </p>
-     *
-     * @param enableTokenCache true para habilitar (padrão)
-     * @return este builder
-     */
-    public SmartTokenClientBuilder enableTokenCache(final boolean enableTokenCache) {
-        this.enableTokenCache = enableTokenCache;
-        return this;
-    }
-
-    /**
-     * Define a margem em segundos para renovar token antes de expirar.
-     *
-     * <p>
-     * Exemplo: se tokenCacheMarginSeconds=30 e o token expira em 60s,
-     * o cliente renovará o token quando restarem 30s para expiração.
-     * </p>
-     *
-     * @param tokenCacheMarginSeconds margem positiva (padrão: 30s)
-     * @return este builder
-     */
-    public SmartTokenClientBuilder tokenCacheMarginSeconds(final int tokenCacheMarginSeconds) {
-        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds;
+        this.faultToleranceConfig = new FaultToleranceConfig(
+            faultToleranceConfig.getConnectTimeout(),
+            faultToleranceConfig.getRequestTimeout(),
+            assertionTtlSeconds,
+            faultToleranceConfig.getMaxRetries()
+        );
         return this;
     }
 
@@ -308,7 +297,34 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder maxRetries(final int maxRetries) {
-        this.maxRetries = maxRetries;
+        this.faultToleranceConfig = new FaultToleranceConfig(
+            faultToleranceConfig.getConnectTimeout(),
+            faultToleranceConfig.getRequestTimeout(),
+            faultToleranceConfig.getAssertionTtlSeconds(),
+            maxRetries
+        );
+        return this;
+    }
+
+    /**
+     * Define se o cache de tokens está habilitado.
+     *
+     * @param enableTokenCache true para habilitar (padrão)
+     * @return este builder
+     */
+    public SmartTokenClientBuilder enableTokenCache(final boolean enableTokenCache) {
+        this.enableTokenCache = enableTokenCache;
+        return this;
+    }
+
+    /**
+     * Define a margem em segundos para renovar token antes de expirar.
+     *
+     * @param tokenCacheMarginSeconds margem positiva (padrão: 30s)
+     * @return este builder
+     */
+    public SmartTokenClientBuilder tokenCacheMarginSeconds(final int tokenCacheMarginSeconds) {
+        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds;
         return this;
     }
 
@@ -336,8 +352,12 @@ public final class SmartTokenClientBuilder {
 
         String effectiveTokenEndpoint = this.tokenEndpoint;
         if (effectiveTokenEndpoint == null) {
-            effectiveTokenEndpoint = discoverTokenEndpoint(discoveryBaseUrl, effectiveSslContext, connectTimeout,
-                    requestTimeout);
+            effectiveTokenEndpoint = discoverTokenEndpoint(
+                discoveryBaseUrl,
+                effectiveSslContext,
+                faultToleranceConfig.getConnectTimeout(),
+                faultToleranceConfig.getRequestTimeout()
+            );
         }
 
         // Determina a estratégia de assinatura
@@ -360,20 +380,15 @@ public final class SmartTokenClientBuilder {
                 ? SslContextFactory.validateCertificate(certificatePem)
                 : null;
 
-        final SSLContext effectiveSslContextFinal = effectiveSslContext;
-
         return new SmartTokenClient(
                 effectiveTokenEndpoint,
                 clientId,
                 effectiveStrategy,
                 cert,
-                effectiveSslContextFinal,
-                connectTimeout,
-                requestTimeout,
-                assertionTtlSeconds,
+                effectiveSslContext,
+                faultToleranceConfig,
                 enableTokenCache,
-                tokenCacheMarginSeconds,
-                maxRetries);
+                tokenCacheMarginSeconds);
     }
 
     /**

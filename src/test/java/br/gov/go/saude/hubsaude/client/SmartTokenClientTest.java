@@ -696,7 +696,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                120, true, 30, 3); // assertionTtlSeconds = 120
+                                120, true, 30, 3);
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -716,7 +716,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                0, true, 30, 3); // assertionTtlSeconds = 0
+                                0, true, 30, 3);
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -736,7 +736,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                -10, true, 30, 3); // assertionTtlSeconds = -10
+                                -10, true, 30, 3);
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -756,7 +756,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 45, 3); // tokenCacheMarginSeconds = 45
+                                60, true, 45, 3);
 
                 assertThat(client).isNotNull();
         }
@@ -768,7 +768,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 0, 3); // tokenCacheMarginSeconds = 0
+                                60, true, 0, 3);
 
                 assertThat(client).isNotNull();
         }
@@ -780,7 +780,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, -15, 3); // tokenCacheMarginSeconds = -15
+                                60, true, -15, 3);
 
                 assertThat(client).isNotNull();
         }
@@ -792,7 +792,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, 5); // maxRetries = 5
+                                60, true, 30, 5);
 
                 assertThat(client).isNotNull();
         }
@@ -804,7 +804,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, 0); // maxRetries = 0
+                                60, true, 30, 0);
 
                 assertThat(client).isNotNull();
         }
@@ -816,7 +816,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, -2); // maxRetries = -2
+                                60, true, 30, -2);
 
                 assertThat(client).isNotNull();
         }
@@ -828,7 +828,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, true, 30, 3); // enableTokenCache = true
+                                60, true, 30, 3);
 
                 assertThat(client).isNotNull();
         }
@@ -840,7 +840,7 @@ class SmartTokenClientTest {
                 final SmartTokenClient client = new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 Duration.ofSeconds(10), Duration.ofSeconds(30),
-                                60, false, 30, 3); // enableTokenCache = false
+                                60, false, 30, 3);
 
                 assertThat(client).isNotNull();
         }
