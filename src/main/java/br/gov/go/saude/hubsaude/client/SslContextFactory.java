@@ -8,8 +8,6 @@ package br.gov.go.saude.hubsaude.client;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -24,9 +22,7 @@ import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
 
 /**
  * Fábrica de {@link SSLContext} para o cliente HubSaúde.
@@ -43,19 +39,13 @@ import javax.net.ssl.X509TrustManager;
  * {@code $JAVA_HOME/lib/security/cacerts}
  * quando nenhum trust anchor é fornecido (comportamento seguro por padrão)</li>
  * <li><strong>Trust anchor específico:</strong> Aceita um certificado PEM do
- * servidor
- * para validação TLS customizada</li>
- * <li><strong>Trust-all:</strong> Desabilita validação de certificados (⚠️
- * EXCLUSIVO
- * para testes)</li>
+ * servidor para validação TLS customizada</li>
  * </ul>
  *
  * @see SmartTokenClient
  * @see SmartTokenClientBuilder#serverTrustAnchor(Path)
  */
 public final class SslContextFactory {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SslContextFactory.class);
 
     /** Protocolo TLS padrão utilizado quando nenhum é especificado. */
     public static final String DEFAULT_TLS_PROTOCOL = "TLSv1.3";
@@ -133,74 +123,6 @@ public final class SslContextFactory {
         }
     }
 
-    /**
-     * Cria um {@link SSLContext} que confia em todos os certificados.
-     *
-     * <p>
-     * <strong>⚠️ ATENÇÃO: USO EXCLUSIVO PARA TESTES E DESENVOLVIMENTO
-     * LOCAL!</strong>
-     * </p>
-     *
-     * <p>
-     * Este método cria um contexto SSL que <strong>DESABILITA
-     * COMPLETAMENTE</strong>
-     * a validação de certificados TLS, tornando a conexão vulnerável a:
-     * </p>
-     * <ul>
-     * <li>Ataques Man-in-the-Middle (MITM)</li>
-     * <li>Interceptação de tráfego</li>
-     * <li>Roubo de credenciais e tokens</li>
-     * <li>Violação de dados sensíveis de saúde</li>
-     * </ul>
-     *
-     * <p>
-     * <strong>NUNCA</strong> utilize este método em:
-     * </p>
-     * <ul>
-     * <li>Ambiente de produção</li>
-     * <li>Ambiente de homologação</li>
-     * <li>Qualquer ambiente que processe dados reais de pacientes</li>
-     * </ul>
-     *
-     * <p>
-     * Para ambientes de produção, utilize SEMPRE um {@link SSLContext} configurado
-     * com a cadeia de certificados correta do servidor de autorização.
-     * </p>
-     *
-     * @param tlsProtocol protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
-     * @return contexto SSL que aceita qualquer certificado (⚠️ INSEGURO)
-     * @see #buildSslContext(Path, String) para configuração segura com certificado
-     *      específico
-     */
-    static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
-        LOG.warn("⚠️ Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
-        try {
-            final TrustManager[] trustAll = {
-                    new X509TrustManager() {
-                        @Override
-                        public X509Certificate[] getAcceptedIssuers() {
-                            return new X509Certificate[0];
-                        }
-
-                        @Override
-                        public void checkClientTrusted(
-                                final X509Certificate[] c, final String a) {
-                        }
-
-                        @Override
-                        public void checkServerTrusted(
-                                final X509Certificate[] c, final String a) {
-                        }
-                    }
-            };
-            final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
-            ctx.init(null, trustAll, new SecureRandom());
-            return ctx;
-        } catch (Exception ex) {
-            throw new SmartTokenException("Falha ao criar SSLContext trust-all com protocolo '" + tlsProtocol + "'",
-                    ex);
-        }
-    }
 
     /**
      * Realiza um sanity check no certificado PEM associado ao cliente, garantindo

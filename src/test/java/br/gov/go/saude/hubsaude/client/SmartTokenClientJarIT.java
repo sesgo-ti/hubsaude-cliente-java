@@ -139,7 +139,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     private void waitForSimulator() throws Exception {
         final HttpClient client = HttpClient.newBuilder()
-                .sslContext(SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL))
+                .sslContext(TestSslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL))
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
 
@@ -209,7 +209,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
      */
     private X509Certificate extractServerCertificate(final String host, final int port) throws Exception {
         // Usa trust-all temporário APENAS para extrair o certificado
-        final SSLContext trustAllContext = SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL);
+        final SSLContext trustAllContext = TestSslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL);
         final SSLSocketFactory factory = trustAllContext.getSocketFactory();
 
         try (SSLSocket socket = (SSLSocket) factory.createSocket(host, port)) {

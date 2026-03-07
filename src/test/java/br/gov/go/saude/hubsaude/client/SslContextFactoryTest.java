@@ -354,21 +354,21 @@ class SslContextFactoryTest {
                 .hasMessageContaining("Certificado expirado");
     }
 
-    // ==================== buildTrustAllSslContext ====================
+    // ==================== buildTrustAllSslContext (TestSslContextFactory) ====================
 
     @Test
-    @DisplayName("buildTrustAllSslContext: Deve criar SSLContext trust-all")
+    @DisplayName("TestSslContextFactory.buildTrustAllSslContext: Deve criar SSLContext trust-all")
     void deveCriarSslContextTrustAll() {
-        final SSLContext ctx = SslContextFactory.buildTrustAllSslContext("TLSv1.3");
+        final SSLContext ctx = TestSslContextFactory.buildTrustAllSslContext("TLSv1.3");
 
         assertThat(ctx).isNotNull();
         assertThat(ctx.getProtocol()).isEqualTo("TLSv1.3");
     }
 
     @Test
-    @DisplayName("buildTrustAllSslContext: Deve lançar exceção para protocolo inválido")
+    @DisplayName("TestSslContextFactory.buildTrustAllSslContext: Deve lançar exceção para protocolo inválido")
     void deveLancarExcecaoParaProtocoloInvalido() {
-        assertThatThrownBy(() -> SslContextFactory.buildTrustAllSslContext("TLSv99.9"))
+        assertThatThrownBy(() -> TestSslContextFactory.buildTrustAllSslContext("TLSv99.9"))
                 .isInstanceOf(SmartTokenException.class)
                 .hasMessageContaining("Falha ao criar SSLContext trust-all");
     }

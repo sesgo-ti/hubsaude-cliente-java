@@ -304,7 +304,7 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar SSLContext customizado via sslContext()")
     void deveAplicarSslContextCustomizado() throws Exception {
-        final SSLContext trustAll = SslContextFactory.buildTrustAllSslContext(
+        final SSLContext trustAll = TestSslContextFactory.buildTrustAllSslContext(
                 SslContextFactory.DEFAULT_TLS_PROTOCOL);
 
         final SmartTokenClient client = SmartTokenClient.builder()
