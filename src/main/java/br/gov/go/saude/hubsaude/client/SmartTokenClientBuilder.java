@@ -69,6 +69,7 @@ public final class SmartTokenClientBuilder {
     private SigningStrategy signingStrategy;
     private Path certificatePem;
     private Path serverTrustAnchor;
+    private X509Certificate serverTrustAnchorCert;
     private SSLContext customSslContext;
     private KeyStore clientKeyStore;
     private String clientKeyAlias;
@@ -242,6 +243,22 @@ public final class SmartTokenClientBuilder {
     }
 
     /**
+     * Define o certificado do servidor para validação TLS customizada (em memória).
+     *
+     * <p>
+     * Use esta sobrecarga quando o certificado já estiver carregado em memória,
+     * como em testes de integração que extraem o certificado dinamicamente.
+     * </p>
+     *
+     * @param serverTrustAnchorCert certificado X.509; null usa trust store da JVM
+     * @return este builder
+     */
+    public SmartTokenClientBuilder serverTrustAnchor(final X509Certificate serverTrustAnchorCert) {
+        this.serverTrustAnchorCert = serverTrustAnchorCert;
+        return this;
+    }
+
+    /**
      * Define o protocolo TLS a utilizar.
      *
      * <p>
@@ -410,6 +427,17 @@ public final class SmartTokenClientBuilder {
         final SSLContext effectiveSslContext;
         if (customSslContext != null) {
             effectiveSslContext = customSslContext;
+        } else if (serverTrustAnchorCert != null) {
+            // Trust anchor em memória (extraído dinamicamente, ex: testes de integração)
+            if (clientKey != null && cert != null) {
+                // mTLS via chave em memória
+                effectiveSslContext = SslContextFactory.buildSslContext(
+                        serverTrustAnchorCert, tlsProtocol, clientKey, cert);
+            } else {
+                // TLS unidirecional
+                effectiveSslContext = SslContextFactory.buildSslContext(
+                        serverTrustAnchorCert, tlsProtocol);
+            }
         } else if (clientKeyStore != null) {
             // mTLS via KeyStore (PKCS#11/smartcard/USB token, PKCS#12, JKS)
             effectiveSslContext = SslContextFactory.buildSslContext(

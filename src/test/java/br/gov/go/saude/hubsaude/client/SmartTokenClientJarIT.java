@@ -74,7 +74,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
         LOG.info("Simulador disponível em: {}", BASE_URL);
 
         // Extrai o certificado do simulador e constrói SSLContext seguro
-        final X509Certificate simulatorCert = extractServerCertificate("localhost", SIMULATOR_PORT);
+        simulatorCert = extractServerCertificate("localhost", SIMULATOR_PORT);
         simulatorSslContext = SslContextFactory.buildSslContext(simulatorCert, SslContextFactory.DEFAULT_TLS_PROTOCOL);
         LOG.info("SSLContext construído com certificado do simulador: {}", simulatorCert.getSubjectX500Principal());
 
