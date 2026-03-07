@@ -106,17 +106,6 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Testcontainers: inicialização automática do simulador nos testes de integração -->
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
 
         <!-- Simulador SMART on FHIR para testes de integração (obtido via Maven, não path local) -->
         <dependency>

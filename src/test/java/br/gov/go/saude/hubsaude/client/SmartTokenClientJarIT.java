@@ -8,6 +8,8 @@ package br.gov.go.saude.hubsaude.client;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +49,9 @@ import java.util.concurrent.TimeUnit;
  * </ul>
  *
  * @see SmartTokenClientIntegrationTestBase
- * @see SmartTokenClientDockerIT
  */
+@Tag("integration")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("Testes de Integração - SmartTokenClient (JAR)")
 class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
@@ -57,10 +60,10 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
     private static final int SIMULATOR_PORT = 8443;
     private static final String BASE_URL = "https://localhost:" + SIMULATOR_PORT;
 
-    private static Process simulatorProcess;
+    private Process simulatorProcess;
 
     @BeforeAll
-    static void iniciarSimulador(@TempDir final Path tempDir) throws Exception {
+    void iniciarSimulador(@TempDir final Path tempDir) throws Exception {
         LOG.info("☕ Iniciando simulador via ProcessBuilder...");
         startJarSimulator();
         LOG.info("Simulador disponível em: {}", BASE_URL);
@@ -70,7 +73,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
     }
 
     @AfterAll
-    static void pararSimulador() {
+    void pararSimulador() {
         if (simulatorProcess != null) {
             LOG.info("Parando processo JAR do simulador...");
             simulatorProcess.destroy();
@@ -91,7 +94,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     // ==================== Inicialização ====================
 
-    private static void startJarSimulator() throws Exception {
+    private void startJarSimulator() throws Exception {
         final Path jarPath = resolveSimulatorJar();
         LOG.info("Usando JAR do simulador: {}", jarPath);
 
@@ -124,7 +127,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
         waitForSimulator();
     }
 
-    private static void waitForSimulator() throws Exception {
+    private void waitForSimulator() throws Exception {
         final HttpClient client = HttpClient.newBuilder()
                 .sslContext(SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL))
                 .connectTimeout(Duration.ofSeconds(5))
@@ -169,7 +172,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
                 "Simulador não ficou pronto em " + maxAttempts + " segundos. URL: " + healthUrl);
     }
 
-    private static Path resolveSimulatorJar() {
+    private Path resolveSimulatorJar() {
         final Path simulatorJar = Paths.get("target", "simulator", "hubsaude-simulador.jar");
 
         if (Files.exists(simulatorJar)) {

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -39,27 +40,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </p>
  * <ul>
  * <li>{@link SmartTokenClientJarIT} - Usa ProcessBuilder (mais rápido, para dev
- * local)</li>
- * <li>{@link SmartTokenClientDockerIT} - Usa Testcontainers (builds
- * reproduzíveis, CI/CD)</li>
+ * local e CI/CD)</li>
  * </ul>
  *
  * <h2>Execução</h2>
  * 
  * <pre>{@code
- * # Só modo JAR (padrão, mais rápido)
  * mvn verify -Dit.test=SmartTokenClientJarIT
- *
- * # Só modo Docker
- * mvn verify -Dit.test=SmartTokenClientDockerIT
- *
- * # Ambos
- * mvn verify
  * }</pre>
  *
  * @see SmartTokenClient
  */
-@Tag("integration")
 abstract class SmartTokenClientIntegrationTestBase {
 
         protected final Logger log = LoggerFactory.getLogger(getClass());
@@ -71,12 +62,12 @@ abstract class SmartTokenClientIntegrationTestBase {
          * SSLContext trust-all para testes com certificados auto-assinados do
          * simulador.
          */
-        protected static final javax.net.ssl.SSLContext TRUST_ALL_SSL_CONTEXT = SslContextFactory
+        protected static final SSLContext TRUST_ALL_SSL_CONTEXT = SslContextFactory
                         .buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL);
 
-        protected static Path keyFile;
-        protected static Path certFile;
-        protected static String certificatePem;
+        protected Path keyFile;
+        protected Path certFile;
+        protected String certificatePem;
 
         // ==================== Métodos Abstratos ====================
 
@@ -101,7 +92,7 @@ abstract class SmartTokenClientIntegrationTestBase {
          * Gera credenciais de teste (chave privada + certificado).
          * Deve ser chamado pelas subclasses no @BeforeAll.
          */
-        protected static void gerarCredenciais(final Path tempDir) throws Exception {
+        protected void gerarCredenciais(final Path tempDir) throws Exception {
                 // Gera par de chaves RSA
                 final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
                 gen.initialize(2048);
