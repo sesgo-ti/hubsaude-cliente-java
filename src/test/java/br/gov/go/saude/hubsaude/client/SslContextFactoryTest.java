@@ -321,12 +321,22 @@ class SslContextFactoryTest {
     // ==================== buildSslContext ====================
 
     @Test
-    @DisplayName("buildSslContext: Deve retornar SSLContext padrão quando serverTrustAnchor é null")
-    void deveRetornarSslContextPadraoQuandoTrustAnchorNull() {
+    @DisplayName("buildSslContext: Deve respeitar protocolo TLS mesmo sem serverTrustAnchor")
+    void deveRespeitarProtocoloTlsQuandoTrustAnchorNull() {
         final SSLContext ctx = SslContextFactory.buildSslContext((Path) null, SslContextFactory.DEFAULT_TLS_PROTOCOL);
 
         assertThat(ctx).isNotNull();
-        assertThat(ctx.getProtocol()).isEqualTo("Default");
+        // Agora o protocolo especificado é sempre respeitado (não mais "Default")
+        assertThat(ctx.getProtocol()).isEqualTo("TLSv1.3");
+    }
+
+    @Test
+    @DisplayName("buildSslContext: Deve usar TLS 1.2 quando especificado sem serverTrustAnchor")
+    void deveUsarTls12QuandoEspecificadoSemTrustAnchor() {
+        final SSLContext ctx = SslContextFactory.buildSslContext((Path) null, "TLSv1.2");
+
+        assertThat(ctx).isNotNull();
+        assertThat(ctx.getProtocol()).isEqualTo("TLSv1.2");
     }
 
     @Test

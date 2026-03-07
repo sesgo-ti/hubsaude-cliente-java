@@ -59,10 +59,9 @@ public final class SslContextFactory {
      *
      * <p>
      * Quando {@code serverTrustAnchor} é {@code null}, utiliza o trust store padrão
-     * da JVM ({@code $JAVA_HOME/lib/security/cacerts}), que é o comportamento
-     * seguro
-     * por padrão. Para ambientes de teste com certificados auto-assinados, utilize
-     * {@link #buildTrustAllSslContext(String)} explicitamente.
+     * da JVM ({@code $JAVA_HOME/lib/security/cacerts}) com o protocolo TLS
+     * especificado. Para ambientes de teste com certificados auto-assinados,
+     * utilize {@code TestSslContextFactory.buildTrustAllSslContext()} (apenas em testes).
      * </p>
      *
      * @param serverTrustAnchor certificado do servidor; se null, usa trust store
@@ -74,10 +73,15 @@ public final class SslContextFactory {
      */
     public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
         if (serverTrustAnchor == null) {
+            // Sem trust anchor customizado: usa trust store da JVM mas respeita o protocolo
             try {
-                return SSLContext.getDefault();
+                final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
+                ctx.init(null, null, null); // null = trust store padrão da JVM
+                return ctx;
             } catch (NoSuchAlgorithmException ex) {
-                throw new SmartTokenException("Falha ao obter SSLContext padrão da JVM", ex);
+                throw new SmartTokenException("Protocolo TLS não suportado: " + tlsProtocol, ex);
+            } catch (Exception ex) {
+                throw new SmartTokenException("Falha ao criar SSLContext com protocolo " + tlsProtocol, ex);
             }
         }
         try {
