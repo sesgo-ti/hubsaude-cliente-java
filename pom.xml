@@ -130,30 +130,32 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <rules>
+                        <rule>
+                            <element>BUNDLE</element>
+                            <limits>
+                                <limit>
+                                    <counter>LINE</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.89</minimum>
+                                </limit>
+                            </limits>
+                        </rule>
+                    </rules>
+                    <!-- Exclui métodos específicos que requerem hardware PKCS#11/HSM -->
+                    <!-- Exclui CLI de verificação (interativo, não testável automaticamente) -->
+                    <excludes>
+                        <exclude>**/SigningStrategyFactory$*Pkcs11*</exclude>
+                        <exclude>**/cli/VerificarAcesso.class</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>jacoco-check</id>
                         <goals>
                             <goal>check</goal>
                         </goals>
-                        <configuration>
-                            <rules>
-                                <rule>
-                                    <element>BUNDLE</element>
-                                    <limits>
-                                        <limit>
-                                            <counter>LINE</counter>
-                                            <value>COVEREDRATIO</value>
-                                            <minimum>0.85</minimum>
-                                        </limit>
-                                    </limits>
-                                </rule>
-                            </rules>
-                            <!-- Exclui métodos específicos que requerem hardware PKCS#11/HSM -->
-                            <excludes>
-                                <exclude>**/SigningStrategyFactory$*Pkcs11*</exclude>
-                            </excludes>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>

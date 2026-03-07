@@ -244,6 +244,83 @@ class PemLoaderTest {
                 .hasMessageContaining("senha incorreta");
     }
 
+    // ---------- Testes para PEMEncryptedKeyPair (OpenSSL tradicional criptografado) ----------
+
+    @Test
+    void deveFalharQuandoChaveOpenSslEncriptadaSemSenha(@TempDir final Path tempDir) throws Exception {
+        final Path encryptedFile = tempDir.resolve("openssl-encrypted-key.pem");
+        final String encryptedPem = createOpenSslEncryptedPem();
+        Files.writeString(encryptedFile, encryptedPem, StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKey(encryptedFile))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("requer senha");
+    }
+
+    @Test
+    void deveCarregarChaveOpenSslEncriptadaComSenhaCorreta(@TempDir final Path tempDir) throws Exception {
+        final Path encryptedFile = tempDir.resolve("openssl-encrypted-key.pem");
+        final String encryptedPem = createOpenSslEncryptedPem();
+        Files.writeString(encryptedFile, encryptedPem, StandardCharsets.UTF_8);
+
+        final PrivateKey loaded = PemLoader.loadPrivateKey(encryptedFile, "openssl123".toCharArray());
+
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.getAlgorithm()).isEqualTo("RSA");
+    }
+
+    @Test
+    void deveFalharComSenhaIncorretaEmChaveOpenSslEncriptada(@TempDir final Path tempDir) throws Exception {
+        final Path encryptedFile = tempDir.resolve("openssl-encrypted-key.pem");
+        final String encryptedPem = createOpenSslEncryptedPem();
+        Files.writeString(encryptedFile, encryptedPem, StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKey(encryptedFile, "senha-errada".toCharArray()))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("senha incorreta");
+    }
+
+    @Test
+    void deveFalharComSenhaVaziaEmChaveOpenSslEncriptada(@TempDir final Path tempDir) throws Exception {
+        final Path encryptedFile = tempDir.resolve("openssl-encrypted-key.pem");
+        final String encryptedPem = createOpenSslEncryptedPem();
+        Files.writeString(encryptedFile, encryptedPem, StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKey(encryptedFile, new char[0]))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("requer senha");
+    }
+
+    /**
+     * Cria uma chave RSA criptografada no formato OpenSSL tradicional.
+     * Este formato usa "BEGIN RSA PRIVATE KEY" com headers Proc-Type e DEK-Info.
+     */
+    private static String createOpenSslEncryptedPem() throws Exception {
+        // Adicionar BouncyCastle provider se não existir
+        if (java.security.Security.getProvider("BC") == null) {
+            java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        }
+
+        // Gerar par de chaves
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        final KeyPair pair = gen.generateKeyPair();
+
+        // Criar PEM criptografado no formato OpenSSL tradicional (PEMEncryptedKeyPair)
+        java.io.StringWriter sw = new java.io.StringWriter();
+        try (org.bouncycastle.openssl.jcajce.JcaPEMWriter pemWriter =
+                new org.bouncycastle.openssl.jcajce.JcaPEMWriter(sw)) {
+
+            // Usar encryptor no formato OpenSSL tradicional (DES-EDE3-CBC)
+            org.bouncycastle.openssl.jcajce.JcePEMEncryptorBuilder encryptorBuilder =
+                    new org.bouncycastle.openssl.jcajce.JcePEMEncryptorBuilder("DES-EDE3-CBC")
+                            .setProvider("BC");
+
+            pemWriter.writeObject(pair.getPrivate(), encryptorBuilder.build("openssl123".toCharArray()));
+        }
+        return sw.toString();
+    }
+
     private static String toPkcs1Pem(final PrivateKey privateKey) throws Exception {
         // Converter para PKCS#1 (RSAPrivateKey)
         org.bouncycastle.asn1.pkcs.RSAPrivateKey rsaKey =

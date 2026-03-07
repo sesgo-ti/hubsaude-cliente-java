@@ -2,6 +2,7 @@
 
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
+[![Version](https://img.shields.io/badge/Version-0.0.0--SNAPSHOT-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![License](https://img.shields.io/badge/License-SES--GO%2FUFG-green)](#licença)
 
 Biblioteca Java de conveniência para autenticação no HubSaúde.
@@ -38,6 +39,66 @@ var client = SmartTokenClient.builder()
 
 String token = client.obtainToken("system/Patient.rs");
 ```
+
+---
+
+## Verificação pós-credenciamento
+
+Após ter o credenciamento aprovado, use a ferramenta de verificação para confirmar que o acesso está funcionando:
+
+```bash
+# Verificação básica
+java -cp hubsaude-cliente-java.jar \
+    br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \
+    --client-id=hs-12345678 \
+    --key=minha-chave.pem \
+    --cert=meu-certificado.pem
+
+# Com detalhes do token
+java -cp hubsaude-cliente-java.jar \
+    br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \
+    --client-id=hs-12345678 \
+    --key=minha-chave.pem \
+    --cert=meu-certificado.pem \
+    --verbose
+```
+
+**Saída esperada (sucesso):**
+```
+╔═══════════════════════════════════════════════════════════╗
+║     HubSaúde - Verificador de Acesso (Pós-Credenciamento) ║
+╚═══════════════════════════════════════════════════════════╝
+
+ℹ Configuração:
+  Client ID:  hs-12345678
+  Chave:      minha-chave.pem
+  Certificado:meu-certificado.pem
+  Scope:      system/Patient.rs
+  TLS:        TLSv1.3
+  FHIR Base:  https://fhir.saude.go.gov.br (descoberta automática)
+
+ℹ Obtendo token de acesso...
+✓ Token obtido com sucesso!
+
+  Tempo de resposta: 245ms
+  Token (primeiros 50 chars): eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi...
+
+✓ Credenciamento verificado. Acesso ao HubSaúde está funcionando.
+```
+
+**Parâmetros disponíveis:**
+
+| Parâmetro | Descrição | Obrigatório |
+|-----------|-----------|-------------|
+| `--client-id` | ID do cliente (fornecido no credenciamento) | Sim |
+| `--key` | Caminho para a chave privada PEM | Sim |
+| `--cert` | Caminho para o certificado PEM | Sim |
+| `--endpoint` | URL do token endpoint (desabilita descoberta) | Não |
+| `--fhir-base` | URL base FHIR (padrão: https://fhir.saude.go.gov.br) | Não |
+| `--scope` | Scope a solicitar (padrão: system/Patient.rs) | Não |
+| `--password` | Senha da chave privada (se criptografada) | Não |
+| `--tls` | Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: TLSv1.3) | Não |
+| `--verbose` | Mostra detalhes do token obtido | Não |
 
 ---
 
@@ -90,7 +151,7 @@ Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
 
 ---
 
-## Preparação de Certificados
+## Preparação de certificados
 
 ### Converter PFX/P12 (ICP-Brasil) para PEM
 
@@ -109,7 +170,7 @@ openssl pkcs8 -topk8 -nocrypt -in chave-privada.pem -out chave-pkcs8.pem
 
 > **Segurança:** Use `-nodes` apenas em ambientes seguros. Para produção, considere manter a chave criptografada ou usar HSM.
 
-### Chave Privada com Senha
+### Chave privada com Senha
 
 ```bash
 # Converter para PKCS#8 criptografado (AES-256)
@@ -124,7 +185,7 @@ var client = SmartTokenClient.builder()
         .build();
 ```
 
-### Gerar Certificados de Teste (para hubsaude-simulador)
+### Gerar certificados de teste (para hubsaude-simulador)
 
 Para desenvolvimento e testes locais com o `hubsaude-simulador`:
 
@@ -145,7 +206,7 @@ Os arquivos `test-key.pem` e `test-cert.pem` podem ser usados diretamente com o 
 
 ---
 
-## Configuração Completa
+## Configuração completa
 
 ```java
 var client = SmartTokenClient.builder()
@@ -154,6 +215,7 @@ var client = SmartTokenClient.builder()
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
         .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // opcional: CA customizada
+        .tlsProtocol("TLSv1.2")                         // opcional: TLS 1.2 (padrão: TLSv1.3)
         .connectTimeout(Duration.ofSeconds(10))          // opcional
         .requestTimeout(Duration.ofSeconds(30))          // opcional
         .assertionTtlSeconds(120)                        // opcional: TTL do JWT
@@ -163,7 +225,7 @@ var client = SmartTokenClient.builder()
         .build();
 ```
 
-### Descoberta Automática de Endpoint
+### Descoberta automática de endpoint
 
 ```java
 var client = SmartTokenClient.builder()
@@ -229,7 +291,7 @@ var client = SmartTokenClient.builder()
 
 ---
 
-## Resiliência em Produção
+## Resiliência em produção
 
 ### Integração com Resilience4j
 
@@ -255,11 +317,10 @@ mvn test
 
 ### Integração
 
-| Modo     | Comando                                     | Pré-requisito | Tempo |
-|----------|---------------------------------------------|---------------|-------|
-| JAR      | `mvn verify -Dit.test=SmartTokenClientJarIT`    | Java 21+      | ~5s   |
-| Docker   | `mvn verify -Dit.test=SmartTokenClientDockerIT` | Docker        | ~9s   |
-| Todos    | `mvn verify`                                    | Ambos         | ~14s  |
+| Modo     | Comando                                          | Pré-requisito | Tempo |
+|----------|--------------------------------------------------|---------------|-------|
+| JAR      | `mvn verify -Dit.test=SmartTokenClientJarIT`     | Java 21+      | ~5s   |
+| Todos    | `mvn verify`                                     | Java 21+      | ~5s   |
 
 Os testes de integração utilizam o `hubsaude-simulador` automaticamente.
 
