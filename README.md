@@ -249,8 +249,9 @@ var client = SmartTokenClient.builder()
 >         // ...demais configurações
 >         .build();
 > ```
->
-> *Nota: O simulador não expõe endpoint HTTP para download do certificado PEM. A extração via `openssl s_client` é a forma recomendada.*
+
+> **Nota**  
+> O simulador não expõe endpoint HTTP para download do certificado PEM. A extração via `openssl s_client` é a forma recomendada.
 
 ### Descoberta automática de endpoint
 
