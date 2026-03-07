@@ -59,11 +59,11 @@ abstract class SmartTokenClientIntegrationTestBase {
         protected static final String ALLOWED_SCOPES = "system/Patient.rs system/Observation.rs";
 
         /**
-         * SSLContext trust-all para testes com certificados auto-assinados do
-         * simulador.
+         * SSLContext configurado com o certificado do simulador.
+         * Deve ser inicializado pela subclasse no @BeforeAll após extrair
+         * o certificado do servidor.
          */
-        protected static final SSLContext TRUST_ALL_SSL_CONTEXT = SslContextFactory
-                        .buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL);
+        protected SSLContext simulatorSslContext;
 
         protected Path keyFile;
         protected Path certFile;
@@ -114,7 +114,7 @@ abstract class SmartTokenClientIntegrationTestBase {
         @BeforeEach
         void registrarClienteNoSimulador() throws Exception {
                 final HttpClient client = HttpClient.newBuilder()
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .connectTimeout(Duration.ofSeconds(10))
                                 .build();
 
@@ -149,7 +149,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs");
@@ -167,7 +167,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 assertThatThrownBy(() -> tokenClient.obtainToken("system/Encounter.rs"))
@@ -185,7 +185,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
                                 .tokenCacheMarginSeconds(30)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 final String token1 = tokenClient.obtainToken("system/Patient.rs");
@@ -204,7 +204,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 final String tokenPatient = tokenClient.obtainToken("system/Patient.rs");
@@ -223,7 +223,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 final String scope = "system/Patient.rs";
@@ -248,7 +248,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .clientId("cliente-inexistente-xyz")
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 assertThatThrownBy(() -> tokenClient.obtainToken("system/Patient.rs"))
@@ -264,7 +264,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs system/Observation.rs");
@@ -282,7 +282,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .certificatePem(certFile)
                                 .connectTimeout(Duration.ofSeconds(5))
                                 .requestTimeout(Duration.ofSeconds(30))
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 // Deve completar dentro do timeout
@@ -299,7 +299,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .sslContext(TRUST_ALL_SSL_CONTEXT)
+                                .sslContext(simulatorSslContext)
                                 .build();
 
                 // O tokenClient deve ter extraído ".well-known/smart-configuration" no build

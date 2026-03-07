@@ -92,6 +92,31 @@ public final class SslContextFactory {
         }
         try {
             final X509Certificate trustedCert = validateCertificate(serverTrustAnchor);
+            return buildSslContext(trustedCert, tlsProtocol);
+        } catch (SmartTokenException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SmartTokenException("Falha ao construir SSLContext customizado: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Constrói um {@link SSLContext} configurado com o certificado X.509 fornecido.
+     *
+     * <p>
+     * Este método permite construir um contexto SSL a partir de um certificado
+     * já carregado em memória, útil para cenários onde o certificado foi obtido
+     * dinamicamente (ex: extraído de uma conexão SSL).
+     * </p>
+     *
+     * @param trustedCert certificado X.509 do servidor a ser confiado
+     * @param tlsProtocol protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
+     * @return contexto SSL configurado para confiar no certificado fornecido
+     * @throws SmartTokenException se o protocolo for inválido ou houver erro de
+     *                             configuração
+     */
+    public static SSLContext buildSslContext(final X509Certificate trustedCert, final String tlsProtocol) {
+        try {
             final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
             trustStore.load(null, null);
             trustStore.setCertificateEntry("trusted-server", trustedCert);
@@ -103,10 +128,8 @@ public final class SslContextFactory {
             final SSLContext ctx = SSLContext.getInstance(tlsProtocol);
             ctx.init(null, tmf.getTrustManagers(), new SecureRandom());
             return ctx;
-        } catch (SmartTokenException ex) {
-            throw ex;
         } catch (Exception ex) {
-            throw new SmartTokenException("Falha ao construir SSLContext customizado: " + ex.getMessage(), ex);
+            throw new SmartTokenException("Falha ao construir SSLContext: " + ex.getMessage(), ex);
         }
     }
 

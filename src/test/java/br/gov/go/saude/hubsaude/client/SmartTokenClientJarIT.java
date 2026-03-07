@@ -14,6 +14,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -25,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
@@ -67,6 +72,11 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
         LOG.info("☕ Iniciando simulador via ProcessBuilder...");
         startJarSimulator();
         LOG.info("Simulador disponível em: {}", BASE_URL);
+
+        // Extrai o certificado do simulador e constrói SSLContext seguro
+        final X509Certificate simulatorCert = extractServerCertificate("localhost", SIMULATOR_PORT);
+        simulatorSslContext = SslContextFactory.buildSslContext(simulatorCert, SslContextFactory.DEFAULT_TLS_PROTOCOL);
+        LOG.info("SSLContext construído com certificado do simulador: {}", simulatorCert.getSubjectX500Principal());
 
         // Gera credenciais de teste
         gerarCredenciais(tempDir);
@@ -182,5 +192,46 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
         throw new IllegalStateException(
                 "Não foi possível localizar o JAR do hubsaude-simulador em " + simulatorJar + ". " +
                         "Execute 'mvn verify' para que o maven-dependency-plugin copie o artefato.");
+    }
+
+    /**
+     * Extrai o certificado X.509 do servidor via conexão SSL.
+     *
+     * <p>
+     * Conecta ao servidor usando trust-all temporário apenas para obter o certificado,
+     * que será usado para construir um SSLContext seguro para os testes.
+     * </p>
+     *
+     * @param host hostname do servidor
+     * @param port porta HTTPS do servidor
+     * @return certificado X.509 do servidor
+     * @throws Exception se não conseguir extrair o certificado
+     */
+    private X509Certificate extractServerCertificate(final String host, final int port) throws Exception {
+        // Usa trust-all temporário APENAS para extrair o certificado
+        final SSLContext trustAllContext = SslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL);
+        final SSLSocketFactory factory = trustAllContext.getSocketFactory();
+
+        try (SSLSocket socket = (SSLSocket) factory.createSocket(host, port)) {
+            socket.setSoTimeout(5000);
+            socket.startHandshake();
+
+            final SSLSession session = socket.getSession();
+            final java.security.cert.Certificate[] certs = session.getPeerCertificates();
+
+            if (certs.length == 0) {
+                throw new IllegalStateException("Servidor não retornou certificados");
+            }
+
+            // O primeiro certificado é o do servidor
+            if (certs[0] instanceof X509Certificate x509Cert) {
+                LOG.debug("Certificado extraído: subject={}, issuer={}",
+                        x509Cert.getSubjectX500Principal(),
+                        x509Cert.getIssuerX500Principal());
+                return x509Cert;
+            }
+
+            throw new IllegalStateException("Certificado do servidor não é X.509");
+        }
     }
 }

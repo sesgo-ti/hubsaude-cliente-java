@@ -323,7 +323,7 @@ class SslContextFactoryTest {
     @Test
     @DisplayName("buildSslContext: Deve retornar SSLContext padrão quando serverTrustAnchor é null")
     void deveRetornarSslContextPadraoQuandoTrustAnchorNull() {
-        final SSLContext ctx = SslContextFactory.buildSslContext(null, SslContextFactory.DEFAULT_TLS_PROTOCOL);
+        final SSLContext ctx = SslContextFactory.buildSslContext((Path) null, SslContextFactory.DEFAULT_TLS_PROTOCOL);
 
         assertThat(ctx).isNotNull();
         assertThat(ctx.getProtocol()).isEqualTo("Default");

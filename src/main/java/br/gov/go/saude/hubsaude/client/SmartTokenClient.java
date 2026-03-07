@@ -344,7 +344,7 @@ public final class SmartTokenClient {
                 clientId,
                 SigningStrategyFactory.fromPemFile(privateKeyPem),
                 SslContextFactory.validateCertificate(certificatePem),
-                SslContextFactory.buildSslContext(null, DEFAULT_TLS_PROTOCOL),
+                SslContextFactory.buildSslContext((Path) null, DEFAULT_TLS_PROTOCOL),
                 DEFAULT_CONNECT_TIMEOUT,
                 DEFAULT_REQUEST_TIMEOUT,
                 DEFAULT_ASSERTION_TTL_SECONDS,
