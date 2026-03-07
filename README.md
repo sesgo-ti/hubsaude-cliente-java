@@ -214,8 +214,8 @@ var client = SmartTokenClient.builder()
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
-        .serverTrustAnchor(Path.of("ca-hubsaude.pem"))  // opcional: CA customizada
-        .tlsProtocol("TLSv1.2")                         // opcional: TLS 1.2 (padrão: TLSv1.3)
+        .serverTrustAnchor(Path.of("ca-custom.pem"))     // opcional: ver nota abaixo
+        .tlsProtocol("TLSv1.2")                          // opcional: TLS 1.2 (padrão: TLSv1.3)
         .connectTimeout(Duration.ofSeconds(10))          // opcional
         .requestTimeout(Duration.ofSeconds(30))          // opcional
         .assertionTtlSeconds(120)                        // opcional: TTL do JWT
@@ -224,6 +224,23 @@ var client = SmartTokenClient.builder()
         .maxRetries(3)                                   // opcional: retries
         .build();
 ```
+
+> **Nota sobre `serverTrustAnchor`:** Este parâmetro **não é necessário para produção**. O servidor de produção utiliza certificado Let's Encrypt, que já está na cadeia de confiança padrão da JVM.
+>
+> Use `serverTrustAnchor` apenas em cenários específicos:
+> - **Testes locais:** Ao usar o `hubsaude-simulador` com certificado autoassinado
+> - **Homologação:** Se o ambiente usa CA interna não presente no trust store da JVM
+> - **Desenvolvimento:** Para aceitar certificados de desenvolvimento
+>
+> Exemplo com simulador local:
+> ```java
+> // Extrair certificado do simulador: openssl s_client -connect localhost:8443 < /dev/null 2>/dev/null | openssl x509 > simulador-cert.pem
+> var client = SmartTokenClient.builder()
+>         .tokenEndpoint("https://localhost:8443/auth/token")
+>         .serverTrustAnchor(Path.of("simulador-cert.pem"))
+>         // ...demais configurações
+>         .build();
+> ```
 
 ### Descoberta automática de endpoint
 
@@ -331,7 +348,7 @@ Os testes de integração utilizam o `hubsaude-simulador` automaticamente.
 | Erro | Causa Provável | Solução |
 |------|----------------|---------|
 | `PKCS8 key spec not recognized` | Chave em formato PKCS#1 (tradicional) | Converter: `openssl pkcs8 -topk8 -nocrypt -in key.pem -out key-pkcs8.pem` |
-| `unable to find valid certification path` | CA do servidor não confiável | Configurar `.serverTrustAnchor()` ou importar CA no truststore |
+| `unable to find valid certification path` | CA do servidor não confiável | Para simulador/homologação: usar `.serverTrustAnchor()`; produção: verificar conectividade |
 | `signature verification failed` | Certificado não corresponde à chave | Verificar: `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5` |
 | `connection timed out` | Firewall ou endpoint incorreto | Verificar conectividade e URL |
 
