@@ -29,7 +29,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Utilitário para carregamento de material criptográfico de arquivos PEM.
+ * Utilitário para carregamento de material criptográfico de arquivo PEM.
  *
  * <p>
  * Suporta múltiplos formatos de chave privada:
