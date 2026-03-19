@@ -221,6 +221,8 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     @SuppressWarnings("PMD.UseVarargs")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "KeyStore não é clonável; char[] de senha não é copiado para minimizar exposição em memória")
     public SmartTokenClientBuilder clientKeyStore(
             final KeyStore keyStore,
             final String keyAlias,
@@ -253,6 +255,8 @@ public final class SmartTokenClientBuilder {
      * @param serverTrustAnchorCert certificado X.509; null usa trust store da JVM
      * @return este builder
      */
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "X509Certificate é efetivamente imutável")
     public SmartTokenClientBuilder serverTrustAnchor(final X509Certificate serverTrustAnchorCert) {
         this.serverTrustAnchorCert = serverTrustAnchorCert;
         return this;
