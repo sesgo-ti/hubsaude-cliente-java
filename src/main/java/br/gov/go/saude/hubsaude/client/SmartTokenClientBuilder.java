@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Builder fluente para construção de instâncias de {@link SmartTokenClient}.
+ * Builder para construção de instâncias de {@link SmartTokenClient}.
  *
  * <p>
  * Permite configurar timeouts, TTL do assertion e demais parâmetros
