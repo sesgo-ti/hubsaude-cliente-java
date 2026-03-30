@@ -57,16 +57,14 @@ String token = client.obtainToken("system/Patient.rs");
 Após ter o credenciamento aprovado, use a ferramenta de verificação para confirmar que o acesso está funcionando:
 
 ```bash
-# Verificação básica
-java -cp hubsaude-cliente-java.jar \
-    br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \
+# Verificação básica (use o JAR -cli que inclui todas as dependências)
+java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
     --client-id=hs-12345678 \
     --key=minha-chave.pem \
     --cert=meu-certificado.pem
 
 # Com detalhes do token
-java -cp hubsaude-cliente-java.jar \
-    br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \
+java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
     --client-id=hs-12345678 \
     --key=minha-chave.pem \
     --cert=meu-certificado.pem \

@@ -25,9 +25,8 @@ import java.util.Base64;
  * mvn exec:java -Dexec.mainClass="br.gov.go.saude.hubsaude.client.cli.VerificarAcesso" \
  *     -Dexec.args="--client-id=hs-XXXXXXXX --key=chave.pem --cert=cert.pem"
  *
- * # Via JAR executável
- * java -cp hubsaude-cliente-java.jar \
- *     br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \
+ * # Via JAR executável (fat JAR com todas as dependências)
+ * java -jar hubsaude-cliente-java-X.Y.Z-cli.jar \
  *     --client-id=hs-XXXXXXXX --key=chave.pem --cert=cert.pem
  * }</pre>
  *
@@ -287,8 +286,7 @@ public final class VerificarAcesso {
         System.out.println("Verifica se o credenciamento foi aprovado obtendo um token de acesso.");
         System.out.println();
         System.out.println(ANSI_BOLD + "USO:" + ANSI_RESET);
-        System.out.println("  java -jar hubsaude-cliente-java.jar \\");
-        System.out.println("      br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \\");
+        System.out.println("  java -jar hubsaude-cliente-java-X.Y.Z-cli.jar \\");
         System.out.println("      --client-id=<ID> --key=<CHAVE.PEM> --cert=<CERT.PEM> [opções]");
         System.out.println();
         System.out.println(ANSI_BOLD + "PARÂMETROS OBRIGATÓRIOS:" + ANSI_RESET);
@@ -308,15 +306,13 @@ public final class VerificarAcesso {
         System.out.println(ANSI_BOLD + "EXEMPLOS:" + ANSI_RESET);
         System.out.println();
         System.out.println("  # Verificação básica (descoberta automática de endpoint)");
-        System.out.println("  java -cp hubsaude-cliente-java.jar \\");
-        System.out.println("      br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \\");
+        System.out.println("  java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \\");
         System.out.println("      --client-id=hs-12345678 \\");
         System.out.println("      --key=minha-chave.pem \\");
         System.out.println("      --cert=meu-certificado.pem");
         System.out.println();
         System.out.println("  # Com endpoint explícito e TLS 1.2");
-        System.out.println("  java -cp hubsaude-cliente-java.jar \\");
-        System.out.println("      br.gov.go.saude.hubsaude.client.cli.VerificarAcesso \\");
+        System.out.println("  java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \\");
         System.out.println("      --client-id=hs-12345678 \\");
         System.out.println("      --key=minha-chave.pem \\");
         System.out.println("      --cert=meu-certificado.pem \\");
