@@ -178,6 +178,63 @@ openssl pkcs8 -topk8 -nocrypt -in chave-privada.pem -out chave-pkcs8.pem
 
 > **Segurança:** Use `-nodes` apenas em ambientes seguros. Para produção, considere manter a chave criptografada ou usar HSM.
 
+### Converter PFX/P12 (ICP-Brasil) para PEM com keytool
+
+Alternativamente ao openssl, é possível usar o `keytool` (incluído no JDK) combinado com comandos Java:
+
+```bash
+# 1. Listar aliases disponíveis no arquivo PFX/P12
+keytool -list -keystore certificado.pfx -storetype PKCS12 -v
+
+# 2. Importar PFX para um novo keystore JKS (opcional, para integração Java nativa)
+keytool -importkeystore \
+    -srckeystore certificado.pfx \
+    -srcstoretype PKCS12 \
+    -destkeystore meu-keystore.jks \
+    -deststoretype JKS
+
+# 3. Exportar apenas o certificado para arquivo (formato DER)
+keytool -exportcert \
+    -keystore certificado.pfx \
+    -storetype PKCS12 \
+    -alias meu-alias \
+    -file certificado.der
+
+# 4. Converter certificado DER para PEM (requer openssl)
+openssl x509 -inform DER -in certificado.der -out certificado.pem
+```
+
+> **Nota:** O `keytool` não exporta chaves privadas diretamente para PEM. Para extrair a chave privada, use openssl ou carregue o PKCS#12 diretamente no código Java (ver seção "PKCS#12 Direto").
+
+**Usando PKCS#12 diretamente no Java (sem conversão):**
+
+```java
+// Carregar o arquivo PFX/P12 diretamente, sem conversão para PEM
+KeyStore ks = KeyStore.getInstance("PKCS12");
+try (var fis = new FileInputStream("certificado.pfx")) {
+    ks.load(fis, "senha-pfx".toCharArray());
+}
+
+// Descobrir o alias (se não souber)
+String alias = ks.aliases().nextElement();
+System.out.println("Alias encontrado: " + alias);
+
+// Criar o cliente usando o KeyStore
+SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(
+        ks, alias, "senha-chave".toCharArray());
+
+X509Certificate cert = (X509Certificate) ks.getCertificate(alias);
+
+var client = SmartTokenClient.builder()
+        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .clientId("meu-sistema")
+        .signingStrategy(strategy)
+        .certificate(cert)
+        .build();
+```
+
+Esta abordagem é **recomendada para produção** pois evita expor a chave privada em arquivo PEM.
+
 ### Chave privada com Senha
 
 ```bash
