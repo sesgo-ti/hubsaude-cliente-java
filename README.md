@@ -8,7 +8,7 @@
 Biblioteca Java de conveniência para autenticação no HubSaúde.
 O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMART-on-FHIR**, em particular **SMART Backend Services** para comunicação máquina-a-máquina (M2M).
 
-Testes podem ser realizados com um certificado autoassinado usando o simulador do HubSaúde: [hubsaude-simulador](https://hub.saude.go.gov.br).
+A sugestão é experimentar a biblioteca usando o simulador do HubSaúde com certificados autoassinados.
 
 ## Dependência Maven
 
@@ -89,7 +89,7 @@ java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
 | `--key` | Caminho para a chave privada PEM | Sim |
 | `--cert` | Caminho para o certificado PEM | Sim |
 | `--endpoint` | URL do token endpoint (desabilita descoberta) | Não |
-| `--fhir-base` | URL base FHIR (padrão: https://fhir.saude.go.gov.br) | Não |
+| `--fhir-base` | URL base FHIR (padrão: https://hub.saude.go.gov.br) | Não |
 | `--scope` | Scope a solicitar (padrão: system/Patient.rs) | Não |
 | `--password` | Senha da chave privada (se criptografada) | Não |
 | `--tls` | Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: TLSv1.3) | Não |
