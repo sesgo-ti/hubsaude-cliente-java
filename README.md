@@ -1,4 +1,4 @@
-# HubSaúde Cliente Java
+# hubsaude-cliente-java
 
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
@@ -9,9 +9,9 @@ Biblioteca Java de conveniência para autenticação no HubSaúde.
 A classe principal, `SmartTokenClient`, facilita a obtenção de tokens de acesso
 em conformidade com o **SMART Backend Services**, implementando OAuth 2.0 com
 JWT Bearer Assertion (RFCs 6749, 7521, 7523). A assinatura (client_assertion)
-pode ser gerada a partir de arquivo local (PEM ou PKCS#12) ou 
-por dispositivo criptográfico via PKCS#11 (HSM). Dessa forma,
-contempla tanto certificados autoassinados para testes quanto
+pode ser gerada consultando-se arquivo local (PEM ou PKCS#12) ou 
+dispositivo criptográfico via PKCS#11 (HSM). Podem ser empregados, 
+tanto certificados autoassinados para testes quanto
 certificados ICP-Brasil para produção (A1 em arquivo, A3/A4 via HSM).
 
 A biblioteca também suporta **mTLS (mutual TLS)**: quando o servidor exige 
