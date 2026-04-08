@@ -112,6 +112,7 @@ java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
 | `--password` | Senha da chave privada (se criptografada) | Não |
 | `--tls` | Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: TLSv1.3) | Não |
 | `--alg` | Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: RS256) | Não |
+| `--trust` | Certificado PEM do servidor (trust anchor, para simulador/homologação) | Não |
 | `--verbose` | Mostra detalhes do token obtido | Não |
 
 ---

@@ -41,6 +41,7 @@ import java.util.Base64;
  *   <li>{@code --password} — Senha da chave privada, se criptografada (opcional)</li>
  *   <li>{@code --tls} — Protocolo TLS: TLSv1.3 ou TLSv1.2 (opcional, padrão: TLSv1.3)</li>
  *   <li>{@code --alg} — Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (opcional, padrão: RS256)</li>
+ *   <li>{@code --trust} — Caminho para certificado PEM do servidor (trust anchor), para simulador/homologação</li>
  *   <li>{@code --verbose} — Mostra detalhes do token obtido</li>
  * </ul>
  */
@@ -113,6 +114,11 @@ public final class VerificarAcesso {
 
         if (config.keyPassword != null) {
             builder.privateKeyPassword(config.keyPassword);
+        }
+
+        if (config.trustAnchorPath != null) {
+            validateFile(config.trustAnchorPath, "Trust anchor");
+            builder.serverTrustAnchor(Path.of(config.trustAnchorPath));
         }
 
         final SmartTokenClient client = builder.build();
@@ -227,6 +233,8 @@ public final class VerificarAcesso {
             config.tlsProtocol = extractValue(arg, "--tls=");
         } else if (arg.startsWith("--alg=")) {
             config.jwtAlgorithm = extractValue(arg, "--alg=").toUpperCase(java.util.Locale.ROOT);
+        } else if (arg.startsWith("--trust=")) {
+            config.trustAnchorPath = extractValue(arg, "--trust=");
         } else if ("--verbose".equals(arg) || "-v".equals(arg)) {
             config.verbose = true;
         } else if (!"--help".equals(arg) && !"-h".equals(arg)) {
@@ -311,6 +319,7 @@ public final class VerificarAcesso {
         System.out.println("  --password=<SENHA>    Senha da chave privada (se criptografada)");
         System.out.println("  --tls=<VERSAO>        Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: " + DEFAULT_TLS + ")");
         System.out.println("  --alg=<ALG>           Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: " + DEFAULT_ALG + ")");
+        System.out.println("  --trust=<PATH>        Certificado PEM do servidor (trust anchor, para simulador/homologação)");
         System.out.println("  --verbose, -v         Mostra detalhes do token obtido");
         System.out.println("  --help, -h            Exibe esta mensagem");
         System.out.println();
@@ -363,6 +372,7 @@ public final class VerificarAcesso {
         char[] keyPassword;
         String tlsProtocol = DEFAULT_TLS;
         String jwtAlgorithm = DEFAULT_ALG;
+        String trustAnchorPath;
         boolean verbose;
     }
 }
