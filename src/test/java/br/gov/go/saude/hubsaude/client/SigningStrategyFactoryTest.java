@@ -249,7 +249,7 @@ class SigningStrategyFactoryTest {
         // Usar provider fictício apenas para teste de validação
         final java.security.Provider provider = java.security.Security.getProvider("SunJCE");
         
-        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(provider, null, "pin".toCharArray()))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(provider, null, new char[]{ 'p' }))
                 .isInstanceOf(NullPointerException.class);
     }
 
