@@ -60,6 +60,8 @@ var client = SmartTokenClient.builder()
 String token = client.obtainToken("system/Patient.rs");
 ```
 
+> **Nota:** O método `serverTrustAnchor` é necessário apenas para o acesso simulador local, que usa certificado autoassinado. Nos ambientes de homologação e produção do HubSaúde, os certificados são emitidos por autoridade certificadora confiável, já presente no trust store padrão da JVM — portanto essa chamada deve ser omitida.
+
 ---
 
 ## Verificação pós-credenciamento
