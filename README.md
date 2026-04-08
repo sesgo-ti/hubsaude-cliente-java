@@ -6,24 +6,9 @@
 [![License](https://img.shields.io/badge/License-SES--GO%2FUFG-green)](#licença)
 
 Biblioteca Java de conveniência para autenticação no HubSaúde.
-A classe principal, `SmartTokenClient`, facilita a obtenção de tokens de acesso
-em conformidade com o **SMART Backend Services**, implementando OAuth 2.0 com
-JWT Bearer Assertion (RFCs 6749, 7521, 7523). A assinatura (client_assertion)
-pode ser gerada consultando-se arquivo local (PEM ou PKCS#12) ou 
-dispositivo criptográfico via PKCS#11 (HSM). Podem ser empregados, 
-tanto certificados autoassinados para testes quanto
-certificados ICP-Brasil para produção (A1 em arquivo, A3/A4 via HSM).
+O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMART-on-FHIR**, em particular **SMART Backend Services** para comunicação máquina-a-máquina (M2M).
 
-A biblioteca também suporta **mTLS (mutual TLS)**: quando o servidor exige 
-autenticação mútua no nível de transporte, o cliente apresenta
-automaticamente o certificado durante o handshake TLS. A configuração
-de mTLS é habilitada de forma transparente a partir do mesmo material
-criptográfico já fornecido (chave privada e certificado), independentemente
-da origem — arquivo PEM, PKCS#12, KeyStore JKS ou dispositivo 
-criptográfico via PKCS#11 (smartcard, USB token, HSM). Quando o servidor
-não solicita certificado do cliente, a conexão se comporta como TLS 
-unidirecional, sem nenhuma alteração necessária.
-
+Testes podem ser realizados com um certificado autoassinado usando o simulador do HubSaúde: [hubsaude-simulador](https://hub.saude.go.gov.br).
 
 ## Dependência Maven
 
@@ -325,7 +310,7 @@ var client = SmartTokenClient.builder()
 
 ```java
 var client = SmartTokenClient.builder()
-        .fhirBase("https://hub.saude.go.gov.br")  // Descobre via .well-known
+        .fhirBase("https://hub.saude.go.gov.br")  // Descobre via .well-known/smart-configuration
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
