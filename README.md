@@ -8,8 +8,6 @@
 Biblioteca Java de conveniência para autenticação no HubSaúde.
 O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMART-on-FHIR**, em particular **SMART Backend Services** para comunicação máquina-a-máquina (M2M).
 
-A sugestão é experimentar a biblioteca usando o simulador do HubSaúde com certificados autoassinados.
-
 ## Dependência Maven
 
 ```xml
@@ -22,18 +20,38 @@ A sugestão é experimentar a biblioteca usando o simulador do HubSaúde com cer
 
 **Requisitos:** Java 21+, Maven 3.9+
 
-## Início rápido
+
+## Inicio rápido
+
+Gere um par de chaves e um certificado autoassinado para desenvolvimento e testes locais com o `hubsaude-simulador`:
+
+```bash
+# Gerar par de chaves RSA 2048-bit
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out test-key.pem
+
+# Gerar certificado autoassinado (válido por 365 dias)
+openssl req -new -x509 -key test-key.pem -out test-cert.pem -days 365 \
+    -subj "/CN=teste-local/O=Desenvolvimento/C=BR"
+
+# (Opcional) Verificar arquivos gerados
+openssl rsa -in test-key.pem -check -noout
+openssl x509 -in test-cert.pem -text -noout | head -20
+```
+
+Os arquivos `test-key.pem` e `test-cert.pem` podem ser usados diretamente no cliente, conforme ilustrado abaixo.
 
 ```java
 var client = SmartTokenClient.builder()
         .tokenEndpoint("https://auth-smart-staging.saude.go.gov.br/realms/smart/protocol/openid-connect/token")
         .clientId("meu-sistema")
-        .privateKeyPem(Path.of("chave-privada.pem"))
-        .certificatePem(Path.of("certificado.pem"))
+        .privateKeyPem(Path.of("test-key.pem"))
+        .certificatePem(Path.of("test-cert.pem"))
         .build();
 
 String token = client.obtainToken("system/Patient.rs");
 ```
+
+Este código deve ret
 
 ---
 
@@ -238,26 +256,6 @@ var client = SmartTokenClient.builder()
         .build();
 ```
 
-### Gerar certificados de teste (para hubsaude-simulador)
-
-Para desenvolvimento e testes locais com o `hubsaude-simulador`:
-
-```bash
-# Gerar par de chaves RSA 2048-bit
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out test-key.pem
-
-# Gerar certificado autoassinado (válido por 365 dias)
-openssl req -new -x509 -key test-key.pem -out test-cert.pem -days 365 \
-    -subj "/CN=teste-local/O=Desenvolvimento/C=BR"
-
-# (Opcional) Verificar arquivos gerados
-openssl rsa -in test-key.pem -check -noout
-openssl x509 -in test-cert.pem -text -noout | head -20
-```
-
-Os arquivos `test-key.pem` e `test-cert.pem` podem ser usados diretamente com o cliente.
-
----
 
 ## Configuração completa
 
