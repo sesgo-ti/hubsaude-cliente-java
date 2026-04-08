@@ -38,20 +38,27 @@ openssl rsa -in test-key.pem -check -noout
 openssl x509 -in test-cert.pem -text -noout | head -20
 ```
 
-Os arquivos `test-key.pem` e `test-cert.pem` podem ser usados diretamente no cliente, conforme ilustrado abaixo.
+Como o simulador usa certificado autoassinado, é necessário extraí-lo para que o cliente confie na conexão TLS:
+
+```bash
+# Inicie o simulador primeiro: java -jar hubsaude-simulador.jar
+# Em outro terminal, extraia o certificado SSL do simulador:
+openssl s_client -connect localhost:8443 < /dev/null 2>/dev/null | openssl x509 > simulador-server.pem
+```
+
+Com os três arquivos (`test-key.pem`, `test-cert.pem` e `simulador-server.pem`), o cliente pode ser usado conforme ilustrado abaixo.
 
 ```java
 var client = SmartTokenClient.builder()
-        .tokenEndpoint("https://auth-smart-staging.saude.go.gov.br/realms/smart/protocol/openid-connect/token")
+        .tokenEndpoint("https://localhost:8443/auth/token")
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("test-key.pem"))
         .certificatePem(Path.of("test-cert.pem"))
+        .serverTrustAnchor(Path.of("simulador-server.pem"))
         .build();
 
 String token = client.obtainToken("system/Patient.rs");
 ```
-
-Este código deve ret
 
 ---
 
