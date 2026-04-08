@@ -41,7 +41,7 @@ unidirecional, sem nenhuma alteração necessária.
 
 ```java
 var client = SmartTokenClient.builder()
-        .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
+        .tokenEndpoint("https://auth-smart-staging.saude.go.gov.br/realms/smart/protocol/openid-connect/token")
         .clientId("meu-sistema")
         .privateKeyPem(Path.of("chave-privada.pem"))
         .certificatePem(Path.of("certificado.pem"))
@@ -121,9 +121,10 @@ A biblioteca abstrai a seguinte requisição HTTPs:
 curl -X POST https://hub.saude.go.gov.br/auth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials" \
+  -d "client_id=meu-sistema" \
   -d "scope=system/Patient.rs" \
   -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
-  -d "client_assertion=eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCIsIng1YyI6WyJNSUlELi4uIl19.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS384"
+  -d "client_assertion=eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS384"
 ```
 
 Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
@@ -131,9 +132,8 @@ Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
 - *header* 
 ```json
 {  
-  "alg" : "RS384",
-  "typ" : "JWT",
-  "x5c" : [ "cert-base64" ]
+  "alg": "RS384",
+  "typ": "JWT"
 }
 ```
 - *payload*
