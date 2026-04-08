@@ -53,8 +53,7 @@ class SigningStrategyFactoryTest {
 
         final byte[] assinatura = strategy.sign(dados);
 
-        assertThat(assinatura).isNotNull();
-        assertThat(assinatura).hasSizeGreaterThan(0);
+        assertThat(assinatura).isNotNull().hasSizeGreaterThan(0);
 
         // Verificar assinatura (RS256 = SHA256withRSA)
         final Signature verifier = Signature.getInstance("SHA256withRSA");
@@ -133,7 +132,7 @@ class SigningStrategyFactoryTest {
     }
 
     @Test
-    void estrategiasDevemSerIdempotentes() throws Exception {
+    void estrategiasDevemSerIdempotentes() {
         final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
         final byte[] dados = "dados idempotentes".getBytes(StandardCharsets.UTF_8);
 
@@ -241,7 +240,7 @@ class SigningStrategyFactoryTest {
 
     @Test
     void deveFalharComPkcs11ProviderNulo() {
-        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(null, "alias", "pin".toCharArray()))
+        assertThatThrownBy(() -> SigningStrategyFactory.fromPkcs11(null, "alias", new char[]{ 'p' }))
                 .isInstanceOf(NullPointerException.class);
     }
 
