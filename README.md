@@ -83,7 +83,7 @@ java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
   Certificado:meu-certificado.pem
   Scope:      system/Patient.rs
   TLS:        TLSv1.3
-  Algoritmo:  RS384
+  Algoritmo:  RS256
   FHIR Base:  https://fhir.saude.go.gov.br
   Endpoint:   https://fhir.saude.go.gov.br/auth/token (descoberto via .well-known)
 
@@ -108,7 +108,7 @@ java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
 | `--scope` | Scope a solicitar (padrão: system/Patient.rs) | Não |
 | `--password` | Senha da chave privada (se criptografada) | Não |
 | `--tls` | Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: TLSv1.3) | Não |
-| `--alg` | Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: RS384) | Não |
+| `--alg` | Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: RS256) | Não |
 | `--verbose` | Mostra detalhes do token obtido | Não |
 
 ---
@@ -124,7 +124,7 @@ curl -X POST https://hub.saude.go.gov.br/auth/token \
   -d "client_id=meu-sistema" \
   -d "scope=system/Patient.rs" \
   -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
-  -d "client_assertion=eyJhbGciOiJSUzM4NCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS384"
+  -d "client_assertion=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJtZXUtc2lzdGVtYSIsInN1YiI6Im1ldS1zaXN0ZW1hIiwiYXVkIjoiaHR0cHM6Ly9odWIuc2F1ZGUuZ28uZ292LmJyL2F1dGgvdG9rZW4iLCJleHAiOjE3MDk3NDAwMDAsImlhdCI6MTcwOTczOTg4MCwianRpIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.ASSINATURA_RS256"
 ```
 
 Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
@@ -132,7 +132,7 @@ Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
 - *header* 
 ```json
 {  
-  "alg": "RS384",
+  "alg": "RS256",
   "typ": "JWT"
 }
 ```
@@ -147,7 +147,7 @@ Estrutura do JWT (`client_assertion`), ou seja, `header.payload.signature` onde:
   "jti" : "uuid"
 }
 ```
-- *signature*: RS384 (RSA + SHA-384) com chave privada ICP-Brasil
+- *signature*: RS256 (RSA + SHA-256) com chave privada
 
 **Resposta esperada:**
 
@@ -435,37 +435,40 @@ Os testes de integração utilizam o `hubsaude-simulador` automaticamente.
 
 ## Notas Técnicas
 
-### Por que RS384 (e não PS384)?
+### Algoritmo de Assinatura
 
-O algoritmo padrão é **RS384** (RSA PKCS#1 v1.5 + SHA-384) pelos seguintes motivos:
+O algoritmo padrão é **RS256** (RSA PKCS#1 v1.5 + SHA-256) por ser o mais amplamente suportado:
 
-| Critério | RS384 | PS384 (RSA-PSS) |
-|----------|-------|-----------------|
-| **SMART Backend Services** | ✅ Obrigatório | ⚠️ Opcional |
-| **ICP-Brasil (HSM)** | ✅ Universal | ⚠️ Parcial (HSMs antigos) |
-| **Interoperabilidade** | ✅ Máxima | ⚠️ Variável |
-| **Segurança** | ✅ Adequada | ✅ Superior |
+| Critério | RS256 | RS384/RS512 | PS256/PS384 |
+|----------|-------|-------------|-------------|
+| **Keycloak** | ✅ Padrão | ⚠️ Requer config | ⚠️ Requer config |
+| **SMART Backend Services** | ✅ Suportado | ✅ Suportado | ⚠️ Opcional |
+| **ICP-Brasil (HSM)** | ✅ Universal | ✅ Universal | ⚠️ Parcial |
+| **Interoperabilidade** | ✅ Máxima | ✅ Alta | ⚠️ Variável |
 
-Embora PS384 seja tecnicamente mais robusto contra ataques teóricos de padding oracle, RS384:
-- É **obrigatório** pela especificação SMART Backend Services
-- É **universalmente suportado** por HSMs e tokens ICP-Brasil
-- Oferece segurança **adequada** para o caso de uso (comunicação M2M com TLS 1.3)
+**Outros algoritmos disponíveis:**
+- **RS384/RS512**: Maior tamanho de hash, segurança levemente superior
+- **PS256/PS384/PS512**: RSA-PSS, mais robusto contra ataques teóricos
+- **ES256/ES384/ES512**: ECDSA, requer chaves EC
 
-**Se precisar usar PS384**, configure manualmente:
+Para usar um algoritmo diferente:
 
 ```java
-SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(
-        privateKey, 
-        "SHA384withRSAandMGF1"  // PS384
-);
-
 var client = SmartTokenClient.builder()
-        .signingStrategy(strategy)
+        .jwtAlgorithm("RS384")  // ou RS512, PS256, ES256, etc.
         // ...
         .build();
 ```
 
-> **Nota:** Verifique se o authorization server suporta PS384 antes de usar.
+Ou via CLI:
+
+```bash
+java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
+    --alg=RS384 \
+    # ...demais parâmetros
+```
+
+> **Nota:** Verifique se o authorization server suporta o algoritmo escolhido.
 
 ---
 
@@ -485,7 +488,7 @@ var client = SmartTokenClient.builder()
                               │
                               ▼
                     POST /auth/token
-                    (client_assertion JWT RS384)
+                    (client_assertion JWT RS256)
 ```
 
 ---

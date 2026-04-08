@@ -285,8 +285,8 @@ public final class SmartTokenClientBuilder {
      * <p>
      * Algoritmos suportados:
      * <ul>
-     *   <li><strong>RS384</strong> (padrão) — RSA PKCS#1 v1.5 + SHA-384</li>
-     *   <li><strong>RS256</strong> — RSA PKCS#1 v1.5 + SHA-256</li>
+     *   <li><strong>RS256</strong> (padrão) — RSA PKCS#1 v1.5 + SHA-256</li>
+     *   <li><strong>RS384</strong> — RSA PKCS#1 v1.5 + SHA-384</li>
      *   <li><strong>RS512</strong> — RSA PKCS#1 v1.5 + SHA-512</li>
      *   <li><strong>PS256</strong> — RSA-PSS + SHA-256</li>
      *   <li><strong>PS384</strong> — RSA-PSS + SHA-384</li>

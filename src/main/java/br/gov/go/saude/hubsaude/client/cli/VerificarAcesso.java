@@ -40,7 +40,7 @@ import java.util.Base64;
  *   <li>{@code --scope} — Scope a solicitar (opcional, padrão: system/Patient.rs)</li>
  *   <li>{@code --password} — Senha da chave privada, se criptografada (opcional)</li>
  *   <li>{@code --tls} — Protocolo TLS: TLSv1.3 ou TLSv1.2 (opcional, padrão: TLSv1.3)</li>
- *   <li>{@code --alg} — Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (opcional, padrão: RS384)</li>
+ *   <li>{@code --alg} — Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (opcional, padrão: RS256)</li>
  *   <li>{@code --verbose} — Mostra detalhes do token obtido</li>
  * </ul>
  */
@@ -49,7 +49,7 @@ public final class VerificarAcesso {
     private static final String DEFAULT_FHIR_BASE = "https://fhir.saude.go.gov.br";
     private static final String DEFAULT_SCOPE = "system/Patient.rs";
     private static final String DEFAULT_TLS = "TLSv1.3";
-    private static final String DEFAULT_ALG = "RS384";
+    private static final String DEFAULT_ALG = "RS256";
 
     private static final String ANSI_GREEN = "\u001B[32m";
     private static final String ANSI_RED = "\u001B[31m";

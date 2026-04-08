@@ -44,8 +44,8 @@ import java.util.Objects;
  */
 public final class PrivateKeySigningStrategy implements SigningStrategy {
 
-    /** Algoritmo padrão para SMART Backend Services (RS384). */
-    public static final String DEFAULT_ALGORITHM = "SHA384withRSA";
+    /** Algoritmo padrão (RS256). */
+    public static final String DEFAULT_ALGORITHM = "SHA256withRSA";
 
     private final PrivateKey privateKey;
     private final Provider provider;

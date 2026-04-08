@@ -43,7 +43,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Abstrai toda a complexidade de:
  * <ul>
  * <li>Leitura da chave privada PEM</li>
- * <li>Montagem do {@code client_assertion} JWT (assinado com RS384)</li>
+ * <li>Montagem do {@code client_assertion} JWT (assinado com RS256 por padrão)</li>
  * <li>Comunicação HTTP com o endpoint {@code /auth/token}</li>
  * </ul>
  *
@@ -302,8 +302,8 @@ public final class SmartTokenClient {
     /** Protocolo TLS padrão. */
     public static final String DEFAULT_TLS_PROTOCOL = SslContextFactory.DEFAULT_TLS_PROTOCOL;
 
-    /** Algoritmo JWT padrão para SMART Backend Services. */
-    public static final String DEFAULT_JWT_ALGORITHM = "RS384";
+    /** Algoritmo JWT padrão. */
+    public static final String DEFAULT_JWT_ALGORITHM = "RS256";
 
     /** Encoder Base64 URL-safe sem padding. */
     private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();

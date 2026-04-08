@@ -44,7 +44,7 @@ public interface SigningStrategy {
      * <p>
      * A implementação é responsável por garantir que o algoritmo de assinatura
      * seja apropriado para o caso de uso. Para SMART Backend Services, o algoritmo
-     * esperado é {@code SHA384withRSA} (RS384).
+     * esperado é {@code SHA256withRSA} (RS256).
      * </p>
      *
      * @param data bytes a serem assinados (tipicamente o header.payload do JWT)
