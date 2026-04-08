@@ -83,7 +83,9 @@ java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
   Certificado:meu-certificado.pem
   Scope:      system/Patient.rs
   TLS:        TLSv1.3
-  FHIR Base:  https://fhir.saude.go.gov.br (descoberta automática)
+  Algoritmo:  RS384
+  FHIR Base:  https://fhir.saude.go.gov.br
+  Endpoint:   https://fhir.saude.go.gov.br/auth/token (descoberto via .well-known)
 
 ℹ Obtendo token de acesso...
 ✓ Token obtido com sucesso!
@@ -106,6 +108,7 @@ java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
 | `--scope` | Scope a solicitar (padrão: system/Patient.rs) | Não |
 | `--password` | Senha da chave privada (se criptografada) | Não |
 | `--tls` | Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: TLSv1.3) | Não |
+| `--alg` | Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: RS384) | Não |
 | `--verbose` | Mostra detalhes do token obtido | Não |
 
 ---

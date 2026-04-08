@@ -75,6 +75,7 @@ public final class SmartTokenClientBuilder {
     private String clientKeyAlias;
     private char[] clientKeyPassword;
     private String tlsProtocol = SslContextFactory.DEFAULT_TLS_PROTOCOL;
+    private String jwtAlgorithm = SmartTokenClient.DEFAULT_JWT_ALGORITHM;
     private FaultToleranceConfig faultToleranceConfig = new FaultToleranceConfig(
         SmartTokenClient.DEFAULT_CONNECT_TIMEOUT,
         SmartTokenClient.DEFAULT_REQUEST_TIMEOUT,
@@ -279,6 +280,39 @@ public final class SmartTokenClientBuilder {
     }
 
     /**
+     * Define o algoritmo JWT para assinatura do client_assertion.
+     *
+     * <p>
+     * Algoritmos suportados:
+     * <ul>
+     *   <li><strong>RS384</strong> (padrão) — RSA PKCS#1 v1.5 + SHA-384</li>
+     *   <li><strong>RS256</strong> — RSA PKCS#1 v1.5 + SHA-256</li>
+     *   <li><strong>RS512</strong> — RSA PKCS#1 v1.5 + SHA-512</li>
+     *   <li><strong>PS256</strong> — RSA-PSS + SHA-256</li>
+     *   <li><strong>PS384</strong> — RSA-PSS + SHA-384</li>
+     *   <li><strong>PS512</strong> — RSA-PSS + SHA-512</li>
+     *   <li><strong>ES256</strong> — ECDSA + SHA-256 (P-256)</li>
+     *   <li><strong>ES384</strong> — ECDSA + SHA-384 (P-384)</li>
+     *   <li><strong>ES512</strong> — ECDSA + SHA-512 (P-521)</li>
+     * </ul>
+     * </p>
+     *
+     * <p>
+     * <strong>Nota:</strong> O algoritmo configurado aqui define apenas o valor
+     * do campo {@code alg} no header do JWT. A {@link SigningStrategy} deve ser
+     * compatível com o algoritmo escolhido. Se usar chave RSA com algoritmo ES*,
+     * a assinatura falhará.
+     * </p>
+     *
+     * @param jwtAlgorithm nome do algoritmo JWT (ex: RS384, RS256)
+     * @return este builder
+     */
+    public SmartTokenClientBuilder jwtAlgorithm(final String jwtAlgorithm) {
+        this.jwtAlgorithm = jwtAlgorithm;
+        return this;
+    }
+
+    /**
      * Define um {@link SSLContext} customizado, substituindo o comportamento
      * padrão de {@link #serverTrustAnchor(Path)}.
      *
@@ -416,7 +450,9 @@ public final class SmartTokenClientBuilder {
             clientKey = null;
         } else if (privateKeyPem != null) {
             clientKey = PemLoader.loadPrivateKey(privateKeyPem, privateKeyPassword);
-            effectiveStrategy = SigningStrategyFactory.fromPrivateKey(clientKey);
+            // Converte algoritmo JWT para algoritmo Java e cria a estratégia
+            final String javaAlgorithm = SigningStrategyFactory.jwtAlgorithmToJava(jwtAlgorithm);
+            effectiveStrategy = SigningStrategyFactory.fromPrivateKey(clientKey, javaAlgorithm);
         } else {
             throw new IllegalStateException(
                     "É obrigatório definir signingStrategy ou privateKeyPem");
@@ -476,7 +512,8 @@ public final class SmartTokenClientBuilder {
                 effectiveSslContext,
                 faultToleranceConfig,
                 enableTokenCache,
-                tokenCacheMarginSeconds);
+                tokenCacheMarginSeconds,
+                jwtAlgorithm);
     }
 
     /**

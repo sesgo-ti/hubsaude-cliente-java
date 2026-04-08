@@ -302,8 +302,8 @@ public final class SmartTokenClient {
     /** Protocolo TLS padrão. */
     public static final String DEFAULT_TLS_PROTOCOL = SslContextFactory.DEFAULT_TLS_PROTOCOL;
 
-    /** Header JWT para RS384. */
-    private static final String JWT_HEADER_RS384 = "{\"alg\":\"RS384\",\"typ\":\"JWT\"}";
+    /** Algoritmo JWT padrão para SMART Backend Services. */
+    public static final String DEFAULT_JWT_ALGORITHM = "RS384";
 
     /** Encoder Base64 URL-safe sem padding. */
     private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
@@ -315,6 +315,7 @@ public final class SmartTokenClient {
     private final FaultToleranceConfig faultToleranceConfig;
     private final boolean enableTokenCache;
     private final int tokenCacheMarginSeconds;
+    private final String jwtAlgorithm;
 
     /** Cache de tokens por scope. */
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
@@ -443,7 +444,8 @@ public final class SmartTokenClient {
         SSLContext sslContext,
         FaultToleranceConfig faultToleranceConfig,
         boolean enableTokenCache,
-        int tokenCacheMarginSeconds
+        int tokenCacheMarginSeconds,
+        String jwtAlgorithm
     ) {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
@@ -454,12 +456,30 @@ public final class SmartTokenClient {
         this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
                 ? tokenCacheMarginSeconds
                 : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+        this.jwtAlgorithm = jwtAlgorithm != null ? jwtAlgorithm : DEFAULT_JWT_ALGORITHM;
         this.httpClient = HttpClient.newBuilder()
                 .sslContext(context)
                 .connectTimeout(faultToleranceConfig.connectTimeout())
                 .build();
-        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={}",
-                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries());
+        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={} alg={}",
+                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries(), this.jwtAlgorithm);
+    }
+
+    /**
+     * Construtor de compatibilidade (sem jwtAlgorithm).
+     */
+    public SmartTokenClient(
+        String tokenEndpoint,
+        String clientId,
+        SigningStrategy signingStrategy,
+        X509Certificate certificate,
+        SSLContext sslContext,
+        FaultToleranceConfig faultToleranceConfig,
+        boolean enableTokenCache,
+        int tokenCacheMarginSeconds
+    ) {
+        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
+                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds, DEFAULT_JWT_ALGORITHM);
     }
 
     /**
@@ -547,6 +567,29 @@ public final class SmartTokenClient {
         LOG.debug("Cache invalidado para clientId={} scope={}", clientId, normalizedScope);
     }
 
+    /**
+     * Retorna a URL do token endpoint configurado.
+     *
+     * <p>
+     * Útil para diagnóstico, especialmente quando o endpoint foi
+     * descoberto automaticamente via {@code .well-known/smart-configuration}.
+     * </p>
+     *
+     * @return URL do token endpoint
+     */
+    public String getTokenEndpoint() {
+        return tokenEndpoint;
+    }
+
+    /**
+     * Retorna o algoritmo JWT configurado para assinatura do client_assertion.
+     *
+     * @return nome do algoritmo JWT (ex: RS384, RS256)
+     */
+    public String getJwtAlgorithm() {
+        return jwtAlgorithm;
+    }
+
     private String obtainTokenWithRetry(final String scope) throws IOException, InterruptedException {
         LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
 
@@ -572,7 +615,7 @@ public final class SmartTokenClient {
 
     private String doObtainToken(final String scope) throws IOException, InterruptedException {
         final String assertion = buildClientAssertion();
-        final String body = buildFormBody(assertion, scope);
+        final String body = buildFormBody(clientId, assertion, scope);
 
         final HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(tokenEndpoint))
@@ -611,7 +654,7 @@ public final class SmartTokenClient {
     }
 
     /**
-     * Constrói o JWT client_assertion assinado com RS384.
+     * Constrói o JWT client_assertion assinado com o algoritmo configurado.
      *
      * @return JWT compacto pronto para uso no campo client_assertion
      */
@@ -621,7 +664,7 @@ public final class SmartTokenClient {
         final long iat = now.getEpochSecond();
         final long exp = now.plusSeconds(faultToleranceConfig.assertionTtlSeconds()).getEpochSecond();
         final String jti = UUID.randomUUID().toString();
-        LOG.trace("Construindo client_assertion ttl={}s", faultToleranceConfig.assertionTtlSeconds());
+        LOG.trace("Construindo client_assertion ttl={}s alg={}", faultToleranceConfig.assertionTtlSeconds(), jwtAlgorithm);
 
         // Constrói o payload JSON usando ObjectMapper para escape correto e seguro
         final Map<String, Object> claims = new LinkedHashMap<>();
@@ -639,9 +682,12 @@ public final class SmartTokenClient {
             throw new SmartTokenException("Falha ao serializar payload do JWT", e);
         }
 
+        // Constrói o header JWT dinamicamente com o algoritmo configurado
+        final String jwtHeader = "{\"alg\":\"" + jwtAlgorithm + "\",\"typ\":\"JWT\"}";
+
         // Codifica header e payload em Base64Url
         final String headerB64 = BASE64_URL_ENCODER.encodeToString(
-                JWT_HEADER_RS384.getBytes(StandardCharsets.UTF_8));
+                jwtHeader.getBytes(StandardCharsets.UTF_8));
         final String payloadB64 = BASE64_URL_ENCODER.encodeToString(
                 payload.getBytes(StandardCharsets.UTF_8));
 
@@ -657,15 +703,23 @@ public final class SmartTokenClient {
 
     /**
      * Monta o payload {@code application/x-www-form-urlencoded} exigido pelo
-     * endpoint {@code /auth/token}, incluindo {@code client_assertion} e scopes.
+     * endpoint {@code /auth/token}, incluindo {@code client_id}, {@code client_assertion} e scopes.
      *
+     * <p>
+     * O parâmetro {@code client_id} é incluído no corpo da requisição para
+     * compatibilidade com servidores OAuth2/OIDC como Keycloak, que exigem
+     * esse parâmetro além do JWT assertion.
+     * </p>
+     *
+     * @param clientId  identificador do cliente
      * @param assertion JWT assinado que comprova a identidade do cliente
      * @param scope     escopos solicitados, separados por espaço (opcional)
      * @return string pronta para envio no corpo da requisição HTTP
      */
-    public static String buildFormBody(final String assertion, final String scope) {
+    public static String buildFormBody(final String clientId, final String assertion, final String scope) {
         final StringBuilder sb = new StringBuilder(FORM_BODY_INITIAL_CAPACITY)
                 .append("grant_type=").append(encode(GRANT_TYPE))
+                .append("&client_id=").append(encode(clientId))
                 .append("&client_assertion_type=").append(encode(ASSERTION_TYPE))
                 .append("&client_assertion=").append(encode(assertion));
         if (scope != null && !scope.isBlank()) {

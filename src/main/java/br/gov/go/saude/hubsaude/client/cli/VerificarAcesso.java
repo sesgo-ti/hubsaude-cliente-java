@@ -40,6 +40,7 @@ import java.util.Base64;
  *   <li>{@code --scope} — Scope a solicitar (opcional, padrão: system/Patient.rs)</li>
  *   <li>{@code --password} — Senha da chave privada, se criptografada (opcional)</li>
  *   <li>{@code --tls} — Protocolo TLS: TLSv1.3 ou TLSv1.2 (opcional, padrão: TLSv1.3)</li>
+ *   <li>{@code --alg} — Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (opcional, padrão: RS384)</li>
  *   <li>{@code --verbose} — Mostra detalhes do token obtido</li>
  * </ul>
  */
@@ -48,6 +49,7 @@ public final class VerificarAcesso {
     private static final String DEFAULT_FHIR_BASE = "https://fhir.saude.go.gov.br";
     private static final String DEFAULT_SCOPE = "system/Patient.rs";
     private static final String DEFAULT_TLS = "TLSv1.3";
+    private static final String DEFAULT_ALG = "RS384";
 
     private static final String ANSI_GREEN = "\u001B[32m";
     private static final String ANSI_RED = "\u001B[31m";
@@ -88,25 +90,9 @@ public final class VerificarAcesso {
     }
 
     private static void verificarAcesso(final Config config) throws Exception {
-        printInfo("Configuração:");
-        System.out.println("  Client ID:  " + config.clientId);
-        System.out.println("  Chave:      " + config.keyPath);
-        System.out.println("  Certificado:" + config.certPath);
-        System.out.println("  Scope:      " + config.scope);
-        System.out.println("  TLS:        " + config.tlsProtocol);
-        if (config.tokenEndpoint != null) {
-            System.out.println("  Endpoint:   " + config.tokenEndpoint);
-        } else {
-            System.out.println("  FHIR Base:  " + config.fhirBase + " (descoberta automática)");
-        }
-        System.out.println();
-
-        // Validar arquivos
+        // Validar arquivos primeiro
         validateFile(config.keyPath, "Chave privada");
         validateFile(config.certPath, "Certificado");
-
-        printInfo("Obtendo token de acesso...");
-        final Instant start = Instant.now();
 
         // Construir cliente
         final SmartTokenClientBuilder builder = SmartTokenClient.builder()
@@ -114,13 +100,15 @@ public final class VerificarAcesso {
                 .privateKeyPem(Path.of(config.keyPath))
                 .certificatePem(Path.of(config.certPath))
                 .tlsProtocol(config.tlsProtocol)
+                .jwtAlgorithm(config.jwtAlgorithm)
                 .connectTimeout(Duration.ofSeconds(30))
                 .requestTimeout(Duration.ofSeconds(60));
 
-        if (config.tokenEndpoint != null) {
-            builder.tokenEndpoint(config.tokenEndpoint);
-        } else {
+        final boolean usandoDescoberta = config.tokenEndpoint == null;
+        if (usandoDescoberta) {
             builder.fhirBase(config.fhirBase);
+        } else {
+            builder.tokenEndpoint(config.tokenEndpoint);
         }
 
         if (config.keyPassword != null) {
@@ -128,6 +116,26 @@ public final class VerificarAcesso {
         }
 
         final SmartTokenClient client = builder.build();
+
+        // Exibir configuração com o endpoint efetivamente usado
+        printInfo("Configuração:");
+        System.out.println("  Client ID:  " + config.clientId);
+        System.out.println("  Chave:      " + config.keyPath);
+        System.out.println("  Certificado:" + config.certPath);
+        System.out.println("  Scope:      " + config.scope);
+        System.out.println("  TLS:        " + config.tlsProtocol);
+        System.out.println("  Algoritmo:  " + client.getJwtAlgorithm());
+        if (usandoDescoberta) {
+            System.out.println("  FHIR Base:  " + config.fhirBase);
+            System.out.println("  Endpoint:   " + client.getTokenEndpoint() + " (descoberto via .well-known)");
+        } else {
+            System.out.println("  Endpoint:   " + client.getTokenEndpoint());
+        }
+        System.out.println();
+
+        printInfo("Obtendo token de acesso...");
+        final Instant start = Instant.now();
+
         final String token = client.obtainToken(config.scope);
 
         final Duration elapsed = Duration.between(start, Instant.now());
@@ -217,6 +225,8 @@ public final class VerificarAcesso {
             config.keyPassword = extractValue(arg, "--password=").toCharArray();
         } else if (arg.startsWith("--tls=")) {
             config.tlsProtocol = extractValue(arg, "--tls=");
+        } else if (arg.startsWith("--alg=")) {
+            config.jwtAlgorithm = extractValue(arg, "--alg=").toUpperCase(java.util.Locale.ROOT);
         } else if ("--verbose".equals(arg) || "-v".equals(arg)) {
             config.verbose = true;
         } else if (!"--help".equals(arg) && !"-h".equals(arg)) {
@@ -300,6 +310,7 @@ public final class VerificarAcesso {
         System.out.println("  --scope=<SCOPE>       Scope a solicitar (padrão: " + DEFAULT_SCOPE + ")");
         System.out.println("  --password=<SENHA>    Senha da chave privada (se criptografada)");
         System.out.println("  --tls=<VERSAO>        Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: " + DEFAULT_TLS + ")");
+        System.out.println("  --alg=<ALG>           Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: " + DEFAULT_ALG + ")");
         System.out.println("  --verbose, -v         Mostra detalhes do token obtido");
         System.out.println("  --help, -h            Exibe esta mensagem");
         System.out.println();
@@ -311,12 +322,13 @@ public final class VerificarAcesso {
         System.out.println("      --key=minha-chave.pem \\");
         System.out.println("      --cert=meu-certificado.pem");
         System.out.println();
-        System.out.println("  # Com endpoint explícito e TLS 1.2");
+        System.out.println("  # Com endpoint explícito, TLS 1.2 e algoritmo RS256");
         System.out.println("  java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \\");
         System.out.println("      --client-id=hs-12345678 \\");
         System.out.println("      --key=minha-chave.pem \\");
         System.out.println("      --cert=meu-certificado.pem \\");
         System.out.println("      --endpoint=https://fhir.saude.go.gov.br/auth/token \\");
+        System.out.println("      --alg=RS256 \\");
         System.out.println("      --tls=TLSv1.2 \\");
         System.out.println("      --verbose");
         System.out.println();
@@ -350,6 +362,7 @@ public final class VerificarAcesso {
         String scope = DEFAULT_SCOPE;
         char[] keyPassword;
         String tlsProtocol = DEFAULT_TLS;
+        String jwtAlgorithm = DEFAULT_ALG;
         boolean verbose;
     }
 }

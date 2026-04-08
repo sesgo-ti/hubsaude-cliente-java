@@ -250,4 +250,46 @@ public final class SigningStrategyFactory {
             throw new SmartTokenException("Falha ao configurar provider PKCS#11: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Converte um algoritmo JWT (JWA) para o nome do algoritmo de assinatura Java (JCA).
+     *
+     * <h3>Mapeamentos Suportados</h3>
+     * <table>
+     *   <tr><th>JWT (JWA)</th><th>Java (JCA)</th><th>Descrição</th></tr>
+     *   <tr><td>RS256</td><td>SHA256withRSA</td><td>RSA PKCS#1 v1.5 + SHA-256</td></tr>
+     *   <tr><td>RS384</td><td>SHA384withRSA</td><td>RSA PKCS#1 v1.5 + SHA-384</td></tr>
+     *   <tr><td>RS512</td><td>SHA512withRSA</td><td>RSA PKCS#1 v1.5 + SHA-512</td></tr>
+     *   <tr><td>PS256</td><td>SHA256withRSAandMGF1</td><td>RSA-PSS + SHA-256</td></tr>
+     *   <tr><td>PS384</td><td>SHA384withRSAandMGF1</td><td>RSA-PSS + SHA-384</td></tr>
+     *   <tr><td>PS512</td><td>SHA512withRSAandMGF1</td><td>RSA-PSS + SHA-512</td></tr>
+     *   <tr><td>ES256</td><td>SHA256withECDSA</td><td>ECDSA P-256 + SHA-256</td></tr>
+     *   <tr><td>ES384</td><td>SHA384withECDSA</td><td>ECDSA P-384 + SHA-384</td></tr>
+     *   <tr><td>ES512</td><td>SHA512withECDSA</td><td>ECDSA P-521 + SHA-512</td></tr>
+     * </table>
+     *
+     * @param jwtAlgorithm algoritmo no formato JWT/JWA (ex: RS256, RS384, PS256)
+     * @return algoritmo no formato Java/JCA (ex: SHA256withRSA, SHA384withRSA)
+     * @throws SmartTokenException se o algoritmo não for reconhecido
+     */
+    public static String jwtAlgorithmToJava(final String jwtAlgorithm) {
+        Objects.requireNonNull(jwtAlgorithm, "jwtAlgorithm não pode ser null");
+        return switch (jwtAlgorithm.toUpperCase(java.util.Locale.ROOT)) {
+            // RSA PKCS#1 v1.5
+            case "RS256" -> "SHA256withRSA";
+            case "RS384" -> "SHA384withRSA";
+            case "RS512" -> "SHA512withRSA";
+            // RSA-PSS
+            case "PS256" -> "SHA256withRSAandMGF1";
+            case "PS384" -> "SHA384withRSAandMGF1";
+            case "PS512" -> "SHA512withRSAandMGF1";
+            // ECDSA
+            case "ES256" -> "SHA256withECDSA";
+            case "ES384" -> "SHA384withECDSA";
+            case "ES512" -> "SHA512withECDSA";
+            default -> throw new SmartTokenException(
+                    "Algoritmo JWT não suportado: " + jwtAlgorithm
+                            + ". Algoritmos válidos: RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512");
+        };
+    }
 }
