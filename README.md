@@ -23,7 +23,9 @@ O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMA
 
 ## Inicio rápido
 
-Gere um par de chaves e um certificado autoassinado para desenvolvimento e testes locais com o `hubsaude-simulador`:
+Siga os passos abaixo para testar a biblioteca localmente com o `hubsaude-simulador`.
+
+### 1. Gerar par de chaves e certificado do cliente
 
 ```bash
 # Gerar par de chaves RSA 2048-bit
@@ -31,22 +33,55 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out test-key.pem
 
 # Gerar certificado autoassinado (válido por 365 dias)
 openssl req -new -x509 -key test-key.pem -out test-cert.pem -days 365 \
-    -subj "/CN=teste-local/O=Desenvolvimento/C=BR"
+    -subj "/CN=meu-sistema/O=Desenvolvimento/C=BR"
 
 # (Opcional) Verificar arquivos gerados
 openssl rsa -in test-key.pem -check -noout
 openssl x509 -in test-cert.pem -text -noout | head -20
 ```
 
+### 2. Iniciar o simulador
+
+```bash
+java -jar hubsaude-simulador.jar
+```
+
+O simulador estará disponível em `https://localhost:8443`.
+
+### 3. Extrair o certificado do simulador
+
 Como o simulador usa certificado autoassinado, é necessário extraí-lo para que o cliente confie na conexão TLS:
 
 ```bash
-# Inicie o simulador primeiro: java -jar hubsaude-simulador.jar
-# Em outro terminal, extraia o certificado SSL do simulador:
+# Em outro terminal (com o simulador rodando):
 openssl s_client -connect localhost:8443 < /dev/null 2>/dev/null | openssl x509 > simulador-server.pem
 ```
 
-Com os três arquivos (`test-key.pem`, `test-cert.pem` e `simulador-server.pem`), o cliente pode ser usado conforme ilustrado abaixo.
+### 4. Registrar o cliente no simulador
+
+O simulador exige que o cliente seja registrado antes de solicitar tokens. Registre o certificado público do cliente via API:
+
+```bash
+# Registrar o cliente com seu certificado e scopes permitidos
+curl -k -X POST https://localhost:8443/clients/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "meu-sistema",
+    "certificate": "'"$(awk '{printf "%s\\n", $0}' test-cert.pem)"'",
+    "allowed_scopes": "system/Patient.rs system/Observation.rs"
+  }'
+```
+
+> **Nota:** O `-k` ignora a validação do certificado do servidor apenas para o registro. Alternativamente, use `--cacert simulador-server.pem`.
+
+**Resposta esperada:**
+```json
+{"status":"registered","client_id":"meu-sistema"}
+```
+
+### 5. Obter token de acesso
+
+Com os arquivos `test-key.pem`, `test-cert.pem` e `simulador-server.pem`, o cliente pode ser usado:
 
 ```java
 var client = SmartTokenClient.builder()
@@ -58,9 +93,18 @@ var client = SmartTokenClient.builder()
         .build();
 
 String token = client.obtainToken("system/Patient.rs");
+System.out.println("Token obtido: " + token);
 ```
 
-> **Nota:** O método `serverTrustAnchor` é necessário apenas para o acesso simulador local, que usa certificado autoassinado. Nos ambientes de homologação e produção do HubSaúde, os certificados são emitidos por autoridade certificadora confiável, já presente no trust store padrão da JVM — portanto essa chamada deve ser omitida.
+### Resumo dos arquivos
+
+| Arquivo | Descrição | Compartilhar? |
+|---------|-----------|---------------|
+| `test-key.pem` | Chave privada do cliente (assina JWT) | ❌ **Nunca** |
+| `test-cert.pem` | Certificado público do cliente | ✅ Registrar no servidor |
+| `simulador-server.pem` | Certificado do simulador (trust anchor) | N/A (apenas para testes locais) |
+
+> **Nota:** O método `serverTrustAnchor` é necessário apenas para o simulador local, que usa certificado autoassinado. Nos ambientes de homologação e produção do HubSaúde, os certificados são emitidos por autoridade certificadora confiável, já presente no trust store padrão da JVM — portanto essa chamada deve ser omitida.
 
 ---
 
