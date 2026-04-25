@@ -19,9 +19,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Builder para construção de instâncias de {@link SmartTokenClient}.
@@ -554,8 +555,9 @@ public final class SmartTokenClientBuilder {
                                 + SmartTokenClient.sanitizeErrorResponse(response.body()));
             }
 
-            final ObjectMapper mapper = new ObjectMapper()
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            final ObjectMapper mapper = JsonMapper.builder()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                    .build();
             final JsonNode node = mapper.readTree(response.body());
 
             if (!node.has("token_endpoint")) {

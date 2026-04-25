@@ -30,10 +30,11 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import javax.net.ssl.SSLContext;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Classe de conveniência para obtenção de access tokens 
@@ -269,8 +270,9 @@ public final class SmartTokenClient {
     private static final long RETRY_BASE_DELAY_MS = 1000L;
 
     /** ObjectMapper compartilhado (thread-safe) com configuração de segurança. */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .build();
 
     /** Código HTTP: Rate Limit Exceeded. */
     private static final int HTTP_TOO_MANY_REQUESTS = 429;
@@ -678,7 +680,7 @@ public final class SmartTokenClient {
         final String payload;
         try {
             payload = OBJECT_MAPPER.writeValueAsString(claims);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new SmartTokenException("Falha ao serializar payload do JWT", e);
         }
 
