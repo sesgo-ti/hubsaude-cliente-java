@@ -5,20 +5,21 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Objects;
+
 import javax.net.ssl.SSLContext;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;

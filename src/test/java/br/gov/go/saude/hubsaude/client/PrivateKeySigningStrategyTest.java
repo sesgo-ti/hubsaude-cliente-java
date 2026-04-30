@@ -5,8 +5,8 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -15,8 +15,8 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 /**
  * Testes unitários para {@link PrivateKeySigningStrategy}.

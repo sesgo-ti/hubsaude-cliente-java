@@ -73,4 +73,3 @@ public record FaultToleranceConfig(Duration connectTimeout, Duration requestTime
     }
 }
 
-

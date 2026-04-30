@@ -5,13 +5,9 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import javax.net.ssl.SSLContext;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -27,8 +23,13 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import javax.net.ssl.SSLContext;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Classe base abstrata para testes de integração do SmartTokenClient.

@@ -5,9 +5,6 @@
 
 package br.gov.go.saude.hubsaude.client.cli;
 
-import br.gov.go.saude.hubsaude.client.SmartTokenClient;
-import br.gov.go.saude.hubsaude.client.SmartTokenClientBuilder;
-
 import java.io.Console;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,6 +12,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+
+import br.gov.go.saude.hubsaude.client.SmartTokenClient;
+import br.gov.go.saude.hubsaude.client.SmartTokenClientBuilder;
 
 /**
  * Ferramenta de linha de comando para verificar acesso ao HubSaúde após credenciamento.
@@ -376,4 +376,3 @@ public final class VerificarAcesso {
         boolean verbose;
     }
 }
-

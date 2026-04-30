@@ -5,13 +5,8 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import br.gov.go.saude.hubsaude.client.FaultToleranceConfig;
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,10 +17,16 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
+
 import javax.net.ssl.SSLContext;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import br.gov.go.saude.hubsaude.client.FaultToleranceConfig;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 
 /**
  * Testes unitários do SmartTokenClient.

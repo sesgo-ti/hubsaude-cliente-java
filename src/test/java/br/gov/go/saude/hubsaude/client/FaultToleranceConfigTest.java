@@ -5,14 +5,14 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Testes unitários para {@link FaultToleranceConfig}.
@@ -177,5 +177,4 @@ class FaultToleranceConfigTest {
         assertThat(Duration.ofSeconds(30)).isEqualTo(SmartTokenClient.DEFAULT_REQUEST_TIMEOUT);
     }
 }
-
 

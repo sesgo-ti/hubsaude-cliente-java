@@ -5,14 +5,15 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Fábrica de {@link SSLContext} para uso exclusivo em testes.
@@ -91,4 +92,3 @@ public final class TestSslContextFactory {
         }
     }
 }
-

@@ -5,9 +5,9 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Testes unitários para {@link SigningException}.

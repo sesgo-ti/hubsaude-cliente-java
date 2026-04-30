@@ -5,13 +5,13 @@
 
 package br.gov.go.saude.hubsaude.client;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Signature;
 import java.util.Objects;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Implementação de {@link SigningStrategy} baseada em {@link PrivateKey}.
