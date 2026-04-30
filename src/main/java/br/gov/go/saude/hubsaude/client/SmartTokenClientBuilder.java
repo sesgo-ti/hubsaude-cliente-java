@@ -59,8 +59,8 @@ import tools.jackson.databind.json.JsonMapper;
  * @see SigningStrategy
  * @see SslContextFactory
  */
-@SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields" }) // Padrão Builder usa nomes iguais e tem muitos
-                                                                     // campos
+// Padrão Builder usa nomes iguais e tem muitos campos
+@SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields" })
 public final class SmartTokenClientBuilder {
 
     private String tokenEndpoint;
@@ -165,7 +165,8 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Não copiar char[] minimiza exposição de senha em memória")
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "Não copiar char[] minimiza exposição de senha em memória")
     public SmartTokenClientBuilder privateKeyPassword(final char[] password) {
         this.privateKeyPassword = password;
         return this;
@@ -225,7 +226,7 @@ public final class SmartTokenClientBuilder {
      */
     @SuppressWarnings("PMD.UseVarargs")
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-            justification = "KeyStore não é clonável; char[] de senha não é copiado para minimizar exposição em memória")
+            justification = "KeyStore não é clonável; char[] de senha não copiado para minimizar exposição")
     public SmartTokenClientBuilder clientKeyStore(
             final KeyStore keyStore,
             final String keyAlias,

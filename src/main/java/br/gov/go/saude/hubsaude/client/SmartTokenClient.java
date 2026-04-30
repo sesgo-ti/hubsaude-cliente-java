@@ -39,7 +39,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Classe de conveniência para obtenção de access tokens 
+ * Classe de conveniência para obtenção de access tokens
  * SMART Backend Services.
  *
  * <p>
@@ -68,7 +68,7 @@ import tools.jackson.databind.json.JsonMapper;
  * }</pre>
  *
  * <h2>Uso avançado com Builder:</h2>
- * 
+ *
  * <pre>{@code
  * var tokenClient = SmartTokenClient.builder()
  *         .tokenEndpoint("https://localhost:8443/auth/token")
@@ -232,7 +232,7 @@ import tools.jackson.databind.json.JsonMapper;
  * </p>
  *
  * <pre>{@code
- * @Service
+ * {@literal @Service}
  * public class TokenService {
  *     private final SmartTokenClient tokenClient;
  *     private final CircuitBreaker circuitBreaker;
@@ -261,6 +261,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
 @SuppressWarnings("PMD.CouplingBetweenObjects")
+@SuppressWarnings("checkstyle:DeclarationOrder") // grouping by logical role over access modifier
 public final class SmartTokenClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
@@ -282,12 +283,6 @@ public final class SmartTokenClient {
     /** Código HTTP: OK. */
     private static final int HTTP_OK = 200;
 
-    /** Tamanho inicial do StringBuilder para form body. */
-    private static final int FORM_BODY_INITIAL_CAPACITY = 128;
-
-    /** Limite máximo para sanitização de respostas de erro. */
-    private static final int MAX_ERROR_RESPONSE_LENGTH = 500;
-
     /** TTL padrão do client_assertion em segundos. */
     public static final int DEFAULT_ASSERTION_TTL_SECONDS = 60;
 
@@ -308,6 +303,12 @@ public final class SmartTokenClient {
 
     /** Algoritmo JWT padrão. */
     public static final String DEFAULT_JWT_ALGORITHM = "RS256";
+
+    /** Tamanho inicial do StringBuilder para form body. */
+    private static final int FORM_BODY_INITIAL_CAPACITY = 128;
+
+    /** Limite máximo para sanitização de respostas de erro. */
+    private static final int MAX_ERROR_RESPONSE_LENGTH = 500;
 
     /** Encoder Base64 URL-safe sem padding. */
     private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
@@ -425,21 +426,26 @@ public final class SmartTokenClient {
         this(tokenEndpoint, clientId,
                 createValidatedSigningStrategy(privateKey, certificate),
                 certificate, sslContext,
-                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
+                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT,
+                        DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
                 true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
     }
 
-    /**
-     * Cria SigningStrategy validando a consistência entre chave e certificado.
-     */
-    private static SigningStrategy createValidatedSigningStrategy(
-            final PrivateKey privateKey,
-            final X509Certificate certificate) {
-        verifyKeyPairConsistency(privateKey, certificate);
-        return SigningStrategyFactory.fromPrivateKey(privateKey);
-    }
-
     // === Construtor principal ===
+    /**
+     * Construtor principal de baixo nível.
+     *
+     * @param tokenEndpoint           URL do endpoint /auth/token
+     * @param clientId                identificador do cliente
+     * @param signingStrategy         estratégia de assinatura JWT
+     * @param certificate             certificado X.509 do cliente
+     * @param sslContext              contexto SSL para o {@link HttpClient}
+     * @param faultToleranceConfig    configuração de resiliência
+     * @param enableTokenCache        se {@code true}, habilita cache de tokens
+     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
+     * @param jwtAlgorithm            algoritmo JWT (ex: RS256, ES256)
+     */
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public SmartTokenClient(
         String tokenEndpoint,
         String clientId,
@@ -471,7 +477,17 @@ public final class SmartTokenClient {
 
     /**
      * Construtor de compatibilidade (sem jwtAlgorithm).
+     *
+     * @param tokenEndpoint           URL do endpoint /auth/token
+     * @param clientId                identificador do cliente
+     * @param signingStrategy         estratégia de assinatura JWT
+     * @param certificate             certificado X.509 do cliente
+     * @param sslContext              contexto SSL para o {@link HttpClient}
+     * @param faultToleranceConfig    configuração de resiliência
+     * @param enableTokenCache        se {@code true}, habilita cache de tokens
+     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
      */
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public SmartTokenClient(
         String tokenEndpoint,
         String clientId,
@@ -484,6 +500,16 @@ public final class SmartTokenClient {
     ) {
         this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
                 faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds, DEFAULT_JWT_ALGORITHM);
+    }
+
+    /**
+     * Cria SigningStrategy validando a consistência entre chave e certificado.
+     */
+    private static SigningStrategy createValidatedSigningStrategy(
+            final PrivateKey privateKey,
+            final X509Certificate certificate) {
+        verifyKeyPairConsistency(privateKey, certificate);
+        return SigningStrategyFactory.fromPrivateKey(privateKey);
     }
 
     /**
@@ -609,12 +635,14 @@ public final class SmartTokenClient {
                             attempt, faultToleranceConfig.maxRetries(), clientId, ex.getMessage(), delayMs);
                     Thread.sleep(delayMs);
                 } else {
-                    LOG.error("Todas as {} tentativas falharam para clientId={}", faultToleranceConfig.maxRetries(), clientId);
+                    LOG.error("Todas as {} tentativas falharam para clientId={}",
+                            faultToleranceConfig.maxRetries(), clientId);
                 }
             }
         }
         throw new SmartTokenException(
-                "Falha após " + faultToleranceConfig.maxRetries() + " tentativas: " + lastException.getMessage(), lastException);
+                "Falha após " + faultToleranceConfig.maxRetries() + " tentativas: "
+                        + lastException.getMessage(), lastException);
     }
 
     private String doObtainToken(final String scope) throws IOException, InterruptedException {
@@ -668,7 +696,8 @@ public final class SmartTokenClient {
         final long iat = now.getEpochSecond();
         final long exp = now.plusSeconds(faultToleranceConfig.assertionTtlSeconds()).getEpochSecond();
         final String jti = UUID.randomUUID().toString();
-        LOG.trace("Construindo client_assertion ttl={}s alg={}", faultToleranceConfig.assertionTtlSeconds(), jwtAlgorithm);
+        LOG.trace("Construindo client_assertion ttl={}s alg={}",
+                faultToleranceConfig.assertionTtlSeconds(), jwtAlgorithm);
 
         // Constrói o payload JSON usando ObjectMapper para escape correto e seguro
         final Map<String, Object> claims = new LinkedHashMap<>();
