@@ -172,6 +172,12 @@
       <artifactId>jjwt-jackson</artifactId>
       <version>0.12.6</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>jackson-databind</artifactId>
+          <groupId>com.fasterxml.jackson.core</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.github.spotbugs</groupId>

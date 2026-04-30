@@ -60,7 +60,7 @@ import tools.jackson.databind.json.JsonMapper;
  * @see SslContextFactory
  */
 // Padrão Builder usa nomes iguais e tem muitos campos
-@SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields" })
+@SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields", "PMD.TooManyMethods" })
 public final class SmartTokenClientBuilder {
 
     private static final int HTTP_OK = 200;

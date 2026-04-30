@@ -220,6 +220,7 @@ public final class VerificarAcesso {
         return config;
     }
 
+    @SuppressWarnings("PMD.CyclomaticComplexity") // simples cadeia if/else if para parsing CLI
     private static void parseArgument(final String arg, final Config config) {
         if (arg.startsWith("--client-id=")) {
             config.clientId = extractValue(arg, "--client-id=");
@@ -329,7 +330,8 @@ public final class VerificarAcesso {
                 + DEFAULT_TLS + ")");
         System.out.println("  --alg=<ALG>           Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: "
                 + DEFAULT_ALG + ")");
-        System.out.println("  --trust=<PATH>        Certificado PEM do servidor (trust anchor, para simulador/homologação)");
+        System.out.println("  --trust=<PATH>        Certificado PEM do servidor "
+                + "(trust anchor, para simulador/homologação)");
         System.out.println("  --verbose, -v         Mostra detalhes do token obtido");
         System.out.println("  --help, -h            Exibe esta mensagem");
         System.out.println();

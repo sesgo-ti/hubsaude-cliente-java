@@ -260,8 +260,8 @@ import tools.jackson.databind.json.JsonMapper;
  *      Java</a>
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
-@SuppressWarnings("PMD.CouplingBetweenObjects")
-@SuppressWarnings("checkstyle:DeclarationOrder") // grouping by logical role over access modifier
+// DeclarationOrder: grouping by logical role over access modifier
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "checkstyle:DeclarationOrder"})
 public final class SmartTokenClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
@@ -445,7 +445,7 @@ public final class SmartTokenClient {
      * @param tokenCacheMarginSeconds margem em segundos antes da expiração
      * @param jwtAlgorithm            algoritmo JWT (ex: RS256, ES256)
      */
-    @SuppressWarnings("checkstyle:ParameterNumber")
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
     public SmartTokenClient(
         String tokenEndpoint,
         String clientId,
