@@ -63,6 +63,8 @@ import tools.jackson.databind.json.JsonMapper;
 @SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields" })
 public final class SmartTokenClientBuilder {
 
+    private static final int HTTP_OK = 200;
+
     private String tokenEndpoint;
     private String discoveryBaseUrl;
     private String clientId;
@@ -551,7 +553,7 @@ public final class SmartTokenClientBuilder {
                     .build();
 
             final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
+            if (response.statusCode() != HTTP_OK) {
                 throw new SmartTokenException(
                         "Falha ao obter smart-configuration (" + response.statusCode() + "): "
                                 + SmartTokenClient.sanitizeErrorResponse(response.body()));

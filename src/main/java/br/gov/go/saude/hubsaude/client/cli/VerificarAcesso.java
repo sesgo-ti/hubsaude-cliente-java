@@ -51,6 +51,10 @@ public final class VerificarAcesso {
     private static final String DEFAULT_SCOPE = "system/Patient.rs";
     private static final String DEFAULT_TLS = "TLSv1.3";
     private static final String DEFAULT_ALG = "RS256";
+    private static final int CONNECT_TIMEOUT_SECONDS = 30;
+    private static final int REQUEST_TIMEOUT_SECONDS = 60;
+    private static final int TOKEN_PREVIEW_CHARS = 50;
+    private static final int TOKEN_LINE_WIDTH = 80;
 
     private static final String ANSI_GREEN = "\u001B[32m";
     private static final String ANSI_RED = "\u001B[31m";
@@ -102,8 +106,8 @@ public final class VerificarAcesso {
                 .certificatePem(Path.of(config.certPath))
                 .tlsProtocol(config.tlsProtocol)
                 .jwtAlgorithm(config.jwtAlgorithm)
-                .connectTimeout(Duration.ofSeconds(30))
-                .requestTimeout(Duration.ofSeconds(60));
+                .connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS))
+                .requestTimeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS));
 
         final boolean usandoDescoberta = config.tokenEndpoint == null;
         if (usandoDescoberta) {
@@ -154,7 +158,9 @@ public final class VerificarAcesso {
         if (config.verbose) {
             printTokenDetails(token);
         } else {
-            System.out.println("  Token (primeiros 50 chars): " + token.substring(0, Math.min(50, token.length())) + "...");
+            final String preview = token.substring(0,
+                    Math.min(TOKEN_PREVIEW_CHARS, token.length()));
+            System.out.println("  Token (primeiros " + TOKEN_PREVIEW_CHARS + " chars): " + preview + "...");
             System.out.println();
             printInfo("Use --verbose para ver detalhes do token.");
         }
@@ -183,8 +189,8 @@ public final class VerificarAcesso {
         System.out.println();
         System.out.println("  Token completo:");
         // Quebra o token em linhas de 80 caracteres para melhor visualização
-        for (int i = 0; i < token.length(); i += 80) {
-            System.out.println("    " + token.substring(i, Math.min(i + 80, token.length())));
+        for (int i = 0; i < token.length(); i += TOKEN_LINE_WIDTH) {
+            System.out.println("    " + token.substring(i, Math.min(i + TOKEN_LINE_WIDTH, token.length())));
         }
     }
 
@@ -314,11 +320,15 @@ public final class VerificarAcesso {
         System.out.println();
         System.out.println(ANSI_BOLD + "PARÂMETROS OPCIONAIS:" + ANSI_RESET);
         System.out.println("  --endpoint=<URL>      URL do token endpoint (desabilita descoberta)");
-        System.out.println("  --fhir-base=<URL>     URL base FHIR (padrão: " + DEFAULT_FHIR_BASE + ")");
-        System.out.println("  --scope=<SCOPE>       Scope a solicitar (padrão: " + DEFAULT_SCOPE + ")");
+        System.out.println("  --fhir-base=<URL>     URL base FHIR (padrão: "
+                + DEFAULT_FHIR_BASE + ")");
+        System.out.println("  --scope=<SCOPE>       Scope a solicitar (padrão: "
+                + DEFAULT_SCOPE + ")");
         System.out.println("  --password=<SENHA>    Senha da chave privada (se criptografada)");
-        System.out.println("  --tls=<VERSAO>        Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: " + DEFAULT_TLS + ")");
-        System.out.println("  --alg=<ALG>           Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: " + DEFAULT_ALG + ")");
+        System.out.println("  --tls=<VERSAO>        Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: "
+                + DEFAULT_TLS + ")");
+        System.out.println("  --alg=<ALG>           Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: "
+                + DEFAULT_ALG + ")");
         System.out.println("  --trust=<PATH>        Certificado PEM do servidor (trust anchor, para simulador/homologação)");
         System.out.println("  --verbose, -v         Mostra detalhes do token obtido");
         System.out.println("  --help, -h            Exibe esta mensagem");
@@ -362,7 +372,9 @@ public final class VerificarAcesso {
     /**
      * Configuração parseada dos argumentos de linha de comando.
      */
-    private static class Config {
+    @SuppressWarnings({"checkstyle:VisibilityModifier", "PMD.DataClass"})
+    // package-private fields acessados apenas internamente neste CLI
+    private static final class Config {
         String clientId;
         String keyPath;
         String certPath;

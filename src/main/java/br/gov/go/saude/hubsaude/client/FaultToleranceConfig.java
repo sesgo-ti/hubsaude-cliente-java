@@ -36,6 +36,11 @@ import java.util.Objects;
  * );
  * }</pre>
  *
+ * @param connectTimeout      timeout de conexão TCP (não pode ser null)
+ * @param requestTimeout      timeout de requisição HTTP (não pode ser null)
+ * @param assertionTtlSeconds TTL do JWT em segundos (≤0 usa padrão)
+ * @param maxRetries          número de tentativas (≤0 usa padrão)
+ *
  * @see SmartTokenClient
  * @see SmartTokenClientBuilder
  * @since 0.0.0
