@@ -45,6 +45,9 @@ import br.gov.go.saude.hubsaude.client.SmartTokenClientBuilder;
  *   <li>{@code --verbose} — Mostra detalhes do token obtido</li>
  * </ul>
  */
+// PMD.GodClass: TODO débito técnico — extrair parsing de argumentos, IO e
+// validação em colaboradores dedicados.
+@SuppressWarnings("PMD.GodClass")
 public final class VerificarAcesso {
 
     private static final String DEFAULT_FHIR_BASE = "https://fhir.saude.go.gov.br";
@@ -94,6 +97,9 @@ public final class VerificarAcesso {
         }
     }
 
+    // PMD.SignatureDeclareThrowsException: ponto de entrada CLI; loga e
+    // encerra o processo no chamador.
+    @SuppressWarnings("PMD.SignatureDeclareThrowsException")
     private static void verificarAcesso(final Config config) throws Exception {
         // Validar arquivos primeiro
         validateFile(config.keyPath, "Chave privada");

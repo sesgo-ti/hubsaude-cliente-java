@@ -49,7 +49,10 @@ import org.bouncycastle.openssl.PEMParser;
  * @see SmartTokenClient
  * @see SmartTokenClientBuilder#serverTrustAnchor(Path)
  */
-@SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder") // grouped by PEM vs KeyStore use case
+// PMD.GodClass: TODO débito técnico — separar parsing PEM, KeyStore e
+// construção do SSLContext em utilitários dedicados.
+@SuppressWarnings({"checkstyle:OverloadMethodsDeclarationOrder",
+        "PMD.GodClass"}) // grouped by PEM vs KeyStore use case
 public final class SslContextFactory {
 
     /** Protocolo TLS padrão utilizado quando nenhum é especificado. */

@@ -261,7 +261,10 @@ import tools.jackson.databind.json.JsonMapper;
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
 // DeclarationOrder: grouping by logical role over access modifier
-@SuppressWarnings({"PMD.CouplingBetweenObjects", "checkstyle:DeclarationOrder"})
+// PMD.GodClass: TODO débito técnico — extrair builder, retry e cache em
+// colaboradores dedicados em refatoração futura.
+@SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass",
+        "checkstyle:DeclarationOrder"})
 public final class SmartTokenClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
