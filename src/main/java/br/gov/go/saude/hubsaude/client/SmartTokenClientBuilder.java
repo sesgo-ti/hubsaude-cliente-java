@@ -94,6 +94,7 @@ public final class SmartTokenClientBuilder {
     private int tokenCacheMarginSeconds = SmartTokenClient.DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
 
     SmartTokenClientBuilder() {
+        // Construtor package-private; instanciação via SmartTokenClient.builder().
     }
 
     /**

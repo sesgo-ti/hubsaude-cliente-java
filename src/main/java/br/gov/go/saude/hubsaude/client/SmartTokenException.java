@@ -17,10 +17,21 @@ public class SmartTokenException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Cria a exceção apenas com a mensagem.
+     *
+     * @param message descrição da falha
+     */
     public SmartTokenException(final String message) {
         super(message);
     }
 
+    /**
+     * Cria a exceção preservando a causa original.
+     *
+     * @param message descrição da falha
+     * @param cause   exceção original que motivou esta
+     */
     public SmartTokenException(final String message, final Throwable cause) {
         super(message, cause);
     }
