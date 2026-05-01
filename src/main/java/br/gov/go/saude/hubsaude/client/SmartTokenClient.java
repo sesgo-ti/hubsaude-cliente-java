@@ -264,7 +264,7 @@ import tools.jackson.databind.json.JsonMapper;
 // PMD.GodClass: TODO débito técnico — extrair builder, retry e cache em
 // colaboradores dedicados em refatoração futura.
 @SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass",
-        "checkstyle:DeclarationOrder"})
+    "checkstyle:DeclarationOrder"})
 public final class SmartTokenClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
