@@ -59,7 +59,7 @@ openssl s_client -connect localhost:8443 < /dev/null 2>/dev/null | openssl x509 
 
 ### 4. Registrar o cliente no simulador
 
-O simulador exige que o cliente seja registrado antes de solicitar tokens. Registre o certificado público do cliente via API:
+O simulador exige que o cliente seja registrado antes de solicitar tokens. Isso é feito pelo registro do certificado correspondente via API:
 
 ```bash
 # Registrar o cliente com seu certificado e scopes permitidos
@@ -101,7 +101,7 @@ System.out.println("Token obtido: " + token);
 | Arquivo | Descrição | Compartilhar? |
 |---------|-----------|---------------|
 | `test-key.pem` | Chave privada do cliente (assina JWT) | ❌ **Nunca** |
-| `test-cert.pem` | Certificado público do cliente | ✅ Registrar no servidor |
+| `test-cert.pem` | Certificado público do cliente | ✅ Registrar no simulador |
 | `simulador-server.pem` | Certificado do simulador (trust anchor) | N/A (apenas para testes locais) |
 
 > **Nota:** O método `serverTrustAnchor` é necessário apenas para o simulador local, que usa certificado autoassinado. Nos ambientes de homologação e produção do HubSaúde, os certificados são emitidos por autoridade certificadora confiável, já presente no trust store padrão da JVM — portanto essa chamada deve ser omitida.
@@ -110,7 +110,7 @@ System.out.println("Token obtido: " + token);
 
 ## Verificação pós-credenciamento
 
-Após ter o credenciamento aprovado, use a ferramenta de verificação para confirmar que o acesso está funcionando:
+Após ter o credenciamento aprovado (o pedido de credenciamento é feito pelo Sistema Ganesha), use a ferramenta de verificação para confirmar que o acesso está funcionando:
 
 ```bash
 # Verificação básica (use o JAR -cli que inclui todas as dependências)

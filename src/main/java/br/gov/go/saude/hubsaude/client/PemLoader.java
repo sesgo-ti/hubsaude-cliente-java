@@ -228,20 +228,30 @@ public final class PemLoader {
             final String source) throws IOException {
         Objects.requireNonNull(pem, "pem não pode ser null");
 
+        final Object obj;
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
-            final Object obj = parser.readObject();
+            obj = parser.readObject();
+        }
 
-            if (obj instanceof X509CertificateHolder holder) {
-                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-                if (cert == null) {
-                    throw new SmartTokenException("Certificado inválido: " + source);
-                }
-                return cert;
-            }
+        if (!(obj instanceof X509CertificateHolder holder)) {
+            throw new SmartTokenException(
+                    "Arquivo PEM não contém certificado X.509: " + source);
+        }
 
-            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + source);
+        final X509Certificate cert = convertHolder(holder);
+        if (cert == null) {
+            throw new SmartTokenException("Certificado inválido: " + source);
+        }
+        return cert;
+    }
+
+    private static X509Certificate convertHolder(
+            final X509CertificateHolder holder) {
+        try {
+            return new JcaX509CertificateConverter().getCertificate(holder);
         } catch (CertificateException ex) {
-            throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
+            throw new SmartTokenException(
+                    "Falha ao converter certificado: " + ex.getMessage(), ex);
         }
     }
 }

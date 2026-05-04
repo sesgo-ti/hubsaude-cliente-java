@@ -382,16 +382,26 @@ public final class SslContextFactory {
     }
 
     static X509Certificate validateCertificate(Path path, PEMParser parser) throws IOException {
+        final Object obj;
         try (parser) {
-            final Object obj = parser.readObject();
-            if (obj instanceof X509CertificateHolder holder) {
-                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-                validateCertificate(path, cert);
-                return cert;
-            }
-            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + path);
+            obj = parser.readObject();
+        }
+        if (!(obj instanceof X509CertificateHolder holder)) {
+            throw new SmartTokenException(
+                    "Arquivo PEM não contém certificado X.509: " + path);
+        }
+        final X509Certificate cert = convertHolder(holder);
+        validateCertificate(path, cert);
+        return cert;
+    }
+
+    private static X509Certificate convertHolder(
+            final X509CertificateHolder holder) {
+        try {
+            return new JcaX509CertificateConverter().getCertificate(holder);
         } catch (CertificateException ex) {
-            throw new SmartTokenException("Falha ao converter certificado: " + ex.getMessage(), ex);
+            throw new SmartTokenException(
+                    "Falha ao converter certificado: " + ex.getMessage(), ex);
         }
     }
 

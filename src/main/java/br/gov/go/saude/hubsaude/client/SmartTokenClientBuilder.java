@@ -553,7 +553,7 @@ public final class SmartTokenClientBuilder {
                     .GET()
                     .build();
 
-            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            final HttpResponse<String> response = sendRequest(client, request);
             if (response.statusCode() != HTTP_OK) {
                 throw new SmartTokenException(
                         "Falha ao obter smart-configuration (" + response.statusCode() + "): "
@@ -569,6 +569,14 @@ public final class SmartTokenClientBuilder {
                 throw new SmartTokenException("A resposta de smart-configuration não contém 'token_endpoint'");
             }
             return node.get("token_endpoint").asText();
+        }
+    }
+
+    private static HttpResponse<String> sendRequest(
+            final HttpClient client,
+            final HttpRequest request) throws IOException {
+        try {
+            return client.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Requisição para smart-configuration interrompida", e);
