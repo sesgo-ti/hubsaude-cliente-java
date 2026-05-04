@@ -50,7 +50,7 @@ import br.gov.go.saude.hubsaude.client.SmartTokenClientBuilder;
 @SuppressWarnings("PMD.GodClass")
 public final class VerificarAcesso {
 
-    private static final String DEFAULT_FHIR_BASE = "https://fhir.saude.go.gov.br";
+    private static final String DEFAULT_FHIR_BASE = "https://hub.saude.go.gov.br";
     private static final String DEFAULT_SCOPE = "system/Patient.rs";
     private static final String DEFAULT_TLS = "TLSv1.3";
     private static final String DEFAULT_ALG = "RS256";
