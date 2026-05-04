@@ -78,14 +78,6 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
-        <!-- SLF4J Simple: implementação minimalista para CLI (opcional) -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>2.0.17</version>
-            <optional>true</optional>
-        </dependency>
-
         <!-- SpotBugs annotations -->
         <dependency>
             <groupId>com.github.spotbugs</groupId>
@@ -149,11 +141,8 @@
                         </rule>
                     </rules>
                     <!-- Exclui métodos específicos que requerem hardware PKCS#11/HSM -->
-                    <!-- Exclui CLI de verificação (interativo, não testável automaticamente) -->
                     <excludes>
                         <exclude>**/SigningStrategyFactory$*Pkcs11*</exclude>
-                        <exclude>**/cli/VerificarAcesso.class</exclude>
-                        <exclude>**/cli/VerificarAcesso$Config.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>
@@ -225,41 +214,6 @@
                 </executions>
             </plugin>
 
-            <!-- Cria JAR executável com todas as dependências (fat JAR) para CLI -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.6.0</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <shadedArtifactAttached>true</shadedArtifactAttached>
-                            <shadedClassifierName>cli</shadedClassifierName>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>br.gov.go.saude.hubsaude.client.cli.VerificarAcesso</mainClass>
-                                </transformer>
-                                <!-- Merge service files (necessário para BouncyCastle) -->
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                            </transformers>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 

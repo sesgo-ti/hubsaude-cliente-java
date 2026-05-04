@@ -106,67 +106,7 @@ System.out.println("Token obtido: " + token);
 
 > **Nota:** O método `serverTrustAnchor` é necessário apenas para o simulador local, que usa certificado autoassinado. Nos ambientes de homologação e produção do HubSaúde, os certificados são emitidos por autoridade certificadora confiável, já presente no trust store padrão da JVM — portanto essa chamada deve ser omitida.
 
----
-
-## Verificação pós-credenciamento
-
-Após ter o credenciamento aprovado (o pedido de credenciamento é feito pelo Sistema Ganesha), use a ferramenta de verificação para confirmar que o acesso está funcionando:
-
-```bash
-# Verificação básica (use o JAR -cli que inclui todas as dependências)
-java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
-    --client-id=hs-12345678 \
-    --key=minha-chave.pem \
-    --cert=meu-certificado.pem
-
-# Com detalhes do token
-java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
-    --client-id=hs-12345678 \
-    --key=minha-chave.pem \
-    --cert=meu-certificado.pem \
-    --verbose
-```
-
-**Saída esperada (sucesso):**
-```
-╔═══════════════════════════════════════════════════════════╗
-║     HubSaúde - Verificador de Acesso (Pós-Credenciamento) ║
-╚═══════════════════════════════════════════════════════════╝
-
-ℹ Configuração:
-  Client ID:  hs-12345678
-  Chave:      minha-chave.pem
-  Certificado:meu-certificado.pem
-  Scope:      system/Patient.rs
-  TLS:        TLSv1.3
-  Algoritmo:  RS256
-  FHIR Base:  https://fhir.saude.go.gov.br
-  Endpoint:   https://fhir.saude.go.gov.br/auth/token (descoberto via .well-known)
-
-ℹ Obtendo token de acesso...
-✓ Token obtido com sucesso!
-
-  Tempo de resposta: 245ms
-  Token (primeiros 50 chars): eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi...
-
-✓ Credenciamento verificado. Acesso ao HubSaúde está funcionando.
-```
-
-**Parâmetros disponíveis:**
-
-| Parâmetro | Descrição | Obrigatório |
-|-----------|-----------|-------------|
-| `--client-id` | ID do cliente (fornecido no credenciamento) | Sim |
-| `--key` | Caminho para a chave privada PEM | Sim |
-| `--cert` | Caminho para o certificado PEM | Sim |
-| `--endpoint` | URL do token endpoint (desabilita descoberta) | Não |
-| `--fhir-base` | URL base FHIR (padrão: https://hub.saude.go.gov.br) | Não |
-| `--scope` | Scope a solicitar (padrão: system/Patient.rs) | Não |
-| `--password` | Senha da chave privada (se criptografada) | Não |
-| `--tls` | Protocolo TLS: TLSv1.3 ou TLSv1.2 (padrão: TLSv1.3) | Não |
-| `--alg` | Algoritmo JWT: RS256, RS384, RS512, PS256, etc. (padrão: RS256) | Não |
-| `--trust` | Certificado PEM do servidor (trust anchor, para simulador/homologação) | Não |
-| `--verbose` | Mostra detalhes do token obtido | Não |
+> **Verificação pós-credenciamento:** para conferir, via linha de comando, que o credenciamento está funcionando, use a ferramenta `hubsaude-cliente-cli` (projeto irmão `projetos/hubsaude-cliente-cli`).
 
 ---
 
@@ -495,14 +435,6 @@ var client = SmartTokenClient.builder()
         .jwtAlgorithm("RS384")  // ou RS512, PS256, ES256, etc.
         // ...
         .build();
-```
-
-Ou via CLI:
-
-```bash
-java -jar hubsaude-cliente-java-0.0.0-SNAPSHOT-cli.jar \
-    --alg=RS384 \
-    # ...demais parâmetros
 ```
 
 > **Nota:** Verifique se o authorization server suporta o algoritmo escolhido.
