@@ -27,7 +27,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
+import javax.crypto.AEADBadTagException;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -641,11 +644,68 @@ public final class SmartTokenClient {
                     LOG.error("Todas as {} tentativas falharam para clientId={}",
                             faultToleranceConfig.maxRetries(), clientId);
                 }
+            } catch (IOException ex) {
+                if (isLikelyClientCertificateRejection(ex)) {
+                    LOG.error("Falha de TLS após handshake mTLS para clientId={} endpoint={}: {}."
+                            + " Causa provável: certificado de cliente rejeitado pelo servidor"
+                            + " (revogado, expirado ou não confiável) — o servidor abortou a conexão"
+                            + " em vez de retornar uma resposta HTTP de erro.",
+                            clientId, tokenEndpoint, ex.toString());
+                    throw new SmartTokenException(
+                            "Conexão TLS abortada pelo servidor após o handshake mTLS contra "
+                                    + tokenEndpoint
+                                    + ". Causa provável: certificado de cliente rejeitado"
+                                    + " (revogado, expirado ou não confiável)."
+                                    + " Verifique a validade do certificado em uso e, se ele estiver"
+                                    + " correto, contate o operador do servidor de autorização —"
+                                    + " a resposta esperada nesse cenário seria um alerta TLS"
+                                    + " (certificate_revoked/certificate_expired) ou HTTP 401,"
+                                    + " e não o encerramento abrupto da conexão.",
+                            ex);
+                }
+                throw ex;
             }
         }
         throw new SmartTokenException(
                 "Falha após " + faultToleranceConfig.maxRetries() + " tentativas: "
                         + lastException.getMessage(), lastException);
+    }
+
+    /**
+     * Heurística para identificar falhas de TLS que tipicamente indicam que o
+     * servidor rejeitou o certificado de cliente (revogado, expirado ou não
+     * confiável) sem produzir uma resposta HTTP de erro adequada.
+     *
+     * <p>São tratadas como suspeitas:
+     * <ul>
+     *   <li>{@link SSLHandshakeException} — rejeição durante o handshake;</li>
+     *   <li>{@link AEADBadTagException} na cadeia de causas — record cifrado
+     *       com tag AEAD inválido, sintoma típico de servidor que aceita o
+     *       handshake mas corrompe o estado da conexão ao decidir rejeitar
+     *       o certificado de cliente após o {@code Finished};</li>
+     *   <li>{@link SSLException} com mensagem mencionando {@code bad_record_mac}
+     *       — equivalente do ponto anterior visto pelo lado JSSE.</li>
+     * </ul>
+     *
+     * <p>Esta verificação é heurística e deve ser usada apenas para enriquecer
+     * mensagens de erro; não substitui o diagnóstico do servidor.
+     */
+    static boolean isLikelyClientCertificateRejection(final Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof AEADBadTagException || t instanceof SSLHandshakeException) {
+                return true;
+            }
+            if (t instanceof SSLException) {
+                final String msg = t.getMessage();
+                if (msg != null && msg.toLowerCase(java.util.Locale.ROOT).contains("bad_record_mac")) {
+                    return true;
+                }
+            }
+            if (t.getCause() == t) {
+                break;
+            }
+        }
+        return false;
     }
 
     private String doObtainToken(final String scope) throws IOException, InterruptedException {
