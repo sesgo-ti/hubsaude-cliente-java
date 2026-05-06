@@ -701,9 +701,6 @@ public final class SmartTokenClient {
                     return true;
                 }
             }
-            if (t.getCause() == t) {
-                break;
-            }
         }
         return false;
     }
