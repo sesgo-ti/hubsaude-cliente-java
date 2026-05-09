@@ -16,6 +16,9 @@ import javax.net.ssl.SSLHandshakeException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Hazard;
 
 /**
  * Testes da heurística {@link SmartTokenClient#isLikelyClientCertificateRejection(Throwable)},
@@ -29,6 +32,8 @@ import org.junit.jupiter.api.Test;
  * estes testes validam apenas o reconhecimento das cadeias de exceções
  * que o {@link java.net.http.HttpClient} produz nesses casos.
  */
+@Requirements({@Requirement("C1"), @Requirement("P5"), @Requirement("C11")})
+@Hazard("H-SEC-004")
 class SmartTokenClientCertRejectionTest {
 
     @Nested

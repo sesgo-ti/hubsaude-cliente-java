@@ -13,10 +13,13 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
 
 /**
  * Testes unitários para {@link FaultToleranceConfig}.
  */
+@Requirements({@Requirement("R3"), @Requirement("C11")})
 class FaultToleranceConfigTest {
 
     private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(10);

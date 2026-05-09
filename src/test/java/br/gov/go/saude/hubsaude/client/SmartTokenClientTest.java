@@ -27,6 +27,8 @@ import org.junit.jupiter.api.io.TempDir;
 import br.gov.go.saude.hubsaude.client.FaultToleranceConfig;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
+import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
 
 /**
  * Testes unitários do SmartTokenClient.
@@ -36,6 +38,7 @@ import io.jsonwebtoken.Jwts;
  * necessidade de subir o servidor.
  * </p>
  */
+@Requirements({@Requirement("C1"), @Requirement("RF2"), @Requirement("C11")})
 class SmartTokenClientTest {
 
         private static final String TOKEN_ENDPOINT = "https://localhost:8443/auth/token";
