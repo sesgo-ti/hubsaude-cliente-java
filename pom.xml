@@ -118,6 +118,18 @@
             <version>0.0.0-SNAPSHOT</version>
             <scope>test</scope>
         </dependency>
+        <!-- Fitness functions arquiteturais (ADR-15) — regras
+             ArchUnit compartilhadas pelo módulo hubsaude-arch-rules. -->
+        <dependency>
+            <groupId>br.gov.go.saude.hubsaude</groupId>
+            <artifactId>hubsaude-arch-rules</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
