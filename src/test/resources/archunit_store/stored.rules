@@ -1,0 +1,4 @@
+#
+#Sat May 09 16:19:30 BRT 2026
+Nenhuma\ classe\ deve\ acessar\ System.out/System.err;\ use\ SLF4J\ Logger.=61b89a5a-a0d1-42e6-9cc9-1b81d5c5f8f6
+Subpacotes\ de\ 'br.gov.go.saude.hubsaude.client'\ devem\ ser\ livres\ de\ ciclos.=e7741e02-9eb4-4cf3-bd2a-7343879bf679
