@@ -11,21 +11,107 @@
         <relativePath />
     </parent>
 
+    <!--
+        SPDX-License-Identifier: Apache-2.0
+
+        Override explícito do groupId para publicação pública no Maven
+        Central. O parent permanece em br.gov.go.saude.hubsaude (interno);
+        o flatten-maven-plugin remove a referência ao parent no POM
+        publicado para que consumidores externos não precisem resolver
+        artefatos internos do HubSaúde.
+    -->
+    <groupId>br.gov.go.saude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
+
     <name>HubSaúde Cliente Java</name>
-    <description>Cliente Java para obtenção de token de acesso exigido para usufruir dos serviços oferecidos pelo HubSaúde.</description>
+    <description>Cliente Java para obtenção de token de acesso exigido
+        para usufruir dos serviços oferecidos pelo HubSaúde, hub de dados
+        em saúde do Estado de Goiás (SES-GO). Implementa o fluxo SMART on
+        FHIR Backend Services Authorization (RFC 7523 / OAuth 2.0 JWT
+        Profile) para autenticação de clientes confidenciais.</description>
     <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude</url>
+    <inceptionYear>2025</inceptionYear>
+
+    <organization>
+        <name>Estado de Goiás — Secretaria de Estado da Saúde (SES-GO)</name>
+        <url>https://www.saude.go.gov.br/</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <developers>
         <developer>
             <name>Daniel Nogueira da Costa</name>
             <url>https://github.com/nogueiralegacy</url>
+            <organization>UFG/INF — Fábrica de Software</organization>
+            <organizationUrl>https://fs.inf.ufg.br/</organizationUrl>
+            <timezone>America/Sao_Paulo</timezone>
         </developer>
         <developer>
             <name>Fábio Nogueira de Lucena</name>
             <url>https://github.com/kyriosdata</url>
+            <organization>UFG/INF — Fábrica de Software</organization>
+            <organizationUrl>https://fs.inf.ufg.br/</organizationUrl>
+            <timezone>America/Sao_Paulo</timezone>
         </developer>
     </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/FabricaDeSoftwareINF/server-hubsaude.git</connection>
+        <developerConnection>scm:git:git@github.com:FabricaDeSoftwareINF/server-hubsaude.git</developerConnection>
+        <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/main/hubsaude/projetos/hubsaude-cliente-java</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude/issues</url>
+    </issueManagement>
+
+    <ciManagement>
+        <system>GitHub Actions</system>
+        <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude/actions</url>
+    </ciManagement>
+
+    <properties>
+        <!--
+            hubsaude-cliente-java é o artefato público publicado no
+            Maven Central. Sobrescreve o maven.deploy.skip=true herdado
+            de hubsaude-foundation (interno-only).
+        -->
+        <maven.deploy.skip>false</maven.deploy.skip>
+
+        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
+        <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.10.1</maven-javadoc-plugin.version>
+        <maven-gpg-plugin.version>3.2.4</maven-gpg-plugin.version>
+        <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
+        <cyclonedx-maven-plugin.version>2.9.1</cyclonedx-maven-plugin.version>
+    </properties>
+
+    <!--
+        Publicação no Maven Central via Sonatype Central Portal.
+        Credenciais (CENTRAL_USERNAME/CENTRAL_PASSWORD) em settings.xml
+        sob server-id "central".
+    -->
+    <distributionManagement>
+        <repository>
+            <id>central</id>
+            <name>Sonatype Central Portal</name>
+            <url>https://central.sonatype.com/api/v1/publisher/upload</url>
+        </repository>
+        <snapshotRepository>
+            <id>central-snapshots</id>
+            <name>Sonatype Central Snapshots</name>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
 
     <dependencies>
         <!-- JWT: criação e validação de tokens (JJWT) -->
@@ -219,5 +305,157 @@
 
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Perfil "release": ativado por `mvn -P release deploy`.
+
+            Responsabilidades:
+            - flatten-maven-plugin: gera POM publicável (sem parent
+              interno, dependências com versões resolvidas);
+            - maven-source-plugin: empacota código-fonte (sources.jar);
+            - maven-javadoc-plugin: gera Javadoc (javadoc.jar);
+            - maven-gpg-plugin: assina jars/sources/javadoc/pom;
+            - cyclonedx-maven-plugin: anexa SBOM (classificador
+              "cyclonedx") para SLSA/transparência da supply chain;
+            - central-publishing-maven-plugin: publica no Sonatype
+              Central Portal (sucessor do OSSRH).
+
+            Requisitos no settings.xml e ambiente:
+            - server-id "central" com CENTRAL_USERNAME / CENTRAL_PASSWORD;
+            - GPG: chave importada e `gpg.keyname`/`gpg.passphrase`
+              ou agent autorizado (CI usa loopback pinentry).
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>flatten-maven-plugin</artifactId>
+                        <version>${flatten-maven-plugin.version}</version>
+                        <configuration>
+                            <!--
+                                Modo "oss": apropriado para libs publicadas
+                                em repositórios públicos. Resolve versões
+                                herdadas/dependencyManagement, remove parent
+                                e mantém metadados exigidos pelo Maven Central
+                                (licenses, developers, scm, etc.).
+                            -->
+                            <flattenMode>oss</flattenMode>
+                            <updatePomFile>true</updatePomFile>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>flatten</id>
+                                <phase>process-resources</phase>
+                                <goals>
+                                    <goal>flatten</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>flatten-clean</id>
+                                <phase>clean</phase>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <locale>pt_BR</locale>
+                            <doclint>none</doclint>
+                            <source>21</source>
+                            <quiet>true</quiet>
+                            <failOnError>true</failOnError>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>${cyclonedx-maven-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>build-sbom</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>makeBom</goal>
+                                </goals>
+                                <configuration>
+                                    <outputName>${project.artifactId}-${project.version}-cyclonedx</outputName>
+                                    <outputFormat>json</outputFormat>
+                                    <schemaVersion>1.5</schemaVersion>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <!--
+                                autoPublish=false: o release fica em
+                                estado "validated" no Portal aguardando
+                                publicação manual. Mude para true após
+                                automação do release pipeline.
+                            -->
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>validated</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

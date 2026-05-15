@@ -2,8 +2,8 @@
 
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
-[![Version](https://img.shields.io/badge/Version-0.0.0--SNAPSHOT-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
-[![License](https://img.shields.io/badge/License-SES--GO%2FUFG-green)](#licença)
+[![Version](https://img.shields.io/badge/Version-0.1.0--SNAPSHOT-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 Biblioteca Java de conveniência para autenticação no HubSaúde.
 O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMART-on-FHIR**, em particular **SMART Backend Services** para comunicação máquina-a-máquina (M2M).
@@ -12,11 +12,14 @@ O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMA
 
 ```xml
 <dependency>
-    <groupId>br.gov.go.saude.hubsaude</groupId>
+    <groupId>br.gov.go.saude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
+
+> **Snapshots** estão no repositório `https://central.sonatype.com/repository/maven-snapshots/`.
+> Releases serão publicadas no Maven Central a partir da versão `0.1.0`.
 
 **Requisitos:** Java 21+, Maven 3.9+
 
@@ -477,4 +480,28 @@ var client = SmartTokenClient.builder()
 
 ## Licença
 
-Copyright (c) 2026 SES-GO / UFG. Todos os direitos reservados.
+Copyright 2025 Estado de Goiás, por meio da Secretaria de Estado da
+Saúde de Goiás (SES-GO).
+
+Licenciado sob a **Apache License, Version 2.0** (a "Licença"). Você
+pode obter uma cópia da Licença em
+<https://www.apache.org/licenses/LICENSE-2.0>.
+
+A menos que exigido por lei aplicável ou acordado por escrito, o
+software distribuído sob a Licença é distribuído "NO ESTADO EM QUE SE
+ENCONTRA", SEM GARANTIAS OU CONDIÇÕES DE QUALQUER TIPO, expressas ou
+implícitas. Consulte a Licença para o idioma específico que rege
+permissões e limitações sob a Licença.
+
+Veja [`LICENSE`](LICENSE) para o texto integral e [`NOTICE`](NOTICE)
+para atribuições adicionais.
+
+## Como contribuir
+
+Contribuições são bem-vindas. Consulte:
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — fluxo de contribuição, DCO
+  (Developer Certificate of Origin) e padrões técnicos
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1
+- [`SECURITY.md`](SECURITY.md) — canal de divulgação responsável para
+  vulnerabilidades
