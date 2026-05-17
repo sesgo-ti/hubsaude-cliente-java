@@ -10,16 +10,23 @@ O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMA
 
 ## Dependência Maven
 
+O `hubsaude-cliente-java` é publicado no **GitHub Packages do monorepo HubSaúde**
+(`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`).
+A migração futura para o Maven Central está planejada em `plano.md`.
+
 ```xml
 <dependency>
-    <groupId>br.gov.go.saude</groupId>
+    <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
     <version>0.1.3-SNAPSHOT</version>
 </dependency>
 ```
 
-> **Snapshots** estão no repositório `https://central.sonatype.com/repository/maven-snapshots/`.
-> Releases serão publicadas no Maven Central a partir da versão `0.1.3`.
+> **Acesso ao GitHub Packages:** o repositório exige autenticação
+> mesmo para leitura. Configure `~/.m2/settings.xml` com um
+> Personal Access Token (escopo `read:packages`) e declare o
+> repositório `https://maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`
+> no seu `pom.xml`.
 
 **Requisitos:** Java 21+, Maven 3.9+
 
