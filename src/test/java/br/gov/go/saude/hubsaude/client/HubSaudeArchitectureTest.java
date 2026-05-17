@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 SES-GO / UFG
+ * Todos os direitos reservados.
+ */
+
 package br.gov.go.saude.hubsaude.client;
 
 import org.junit.jupiter.api.Test;

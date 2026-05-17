@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/badge/Version-0.1.0--SNAPSHOT-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-Biblioteca Java de conveniência para autenticação no HubSaúde.
+Biblioteca de conveniência para autenticação no HubSaúde via cliente em Java.
 O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMART-on-FHIR**, em particular **SMART Backend Services** para comunicação máquina-a-máquina (M2M).
 
 ## Dependência Maven
@@ -14,12 +14,12 @@ O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMA
 <dependency>
     <groupId>br.gov.go.saude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.3-SNAPSHOT</version>
 </dependency>
 ```
 
 > **Snapshots** estão no repositório `https://central.sonatype.com/repository/maven-snapshots/`.
-> Releases serão publicadas no Maven Central a partir da versão `0.1.0`.
+> Releases serão publicadas no Maven Central a partir da versão `0.1.3`.
 
 **Requisitos:** Java 21+, Maven 3.9+
 
