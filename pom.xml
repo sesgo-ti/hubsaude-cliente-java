@@ -22,6 +22,7 @@
     -->
     <groupId>br.gov.go.saude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
+    <version>0.1.3-SNAPSHOT</version>
 
     <name>HubSaúde Cliente Java</name>
     <description>Cliente Java para obtenção de token de acesso exigido
