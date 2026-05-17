@@ -132,10 +132,21 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- BouncyCastle: parse de certificados X.509 e chaves PEM -->
+        <!--
+            BouncyCastle: parse de certificados X.509 e chaves PEM.
+            bcpkix fornece cert/openssl/pkcs/operator usados por
+            PemLoader e SslContextFactory; bcprov é declarado
+            explicitamente porque PemLoader importa
+            org.bouncycastle.asn1.pkcs.PrivateKeyInfo (artefato bcprov),
+            evitando depender da resolução transitiva via bcpkix.
+        -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
         </dependency>
 
         <!-- Jackson: parse de respostas JSON do token endpoint -->
@@ -250,6 +261,32 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <version>3.8.1</version>
+                <configuration>
+                    <!--
+                        Dependências consumidas em runtime (não por
+                        imports Java), invisíveis ao goal analyze:
+                        - hubsaude-simulador: JAR copiado para
+                          target/simulator e iniciado via Testcontainers
+                          nos testes de integração (*IT.java).
+                        - jjwt-impl / jjwt-jackson: runtime do JJWT
+                          carregado via ServiceLoader.
+                        - logback-classic: binding SLF4J em testes.
+                        - spring-boot-configuration-processor:
+                          annotation processor (compile-time).
+                        - junit-jupiter / archunit-junit5: agregadores
+                          cujos artefatos efetivos (api/params/engine)
+                          são detectados em vez deles.
+                    -->
+                    <usedDependencies>
+                        <dependency>br.gov.go.saude.hubsaude:hubsaude-simulador</dependency>
+                        <dependency>io.jsonwebtoken:jjwt-impl</dependency>
+                        <dependency>io.jsonwebtoken:jjwt-jackson</dependency>
+                        <dependency>ch.qos.logback:logback-classic</dependency>
+                        <dependency>org.springframework.boot:spring-boot-configuration-processor</dependency>
+                        <dependency>org.junit.jupiter:junit-jupiter</dependency>
+                        <dependency>com.tngtech.archunit:archunit-junit5</dependency>
+                    </usedDependencies>
+                </configuration>
                 <executions>
                     <execution>
                         <id>copy-simulator</id>
