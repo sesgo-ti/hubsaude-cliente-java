@@ -89,6 +89,10 @@
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.10.1</maven-javadoc-plugin.version>
         <cyclonedx-maven-plugin.version>2.9.1</cyclonedx-maven-plugin.version>
+
+        <!-- Versão do hubsaude-simulador (dep de teste + JAR copiado p/ Testcontainers).
+             Independente da versão deste artefato (cliente-java). -->
+        <hubsaude-simulador.version>0.1.3-SNAPSHOT</hubsaude-simulador.version>
     </properties>
 
     <dependencies>
@@ -182,7 +186,7 @@
         <dependency>
             <groupId>br.gov.go.saude.hubsaude</groupId>
             <artifactId>hubsaude-simulador</artifactId>
-            <version>0.1.3-SNAPSHOT</version>
+            <version>${hubsaude-simulador.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -295,7 +299,7 @@
                                 <artifactItem>
                                     <groupId>br.gov.go.saude.hubsaude</groupId>
                                     <artifactId>hubsaude-simulador</artifactId>
-                                    <version>${project.version}</version>
+                                    <version>${hubsaude-simulador.version}</version>
                                     <type>jar</type>
                                     <destFileName>hubsaude-simulador.jar</destFileName>
                                 </artifactItem>
