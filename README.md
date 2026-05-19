@@ -5,8 +5,7 @@
 [![Version](https://img.shields.io/badge/Version-0.1.0--SNAPSHOT-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-Biblioteca de conveniência para autenticação no HubSaúde via cliente em Java.
-O HubSaúde exige interação conforme o padrão FHIR e autenticação via **SMART-on-FHIR**, em particular **SMART Backend Services** para comunicação máquina-a-máquina (M2M).
+Biblioteca Java que facilita a obtenção de tokens de acesso ao HubSaúde via **SMART Backend Services** (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.
 
 ## Dependência Maven
 
@@ -18,7 +17,7 @@ A migração futura para o Maven Central está planejada em `plano.md`.
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.1.3-SNAPSHOT</version>
+    <version>0.1.5</version>
 </dependency>
 ```
 
@@ -179,7 +178,7 @@ Certificados ICP-Brasil geralmente são distribuídos em formato PKCS#12 (`.pfx`
 # 1. Extrair chave privada (será solicitada a senha do PFX)
 openssl pkcs12 -in certificado.pfx -nocerts -nodes -out chave-privada.pem
 
-# 2. Extrair certificado
+# 2. Extrair certificado (chave pública)
 openssl pkcs12 -in certificado.pfx -clcerts -nokeys -out certificado.pem
 
 # 3. (Opcional) Converter chave para PKCS#8 explícito

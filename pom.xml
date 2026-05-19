@@ -24,14 +24,10 @@
         `br.gov.go.saude` e setup GPG).
     -->
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.1.3-SNAPSHOT</version>
+    <version>0.1.5</version>
 
     <name>HubSaúde Cliente Java</name>
-    <description>Cliente Java para obtenção de token de acesso exigido
-        para usufruir dos serviços oferecidos pelo HubSaúde, hub de dados
-        em saúde do Estado de Goiás (SES-GO). Implementa o fluxo SMART on
-        FHIR Backend Services Authorization (RFC 7523 / OAuth 2.0 JWT
-        Profile) para autenticação de clientes confidenciais.</description>
+    <description>Cliente Java para facilitar a obtenção de tokens de acesso ao HubSaúde via SMART Backend Services (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.</description>
     <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude</url>
     <inceptionYear>2025</inceptionYear>
 
