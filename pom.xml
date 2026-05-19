@@ -19,7 +19,7 @@
         conforme demais módulos. O `groupId` e o
         `distributionManagement` são herdados de `hubsaude-parent`.
 
-        Migração futura para Maven Central está planejada em
+        Migração futura para Maven Central está planejada veja
         `plano.md` (depende de verificação do namespace
         `br.gov.go.saude` e setup GPG).
     -->
