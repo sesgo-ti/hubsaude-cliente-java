@@ -528,7 +528,30 @@ System.out.println("Token obtido: " + token);
 
 ---
 
-## Licença
+## Release
+
+A publicação no GitHub Packages é automatizada pelo workflow
+[`hubsaude-cliente-java-release.yml`](../../.github/workflows/hubsaude-cliente-java-release.yml),
+seguindo o padrão de tags definido na **ADR-33**
+(`<artefato>-v<MAJOR>.<MINOR>.<PATCH>`).
+
+**Fluxo padrão (recomendado) — via tag:**
+
+```bash
+# Da raiz do monorepo, com a versão desejada já no pom.xml
+git tag -a cliente-java-v0.1.6 -m "hubsaude-cliente-java 0.1.6"
+git push origin cliente-java-v0.1.6
+```
+
+O workflow é disparado pelo push da tag, faz `mvn versions:set` para
+a versão derivada da tag e roda `mvn clean deploy -P release` (que
+inclui sources, javadoc e SBOM CycloneDX).
+
+**Disparo manual (apenas para emergência/teste):** via aba *Actions*
+do GitHub, escolhendo o workflow e informando a versão no input
+`version`.
+
+
 
 Copyright 2025 Estado de Goiás, por meio da Secretaria de Estado da
 Saúde de Goiás (SES-GO).
