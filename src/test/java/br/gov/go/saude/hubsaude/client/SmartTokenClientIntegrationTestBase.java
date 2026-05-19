@@ -22,6 +22,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 import javax.net.ssl.SSLContext;
 
@@ -56,7 +57,8 @@ abstract class SmartTokenClientIntegrationTestBase {
 
         protected final Logger log = LoggerFactory.getLogger(getClass());
 
-        protected static final String CLIENT_ID = "integration-test-client";
+        protected final String CLIENT_ID =
+                        "integration-test-client-" + UUID.randomUUID();
         protected static final String ALLOWED_SCOPES = "system/Patient.rs system/Observation.rs";
 
         /**
@@ -113,7 +115,7 @@ abstract class SmartTokenClientIntegrationTestBase {
 
                 // Gera certificado autoassinado
                 certFile = tempDir.resolve("client-cert.pem");
-                certificatePem = generateSelfSignedCertPem(pair);
+                certificatePem = generateSelfSignedCertPem(pair, CLIENT_ID);
                 Files.writeString(certFile, certificatePem, StandardCharsets.UTF_8);
         }
 
@@ -142,9 +144,16 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .POST(HttpRequest.BodyPublishers.ofString(json))
                                 .build();
 
-                // Ignora erros de conflito (cliente já registrado)
-                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                log.debug("Registro de cliente: status={}, body={}", response.statusCode(), response.body());
+                final HttpResponse<String> response = client.send(
+                                request, HttpResponse.BodyHandlers.ofString());
+                final int status = response.statusCode();
+                log.debug("Registro de cliente: status={}, body={}",
+                                status, response.body());
+                if (status != 200 && status != 201 && status != 409) {
+                        throw new IllegalStateException(
+                                        "Falha ao registrar cliente no simulador: status="
+                                                        + status + " body=" + response.body());
+                }
         }
 
         // ==================== Testes ====================
@@ -330,9 +339,9 @@ abstract class SmartTokenClientIntegrationTestBase {
         /**
          * Gera certificado X.509 autoassinado via BouncyCastle.
          */
-        protected static String generateSelfSignedCertPem(final KeyPair pair) throws Exception {
+        protected static String generateSelfSignedCertPem(final KeyPair pair, final String cn) throws Exception {
                 final org.bouncycastle.asn1.x500.X500Name subject = new org.bouncycastle.asn1.x500.X500Name(
-                                "CN=" + CLIENT_ID + ",O=Test,C=BR");
+                                "CN=" + cn + ",O=Test,C=BR");
                 final BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
                 final Date notBefore = new Date();
                 final Date notAfter = new Date(System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
