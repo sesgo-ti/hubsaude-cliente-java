@@ -2,7 +2,7 @@
 
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
-[![Version](https://img.shields.io/badge/Version-0.1.0--SNAPSHOT-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
+[![Version](https://img.shields.io/badge/Version-0.1.5-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 Biblioteca Java que facilita a obtenção de tokens de acesso ao HubSaúde via **SMART Backend Services** (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.
@@ -27,8 +27,6 @@ A migração futura para o Maven Central está planejada em `plano.md`.
 > repositório `https://maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`
 > no seu `pom.xml`.
 
-**Requisitos:** Java 21+, Maven 3.9+
-
 
 ## Inicio rápido
 
@@ -51,8 +49,27 @@ openssl x509 -in test-cert.pem -text -noout | head -20
 
 ### 2. Iniciar o simulador
 
+O JAR do `hubsaude-simulador` é publicado no GitHub Packages do
+monorepo (`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`),
+que exige autenticação. Antes de baixá-lo, configure em
+`~/.m2/settings.xml` um `<server>` com `id=github-hubsaude`
+(username = seu usuário GitHub, password = um Personal Access Token
+com escopo `read:packages`).
+
+A partir do diretório `projetos/hubsaude-cliente-java`, rode:
+
 ```bash
-java -jar hubsaude-simulador.jar
+mvn -DskipTests pre-integration-test
+```
+
+A execução `copy-simulator` do `maven-dependency-plugin` baixa o
+artefato (versão controlada pela property `hubsaude-simulador.version`
+do `pom.xml`) e o deposita em `target/simulator/hubsaude-simulador.jar`.
+
+Inicie o simulador:
+
+```bash
+java -jar target/simulator/hubsaude-simulador.jar
 ```
 
 O simulador estará disponível em `https://localhost:8443`.
