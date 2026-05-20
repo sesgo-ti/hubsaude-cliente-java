@@ -92,7 +92,7 @@
 
         <!-- Versão do hubsaude-simulador (dep de teste + JAR copiado p/ Testcontainers).
              Independente da versão deste artefato (cliente-java). -->
-        <hubsaude-simulador.version>0.1.3-SNAPSHOT</hubsaude-simulador.version>
+        <hubsaude-simulador.version>0.1.4</hubsaude-simulador.version>
     </properties>
 
     <dependencies>
