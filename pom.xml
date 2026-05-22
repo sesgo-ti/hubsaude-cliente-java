@@ -5,19 +5,23 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!--
-        Projeto standalone (sem <parent>). hubsaude-cliente-java é
-        uma biblioteca consumida por aplicações externas — inclusive
-        fora do monorepo HubSaúde. Herdar de hubsaude-parent (publicado
-        apenas no GitHub Packages privado) impediria a resolução do POM
-        em qualquer repositório público (Maven Central, mirror corporativo
-        etc.) e arrastaria toda a superfície do BOM HubSaúde para os
-        consumidores. Mesma motivação do ADR-35 (bom/build-tools).
+        Projeto standalone (sem <parent>, sem import de BOM externo).
+        hubsaude-cliente-java é uma biblioteca consumida por aplicações
+        externas — inclusive fora do monorepo HubSaúde. Herdar de
+        hubsaude-parent (publicado apenas no GitHub Packages privado)
+        impediria a resolução do POM em qualquer repositório público
+        (Maven Central, mirror corporativo etc.) e arrastaria toda a
+        superfície do BOM HubSaúde para os consumidores. Mesma
+        motivação do ADR-35 (bom/build-tools).
 
-        Properties de pacotes externos são gerenciadas via import do
-        hubsaude-bom em <dependencyManagement>; o flatten-maven-plugin
-        (modo `oss`) reescreve o POM publicado removendo o import
-        (inlining dos managed deps) para que consumidores em qualquer
-        repositório possam resolver sem acesso ao GitHub Packages.
+        Versionamento de dependências externas é feito INTEIRAMENTE
+        aqui (properties + <dependencyManagement> próprio), sem
+        import do hubsaude-bom. Razão: hubsaude-bom é SNAPSHOT (ADR-36
+        proíbe SNAPSHOT publicado), forneceria versionamento acoplado
+        ao ciclo do monorepo e exigiria install local no CI — trade-offs
+        inaceitáveis para uma lib publicada externamente. O
+        flatten-maven-plugin (modo `oss`) reescreve o POM publicado
+        apenas removendo <parent>; não há import a in-linar.
     -->
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
@@ -86,15 +90,32 @@
         <maven.compiler.release>${java.version}</maven.compiler.release>
 
         <!--
-            Versão do hubsaude-bom importado em <dependencyManagement>.
-            Single source of truth para versões de Spring Boot, jjwt,
-            bouncycastle, jackson, junit, assertj, logback, archunit, etc.
-            Bump manual quando adotar nova release do BOM (ADR-35).
+            Versionamento de dependências externas: pinagem direta,
+            sem import de BOM. Mantém a lib totalmente standalone
+            (construível fora do monorepo, publicavel em Maven Central
+            sem ginastica). Versoes alinhadas ao Spring Boot 4.0.6 BOM
+            no momento do bump — atualizar manualmente quando elevar.
         -->
-        <hubsaude-bom.version>0.1.10-SNAPSHOT</hubsaude-bom.version>
+        <jjwt.version>0.12.6</jjwt.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
+        <jackson3.version>3.1.2</jackson3.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <spotbugs-annotations.version>4.9.3</spotbugs-annotations.version>
+        <junit-jupiter.version>6.0.3</junit-jupiter.version>
+        <assertj.version>3.27.7</assertj.version>
+        <logback.version>1.5.32</logback.version>
+        <archunit.version>1.3.0</archunit.version>
 
-        <!-- Versão do hubsaude-simulador (dep de teste + JAR copiado p/ Testcontainers).
-             Independente da versão deste artefato (cliente-java). -->
+        <!--
+            Modulos do reactor hubsaude-foundation (hubsaude-core,
+            hubsaude-arch-rules) consumidos em test-scope. Resolvidos
+            do GitHub Packages na versao de release. Atualizar quando
+            adotar nova release do foundation.
+        -->
+        <hubsaude-foundation.version>0.1.10</hubsaude-foundation.version>
+
+        <!-- Versao do hubsaude-simulador (dep de teste + JAR copiado p/ Testcontainers).
+             Independente da versao deste artefato (cliente-java). -->
         <hubsaude-simulador.version>0.1.6</hubsaude-simulador.version>
 
         <!-- Publicação no GitHub Packages (ver <distributionManagement>). -->
@@ -134,12 +155,114 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- JWT (test-scope; uso apenas em fixtures de teste) -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+
+            <!-- BouncyCastle (PEM/X.509 parsing) -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+
+            <!-- Jackson 3.x (parse de respostas do token endpoint) -->
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson3.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson3.version}</version>
+            </dependency>
+
+            <!-- SLF4J (API de logging) -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+
+            <!-- SpotBugs annotations (provided) -->
+            <dependency>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-annotations</artifactId>
+                <version>${spotbugs-annotations.version}</version>
+            </dependency>
+
+            <!-- JUnit Jupiter (test) -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit-jupiter.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
+                <version>${junit-jupiter.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-params</artifactId>
+                <version>${junit-jupiter.version}</version>
+            </dependency>
+
+            <!-- AssertJ (test) -->
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+            </dependency>
+
+            <!-- Logback (test) -->
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+
+            <!-- ArchUnit (test; fitness functions ADR-15) -->
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit-junit5</artifactId>
+                <version>${archunit.version}</version>
+            </dependency>
+
+            <!-- Modulos do reactor hubsaude-foundation (test) -->
             <dependency>
                 <groupId>br.gov.go.saude.hubsaude</groupId>
-                <artifactId>hubsaude-bom</artifactId>
-                <version>${hubsaude-bom.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
+                <artifactId>hubsaude-core</artifactId>
+                <version>${hubsaude-foundation.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.gov.go.saude.hubsaude</groupId>
+                <artifactId>hubsaude-arch-rules</artifactId>
+                <version>${hubsaude-foundation.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -337,10 +460,12 @@
         <plugins>
             <!--
                 flatten reescreve o POM publicado: remove <parent>
-                (não há) e in-lining dos managed deps importados do
-                hubsaude-bom. Resultado: POM auto-suficiente, resolvível
-                por consumidores em qualquer repositório (Maven Central
-                incluso após a migração planejada).
+                (não há) e produz POM auto-suficiente. Como não
+                importamos nenhum BOM externo, não há managed deps a
+                in-linar — todos os <version> ja estao explicitos.
+                Resultado: POM resolvivel por consumidores em qualquer
+                repositório (Maven Central incluso após a migração
+                planejada).
             -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
