@@ -26,11 +26,11 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 
-import br.gov.go.saude.hubsaude.archrules.HubSaudeArchRules;
+import br.gov.go.saude.hubsaude.client.archrules.ClientArchRules;
 
 /**
- * Aplica as <i>fitness functions</i> ArchUnit compartilhadas
- * (ver {@link HubSaudeArchRules}) sobre as classes deste serviço.
+ * Aplica as <i>fitness functions</i> ArchUnit deste cliente
+ * (ver {@link ClientArchRules}) sobre as classes do módulo.
  *
  * <p>Importa apenas as classes do {@code target/classes} próprio
  * (filtro {@code DoNotIncludeJars} + {@code DoNotIncludeTests}),
@@ -48,23 +48,23 @@ class HubSaudeArchitectureTest {
 
     @Test
     void domainNaoDependeDeFrameworks() {
-        HubSaudeArchRules.domainHasNoForbiddenDependencies(BASE_PACKAGE)
+        ClientArchRules.domainHasNoForbiddenDependencies(BASE_PACKAGE)
                 .check(classes);
     }
 
     @Test
     void semCiclosEntreSubpacotes() {
-        HubSaudeArchRules.noCyclicDependenciesBetweenSlices(BASE_PACKAGE)
+        ClientArchRules.noCyclicDependenciesBetweenSlices(BASE_PACKAGE)
                 .check(classes);
     }
 
     @Test
     void semSystemOutOuErr() {
-        HubSaudeArchRules.noUseOfStandardStreams().check(classes);
+        ClientArchRules.noUseOfStandardStreams().check(classes);
     }
 
     @Test
     void loggersSaoPrivateStaticFinal() {
-        HubSaudeArchRules.loggersArePrivateStaticFinal().check(classes);
+        ClientArchRules.loggersArePrivateStaticFinal().check(classes);
     }
 }

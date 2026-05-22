@@ -7,6 +7,11 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Alterado
+- Projeto desacoplado: removido `<parent>` e import de BOM externo.
+  POM publicado é auto-suficiente (`flatten-maven-plugin` modo `oss`).
+- Versões das dependências declaradas explicitamente no próprio POM.
+
 ## [0.1.5] - 2026-05-20
 
 ### Adicionado
@@ -14,17 +19,12 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Testes unitários para `FaultToleranceConfig`
 - Arquivo `.gitignore` com exclusões padrão para Java/Maven/IDEs
 - Arquivo `CHANGELOG.md`
-- Arquivo `backlog.md` consolidando melhorias planejadas para o caminho até 1.0.0
 
 ### Alterado
 - `SmartTokenClient` refatorado para usar `FaultToleranceConfig`
 - `SmartTokenClientBuilder` atualizado para construir `FaultToleranceConfig`
-- Documentação do OpenSSL em `problemas.md` clarificada sobre `verify return:1`
 - Cabeçalho de licença dos arquivos `.java` alinhado ao Apache-2.0
-  (SPDX-License-Identifier + texto Apache), substituindo o cabeçalho
-  proprietário anterior, que era incompatível com a licença declarada
-  no `pom.xml`/`LICENSE`
-- Parent POM fixado em `hubsaude-parent:0.1.4` (sem SNAPSHOT)
+  (SPDX-License-Identifier + texto Apache)
 
 ## [0.0.0-SNAPSHOT] - 2026-03-07
 

@@ -64,8 +64,11 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
 - **JavaDoc** em pt-BR para a API pública.
 - **Sem `System.out.println`**: use SLF4J.
 - **Imutabilidade** preferida (records, `final`, coleções imutáveis).
-- **ArchUnit** (`hubsaude-arch-rules`) — regras arquiteturais são
-  bloqueantes.
+- **ArchUnit** (`ClientArchRules` em
+  `src/test/java/.../client/archrules/`) — regras arquiteturais são
+  bloqueantes. As regras são mantidas localmente para preservar a
+  independência total do cliente (sem dependência do monorepo
+  HubSaúde).
 
 ## Política de versionamento
 

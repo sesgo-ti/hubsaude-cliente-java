@@ -4,25 +4,9 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!--
-        Projeto standalone (sem <parent>, sem import de BOM externo).
-        hubsaude-cliente-java é uma biblioteca consumida por aplicações
-        externas — inclusive fora do monorepo HubSaúde. Herdar de
-        hubsaude-parent (publicado apenas no GitHub Packages privado)
-        impediria a resolução do POM em qualquer repositório público
-        (Maven Central, mirror corporativo etc.) e arrastaria toda a
-        superfície do BOM HubSaúde para os consumidores. Mesma
-        motivação do ADR-35 (bom/build-tools).
-
-        Versionamento de dependências externas é feito INTEIRAMENTE
-        aqui (properties + <dependencyManagement> próprio), sem
-        import do hubsaude-bom. Razão: hubsaude-bom é SNAPSHOT (ADR-36
-        proíbe SNAPSHOT publicado), forneceria versionamento acoplado
-        ao ciclo do monorepo e exigiria install local no CI — trade-offs
-        inaceitáveis para uma lib publicada externamente. O
-        flatten-maven-plugin (modo `oss`) reescreve o POM publicado
-        apenas removendo <parent>; não há import a in-linar.
-    -->
+    <!-- Biblioteca standalone, sem <parent> e sem import de BOM:
+         POM auto-suficiente, resolvivel a partir de qualquer
+         repositorio (Maven Central, mirrors corporativos, etc.). -->
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
     <version>0.1.8-SNAPSHOT</version>
@@ -89,13 +73,7 @@
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <maven.compiler.release>${java.version}</maven.compiler.release>
 
-        <!--
-            Versionamento de dependências externas: pinagem direta,
-            sem import de BOM. Mantém a lib totalmente standalone
-            (construível fora do monorepo, publicavel em Maven Central
-            sem ginastica). Versoes alinhadas ao Spring Boot 4.0.6 BOM
-            no momento do bump — atualizar manualmente quando elevar.
-        -->
+        <!-- Versoes das dependencias. -->
         <jjwt.version>0.12.6</jjwt.version>
         <bouncycastle.version>1.84</bouncycastle.version>
         <jackson3.version>3.1.2</jackson3.version>
@@ -106,22 +84,12 @@
         <logback.version>1.5.32</logback.version>
         <archunit.version>1.3.0</archunit.version>
 
-        <!--
-            Modulos do reactor hubsaude-foundation (hubsaude-core,
-            hubsaude-arch-rules) consumidos em test-scope. Resolvidos
-            do GitHub Packages na versao de release. Atualizar quando
-            adotar nova release do foundation.
-        -->
         <hubsaude-foundation.version>0.1.10</hubsaude-foundation.version>
-
-        <!-- Versao do hubsaude-simulador (dep de teste + JAR copiado p/ Testcontainers).
-             Independente da versao deste artefato (cliente-java). -->
         <hubsaude-simulador.version>0.1.6</hubsaude-simulador.version>
 
-        <!-- Publicação no GitHub Packages (ver <distributionManagement>). -->
         <maven.deploy.skip>false</maven.deploy.skip>
 
-        <!-- Plugins de build (pinagem explícita; sem parent para herdar). -->
+        <!-- Plugins. -->
         <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
         <flatten-maven-plugin.version>1.7.0</flatten-maven-plugin.version>
         <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
@@ -259,11 +227,6 @@
                 <artifactId>hubsaude-core</artifactId>
                 <version>${hubsaude-foundation.version}</version>
             </dependency>
-            <dependency>
-                <groupId>br.gov.go.saude.hubsaude</groupId>
-                <artifactId>hubsaude-arch-rules</artifactId>
-                <version>${hubsaude-foundation.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -287,11 +250,9 @@
 
         <!--
             BouncyCastle: parse de certificados X.509 e chaves PEM.
-            bcpkix fornece cert/openssl/pkcs/operator usados por
-            PemLoader e SslContextFactory; bcprov é declarado
-            explicitamente porque PemLoader importa
-            org.bouncycastle.asn1.pkcs.PrivateKeyInfo (artefato bcprov),
-            evitando depender da resolução transitiva via bcpkix.
+            bcprov e declarado explicitamente porque PemLoader usa
+            org.bouncycastle.asn1.pkcs.PrivateKeyInfo (bcprov), sem
+            depender de resolucao transitiva via bcpkix.
         -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
@@ -354,7 +315,7 @@
         </dependency>
 
 
-        <!-- Simulador SMART on FHIR para testes de integração (obtido via Maven, não path local) -->
+        <!-- Simulador SMART on FHIR para testes de integracao. -->
         <dependency>
             <groupId>br.gov.go.saude.hubsaude</groupId>
             <artifactId>hubsaude-simulador</artifactId>
@@ -367,13 +328,14 @@
             <artifactId>hubsaude-core</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Fitness functions arquiteturais (ADR-15) — regras
-             ArchUnit compartilhadas pelo módulo hubsaude-arch-rules. -->
-        <dependency>
-            <groupId>br.gov.go.saude.hubsaude</groupId>
-            <artifactId>hubsaude-arch-rules</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!--
+            Fitness functions arquiteturais (ArchUnit).
+            As regras são replicadas localmente em
+            src/test/java/.../client/archrules/ClientArchRules.java
+            para preservar a independência total do cliente
+            (publicado em Maven Central, sem dependência do
+            monorepo HubSaúde).
+        -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit</artifactId>
@@ -458,15 +420,8 @@
         </pluginManagement>
 
         <plugins>
-            <!--
-                flatten reescreve o POM publicado: remove <parent>
-                (não há) e produz POM auto-suficiente. Como não
-                importamos nenhum BOM externo, não há managed deps a
-                in-linar — todos os <version> ja estao explicitos.
-                Resultado: POM resolvivel por consumidores em qualquer
-                repositório (Maven Central incluso após a migração
-                planejada).
-            -->
+            <!-- Remove <parent> (nao ha) e resolve ${...} no POM
+                 publicado, garantindo POM auto-suficiente. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
@@ -563,19 +518,9 @@
                 <artifactId>maven-dependency-plugin</artifactId>
                 <configuration>
                     <!--
-                        Dependências consumidas em runtime (não por
-                        imports Java), invisíveis ao goal analyze:
-                        - hubsaude-simulador: JAR copiado para
-                          target/simulator e iniciado via Testcontainers
-                          nos testes de integração (*IT.java).
-                        - jjwt-impl / jjwt-jackson: runtime do JJWT
-                          carregado via ServiceLoader.
-                        - logback-classic: binding SLF4J em testes.
-                        - spring-boot-configuration-processor:
-                          annotation processor (compile-time).
-                        - junit-jupiter / archunit-junit5: agregadores
-                          cujos artefatos efetivos (api/params/engine)
-                          são detectados em vez deles.
+                        Dependencias consumidas em runtime ou via
+                        annotation processor, invisiveis ao goal
+                        analyze (false positives).
                     -->
                     <usedDependencies>
                         <dependency>br.gov.go.saude.hubsaude:hubsaude-simulador</dependency>
@@ -643,18 +588,9 @@
     </build>
 
     <profiles>
-        <!--
-            Perfil "release": ativado por `mvn -P release deploy`.
-
-            Responsabilidades:
-            - maven-source-plugin: empacota código-fonte (sources.jar);
-            - maven-javadoc-plugin: gera Javadoc (javadoc.jar);
-            - cyclonedx-maven-plugin: anexa SBOM (classificador
-              "cyclonedx") para SLSA/transparência da supply chain.
-
-            Publicação no GitHub Packages usa o `distributionManagement`
-            declarado neste POM (server-id `github-hubsaude`).
-        -->
+        <!-- Perfil `release`: anexa sources, javadoc e SBOM
+             (CycloneDX) ao artefato publicado.
+             Uso: `mvn -P release deploy`. -->
         <profile>
             <id>release</id>
             <build>
