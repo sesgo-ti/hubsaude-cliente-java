@@ -194,6 +194,22 @@ mvn test       # unitários
 mvn verify     # unitários + integração (sobe o hubsaude-simulador)
 ```
 
+## Publicação (release)
+
+Publicação no GitHub Packages é disparada **exclusivamente por tag**
+(ADR-36), no padrão `cliente-java-v<MAJOR>.<MINOR>.<PATCH>` (ADR-33):
+
+```bash
+git tag -a cliente-java-v0.1.8 -m "hubsaude-cliente-java 0.1.8"
+git push origin cliente-java-v0.1.8
+```
+
+O workflow [`hubsaude-cliente-java-release.yml`](../../../.github/workflows/hubsaude-cliente-java-release.yml)
+deriva a versão da tag (`versions:set`, sem commit) e executa
+`mvn clean deploy -P release`, que só publica se Surefire, Failsafe e
+JaCoCo (cobertura ≥ 85%) passarem. O perfil `release` agrega sources,
+javadoc e SBOM CycloneDX.
+
 ## Referências
 
 | Especificação | Descrição |
