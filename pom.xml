@@ -4,27 +4,24 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>br.gov.go.saude.hubsaude</groupId>
-        <artifactId>hubsaude-parent</artifactId>
-        <version>0.1.6</version>
-        <relativePath />
-    </parent>
-
     <!--
-        SPDX-License-Identifier: Apache-2.0
+        Projeto standalone (sem <parent>). hubsaude-cliente-java é
+        uma biblioteca consumida por aplicações externas — inclusive
+        fora do monorepo HubSaúde. Herdar de hubsaude-parent (publicado
+        apenas no GitHub Packages privado) impediria a resolução do POM
+        em qualquer repositório público (Maven Central, mirror corporativo
+        etc.) e arrastaria toda a superfície do BOM HubSaúde para os
+        consumidores. Mesma motivação do ADR-35 (bom/build-tools).
 
-        Publicação no GitHub Packages do monorepo HubSaúde
-        (`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`),
-        conforme demais módulos. O `groupId` e o
-        `distributionManagement` são herdados de `hubsaude-parent`.
-
-        Migração futura para Maven Central está planejada veja
-        `plano.md` (depende de verificação do namespace
-        `br.gov.go.saude` e setup GPG).
+        Properties de pacotes externos são gerenciadas via import do
+        hubsaude-bom em <dependencyManagement>; o flatten-maven-plugin
+        (modo `oss`) reescreve o POM publicado removendo o import
+        (inlining dos managed deps) para que consumidores em qualquer
+        repositório possam resolver sem acesso ao GitHub Packages.
     -->
+    <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.1.6</version>
+    <version>0.1.7-SNAPSHOT</version>
 
     <name>HubSaúde Cliente Java</name>
     <description>Cliente Java para facilitar a obtenção de tokens de acesso ao HubSaúde via SMART Backend Services (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.</description>
@@ -79,21 +76,73 @@
     </ciManagement>
 
     <properties>
-        <!--
-            hubsaude-cliente-java é publicado no GitHub Packages do
-            monorepo. Sobrescreve o maven.deploy.skip=true herdado de
-            hubsaude-foundation (interno-only por padrão).
-        -->
-        <maven.deploy.skip>false</maven.deploy.skip>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <project.build.outputTimestamp>2026-05-22T13:47:32Z</project.build.outputTimestamp>
 
-        <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
-        <maven-javadoc-plugin.version>3.10.1</maven-javadoc-plugin.version>
-        <cyclonedx-maven-plugin.version>2.9.1</cyclonedx-maven-plugin.version>
+        <java.version>21</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
+
+        <!--
+            Versão do hubsaude-bom importado em <dependencyManagement>.
+            Single source of truth para versões de Spring Boot, jjwt,
+            bouncycastle, jackson, junit, assertj, logback, archunit, etc.
+            Bump manual quando adotar nova release do BOM (ADR-35).
+        -->
+        <hubsaude-bom.version>0.1.10-SNAPSHOT</hubsaude-bom.version>
 
         <!-- Versão do hubsaude-simulador (dep de teste + JAR copiado p/ Testcontainers).
              Independente da versão deste artefato (cliente-java). -->
         <hubsaude-simulador.version>0.1.6</hubsaude-simulador.version>
+
+        <!-- Publicação no GitHub Packages (ver <distributionManagement>). -->
+        <maven.deploy.skip>false</maven.deploy.skip>
+
+        <!-- Plugins de build (pinagem explícita; sem parent para herdar). -->
+        <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
+        <flatten-maven-plugin.version>1.7.0</flatten-maven-plugin.version>
+        <maven-clean-plugin.version>3.5.0</maven-clean-plugin.version>
+        <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.5.5</maven-failsafe-plugin.version>
+        <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
+        <maven-install-plugin.version>3.1.4</maven-install-plugin.version>
+        <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
+        <maven-dependency-plugin.version>3.8.1</maven-dependency-plugin.version>
+        <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
+        <spotbugs-maven-plugin.version>4.9.3.0</spotbugs-maven-plugin.version>
+
+        <!-- Plugins do perfil `release` -->
+        <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.10.1</maven-javadoc-plugin.version>
+        <cyclonedx-maven-plugin.version>2.9.1</cyclonedx-maven-plugin.version>
     </properties>
+
+    <distributionManagement>
+        <repository>
+            <id>github-hubsaude</id>
+            <url>https://maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude</url>
+        </repository>
+        <snapshotRepository>
+            <id>github-hubsaude</id>
+            <url>https://maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>br.gov.go.saude.hubsaude</groupId>
+                <artifactId>hubsaude-bom</artifactId>
+                <version>${hubsaude-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- JWT: criação e validação de tokens (JJWT) -->
@@ -215,7 +264,134 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven-enforcer-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>flatten-maven-plugin</artifactId>
+                    <version>${flatten-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>${maven-clean-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>${maven-resources-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven-jar-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven-install-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>${maven-deploy-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-failsafe-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${maven-dependency-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>${spotbugs-maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
+            <!--
+                flatten reescreve o POM publicado: remove <parent>
+                (não há) e in-lining dos managed deps importados do
+                hubsaude-bom. Resultado: POM auto-suficiente, resolvível
+                por consumidores em qualquer repositório (Maven Central
+                incluso após a migração planejada).
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <configuration>
+                    <flattenMode>oss</flattenMode>
+                    <updatePomFile>true</updatePomFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-baseline</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>[3.9,)</version>
+                                    <message>Maven 3.9+ é obrigatório.</message>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                    <message>Java 21+ é obrigatório.</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
@@ -260,7 +436,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.8.1</version>
                 <configuration>
                     <!--
                         Dependências consumidas em runtime (não por
@@ -314,7 +489,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.5.5</version>
                 <configuration>
                     <excludedGroups>integration</excludedGroups>
                 </configuration>
@@ -324,7 +498,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.5.5</version>
                 <configuration>
                     <groups>integration</groups>
                     <includes>
@@ -355,7 +528,7 @@
               "cyclonedx") para SLSA/transparência da supply chain.
 
             Publicação no GitHub Packages usa o `distributionManagement`
-            herdado de `hubsaude-parent` (server-id `github-hubsaude`).
+            declarado neste POM (server-id `github-hubsaude`).
         -->
         <profile>
             <id>release</id>
