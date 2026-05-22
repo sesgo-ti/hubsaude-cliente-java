@@ -56,9 +56,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Hazard;
 
 /**
  * Testes unitários para {@link SslContextFactory}.
@@ -69,8 +66,6 @@ import br.gov.go.saude.hubsaude.core.rastreabilidade.Hazard;
  * </p>
  */
 @DisplayName("SslContextFactory")
-@Requirements({@Requirement("P3"), @Requirement("C1")})
-@Hazard("H-SEC-003")
 class SslContextFactoryTest {
 
     @TempDir

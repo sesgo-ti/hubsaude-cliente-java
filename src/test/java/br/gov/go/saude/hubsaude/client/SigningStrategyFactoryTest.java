@@ -37,13 +37,10 @@ import java.security.Signature;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
 
 /**
  * Testes unitários para {@link SigningStrategyFactory}.
  */
-@Requirements({@Requirement("C1"), @Requirement("M12"), @Requirement("C11")})
 class SigningStrategyFactoryTest {
 
     private static Path keyFile;

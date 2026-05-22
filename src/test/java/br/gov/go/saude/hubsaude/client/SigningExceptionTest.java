@@ -23,13 +23,10 @@ package br.gov.go.saude.hubsaude.client;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
 
 /**
  * Testes unitários para {@link SigningException}.
  */
-@Requirements({@Requirement("A8"), @Requirement("C11")})
 class SigningExceptionTest {
 
     @Test

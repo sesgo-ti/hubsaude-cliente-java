@@ -56,8 +56,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.sun.net.httpserver.HttpServer;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
 
 /**
  * Testes unitários para {@link SmartTokenClientBuilder}.
@@ -68,7 +66,6 @@ import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
  * </p>
  */
 @DisplayName("SmartTokenClientBuilder")
-@Requirements({@Requirement("C1"), @Requirement("C11")})
 class SmartTokenClientBuilderTest {
 
     private static final String TOKEN_ENDPOINT = "https://auth.example.com/token";

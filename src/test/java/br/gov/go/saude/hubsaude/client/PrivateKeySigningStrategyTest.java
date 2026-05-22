@@ -32,13 +32,10 @@ import java.security.Signature;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirement;
-import br.gov.go.saude.hubsaude.core.rastreabilidade.Requirements;
 
 /**
  * Testes unitários para {@link PrivateKeySigningStrategy}.
  */
-@Requirements({@Requirement("C1"), @Requirement("P1"), @Requirement("P5"), @Requirement("C11")})
 class PrivateKeySigningStrategyTest {
 
         private static PrivateKey rsaPrivateKey;

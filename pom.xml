@@ -220,13 +220,6 @@
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
             </dependency>
-
-            <!-- Modulos do reactor hubsaude-foundation (test) -->
-            <dependency>
-                <groupId>br.gov.go.saude.hubsaude</groupId>
-                <artifactId>hubsaude-core</artifactId>
-                <version>${hubsaude-foundation.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -323,11 +316,6 @@
             <scope>test</scope>
         </dependency>
 
-        <dependency>
-            <groupId>br.gov.go.saude.hubsaude</groupId>
-            <artifactId>hubsaude-core</artifactId>
-            <scope>test</scope>
-        </dependency>
         <!--
             Fitness functions arquiteturais (ArchUnit).
             As regras são replicadas localmente em
