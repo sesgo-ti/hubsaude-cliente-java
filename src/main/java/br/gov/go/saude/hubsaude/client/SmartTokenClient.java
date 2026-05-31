@@ -565,13 +565,40 @@ public final class SmartTokenClient {
      * @throws SmartTokenException  se o servidor retornar erro ou resposta inválida
      */
     public String obtainToken(final String scope) throws IOException, InterruptedException {
+        return obtainTokenResponse(scope).accessToken();
+    }
+
+    /**
+     * Obtém um token de acesso e devolve a resposta completa do servidor de
+     * autorização, incluindo o corpo JSON cru (quando disponível).
+     *
+     * <p>Compartilha exatamente a mesma lógica de cache, lock por scope e
+     * tolerância a falhas de {@link #obtainToken(String)} — na verdade,
+     * {@code obtainToken} delega a este método.</p>
+     *
+     * <p><strong>Atenção:</strong> {@link TokenResponse#rawJson()} só é
+     * preenchido em uma requisição HTTP real. Quando o token é servido a
+     * partir do cache, {@code rawJson()} retorna {@code null} (o corpo
+     * original não é mantido em cache). Para o caso de uso de inspeção/CLI,
+     * cada execução é um processo novo e portanto sempre realiza um fetch
+     * fresco.</p>
+     *
+     * @param scope scopes separados por espaço (ex: {@code "system/Patient.rs"})
+     * @return resposta do token endpoint (access token, expires_in e JSON cru)
+     * @throws IOException          em caso de erro de I/O na comunicação
+     * @throws InterruptedException se a thread for interrompida durante a
+     *                              requisição
+     * @throws SmartTokenException  se o servidor retornar erro ou resposta inválida
+     */
+    public TokenResponse obtainTokenResponse(final String scope)
+            throws IOException, InterruptedException {
         final String normalizedScope = scope == null ? "" : scope.trim();
 
         if (enableTokenCache) {
             final CachedToken cached = tokenCache.get(normalizedScope);
             if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
                 LOG.debug("Retornando token em cache para clientId={} scope={}", clientId, normalizedScope);
-                return cached.accessToken();
+                return fromCache(cached);
             }
         }
 
@@ -584,7 +611,7 @@ public final class SmartTokenClient {
                 final CachedToken cached = tokenCache.get(normalizedScope);
                 if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
                     LOG.debug("Token renovado por outra thread para clientId={} scope={}", clientId, normalizedScope);
-                    return cached.accessToken();
+                    return fromCache(cached);
                 }
             }
 
@@ -592,6 +619,16 @@ public final class SmartTokenClient {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Reconstrói uma {@link TokenResponse} a partir de um token em cache.
+     * O corpo JSON original não é preservado em cache, portanto
+     * {@code rawJson} é {@code null}.
+     */
+    private static TokenResponse fromCache(final CachedToken cached) {
+        final long remaining = Duration.between(Instant.now(), cached.expiresAt()).getSeconds();
+        return new TokenResponse(cached.accessToken(), (int) Math.max(0, remaining), null);
     }
 
     /**
@@ -641,7 +678,7 @@ public final class SmartTokenClient {
         return jwtAlgorithm;
     }
 
-    private String obtainTokenWithRetry(final String scope) throws IOException, InterruptedException {
+    private TokenResponse obtainTokenWithRetry(final String scope) throws IOException, InterruptedException {
         LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
 
         IOException lastException = null;
@@ -720,7 +757,7 @@ public final class SmartTokenClient {
         return false;
     }
 
-    private String doObtainToken(final String scope) throws IOException, InterruptedException {
+    private TokenResponse doObtainToken(final String scope) throws IOException, InterruptedException {
         final String assertion = buildClientAssertion();
         final String body = buildFormBody(clientId, assertion, scope);
 
@@ -757,7 +794,7 @@ public final class SmartTokenClient {
         }
 
         LOG.info("Token obtido com sucesso para clientId={}", clientId);
-        return accessToken;
+        return tokenResponse;
     }
 
     /**
@@ -873,7 +910,7 @@ public final class SmartTokenClient {
         }
         final String accessToken = node.get("access_token").asText();
         final int expiresIn = node.has("expires_in") ? node.get("expires_in").asInt() : 3600;
-        return new TokenResponse(accessToken, expiresIn);
+        return new TokenResponse(accessToken, expiresIn, jsonBody);
     }
 
     /**
@@ -1040,7 +1077,12 @@ public final class SmartTokenClient {
 
     /**
      * Representa a resposta do token endpoint.
+     *
+     * @param accessToken token de acesso emitido
+     * @param expiresIn   validade do token em segundos
+     * @param rawJson     corpo JSON cru da resposta do servidor de autorização;
+     *                    {@code null} quando o token é servido a partir do cache
      */
-    record TokenResponse(String accessToken, int expiresIn) {
+    public record TokenResponse(String accessToken, int expiresIn, String rawJson) {
     }
 }

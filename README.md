@@ -15,7 +15,7 @@ assinatura e a troca pelo *access token* no endpoint OAuth 2.0.
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.1.7</version>
+    <version>0.1.8-SNAPSHOT</version>
 </dependency>
 ```
 
