@@ -782,8 +782,14 @@
                             <!-- Permite pular a analise via -DdependencyCheckSkip=true. -->
                             <skip>${dependencyCheckSkip}</skip>
 
-                            <!-- OSS Index - credenciais do settings.xml (server id: ossindex). -->
-                            <ossIndexServerId>ossindex</ossIndexServerId>
+                            <!--
+                                OSS Index desabilitado: o endpoint da Sonatype
+                                exige credenciais (server id "ossindex" no
+                                settings.xml), indisponiveis neste projeto
+                                publico e auto-suficiente. A base NVD continua
+                                sendo a fonte primaria de vulnerabilidades.
+                            -->
+                            <ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
 
                             <!--
                                 Desabilita analisadores especificos de outros
