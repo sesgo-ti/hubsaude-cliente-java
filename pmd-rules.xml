@@ -1,0 +1,296 @@
+<?xml version="1.0"?>
+<ruleset name="HubSaúde PMD Rules"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>
+        Ruleset PMD enterprise-grade para projetos HubSaúde (SES-GO / UFG).
+
+        Versão        : 2026.05
+        Owner         : time-arquitetura@saude.go.gov.br
+        Política      : docs/QUALITY-GATE.md
+        Última revisão: 2026-05-01
+
+        Cobertura: BestPractices, CodeStyle, Naming, Design, Multithreading,
+        Security, Documentation, Performance, ErrorProne. Categorias críticas
+        para sistema de saúde tratadas como bloqueantes no perfil 'quality'.
+    </description>
+
+    <!-- Excluir código gerado e artefatos de build da análise. -->
+    <exclude-pattern>.*/generated/.*</exclude-pattern>
+    <exclude-pattern>.*/generated-sources/.*</exclude-pattern>
+    <exclude-pattern>.*/generated-test-sources/.*</exclude-pattern>
+    <exclude-pattern>.*/target/.*</exclude-pattern>
+    <exclude-pattern>.*/build/.*</exclude-pattern>
+
+    <!-- =========================================================================
+         BEST PRACTICES - Práticas recomendadas para código de qualidade
+         ========================================================================= -->
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/bestpractices.xml/AvoidReassigningParameters"/>
+    <!-- Renomeado de DefaultLabelNotLastInSwitchStmt no PMD 7.x -->
+    <rule ref="category/java/bestpractices.xml/DefaultLabelNotLastInSwitch"/>
+    <rule ref="category/java/bestpractices.xml/LooseCoupling"/>
+    <rule ref="category/java/bestpractices.xml/PreserveStackTrace"/>
+    <rule ref="category/java/bestpractices.xml/UseVarargs"/>
+    <rule ref="category/java/bestpractices.xml/AvoidStringBufferField"/>
+    <rule ref="category/java/bestpractices.xml/MissingOverride"/>
+    <rule ref="category/java/bestpractices.xml/ReplaceHashtableWithMap"/>
+    <rule ref="category/java/bestpractices.xml/ReplaceVectorWithList"/>
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+
+    <!-- =========================================================================
+         CODE STYLE - Consistência e legibilidade do código
+         ========================================================================= -->
+    <rule ref="category/java/codestyle.xml/UnnecessaryLocalBeforeReturn"/>
+    <rule ref="category/java/codestyle.xml/UselessParentheses"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryImport"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryModifier"/>
+    <rule ref="category/java/codestyle.xml/ExtendsObject"/>
+    <rule ref="category/java/codestyle.xml/ForLoopShouldBeWhileLoop"/>
+    <rule ref="category/java/codestyle.xml/IdenticalCatchBranches"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryCast"/>
+    <rule ref="category/java/codestyle.xml/UseDiamondOperator"/>
+
+    <!-- =========================================================================
+         NAMING - Convenções de nomenclatura (consistência cross-project)
+         ......................................................................
+         Padrões: classes em UpperCamelCase, métodos/variáveis em lowerCamelCase,
+         constantes (enum + static final) em SCREAMING_SNAKE_CASE, pacotes em
+         minúsculas. Exceções pragmáticas em ShortVariableName para idiomas
+         consagrados (i, j, k, e, n, x, y, z, id).
+         ========================================================================= -->
+    <rule ref="category/java/codestyle.xml/ClassNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/MethodNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/FieldNamingConventions">
+        <properties>
+            <property name="enumConstantPattern" value="[A-Z][A-Z_0-9]*"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/codestyle.xml/LocalVariableNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/FormalParameterNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/PackageCase"/>
+    <rule ref="category/java/codestyle.xml/GenericsNaming"/>
+    <rule ref="category/java/codestyle.xml/ShortClassName">
+        <properties>
+            <!-- 3 caracteres: permite acrônimos consagrados (Ssl, Uri, etc.) -->
+            <property name="minimum" value="3"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/codestyle.xml/ShortMethodName">
+        <properties>
+            <!-- 2 caracteres: permite factories idiomáticas (of, to, by) -->
+            <property name="minimum" value="2"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/codestyle.xml/ShortVariable">
+        <properties>
+            <property name="minimum" value="2"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/codestyle.xml/LongVariable">
+        <properties>
+            <property name="minimum" value="40"/>
+        </properties>
+    </rule>
+
+    <!-- =========================================================================
+         DESIGN - Arquitetura e manutenibilidade do código
+         ========================================================================= -->
+    <rule ref="category/java/design.xml/SimplifyBooleanReturns"/>
+    <rule ref="category/java/design.xml/SimplifyBooleanExpressions"/>
+    <rule ref="category/java/design.xml/SwitchDensity"/>
+    <!-- DataClass removida: incompatível com Records/@ConfigurationProperties
+         e DTOs imutáveis adotados como padrão arquitetural neste projeto. -->
+    <rule ref="category/java/design.xml/GodClass"/>
+    <rule ref="category/java/design.xml/UseUtilityClass"/>
+    <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes"/>
+    <rule ref="category/java/design.xml/ExceptionAsFlowControl"/>
+    <rule ref="category/java/design.xml/SignatureDeclareThrowsException"/>
+    <!-- AvoidCatchingThrowable já está na seção SECURITY abaixo. -->
+    <!-- AvoidCatchingGenericException e AvoidThrowingNullPointerException
+         foram removidas no PMD 7.x; cobertura via SpotBugs/FindSecBugs. -->
+    <rule ref="category/java/design.xml/TooManyMethods">
+        <properties>
+            <property name="maxmethods" value="20"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/CyclomaticComplexity">
+        <properties>
+            <property name="classReportLevel" value="80"/>
+            <property name="methodReportLevel" value="15"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/NPathComplexity">
+        <properties>
+            <property name="reportLevel" value="200"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/CouplingBetweenObjects">
+        <properties>
+            <property name="threshold" value="20"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/ExcessivePublicCount">
+        <properties>
+            <property name="minimum" value="45"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/ExcessiveParameterList">
+        <properties>
+            <property name="minimum" value="8"/>
+        </properties>
+    </rule>
+    <!-- ExcessiveClassLength e ExcessiveMethodLength removidos no PMD 7.x, usar NcssCount -->
+    <rule ref="category/java/design.xml/NcssCount">
+        <properties>
+            <property name="methodReportLevel" value="60"/>
+            <property name="classReportLevel" value="500"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/TooManyFields">
+        <properties>
+            <property name="maxfields" value="15"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/AvoidDeeplyNestedIfStmts">
+        <properties>
+            <property name="problemDepth" value="4"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/design.xml/CollapsibleIfStatements"/>
+    <rule ref="category/java/design.xml/FinalFieldCouldBeStatic"/>
+    <rule ref="category/java/design.xml/ImmutableField"/>
+    <rule ref="category/java/design.xml/LogicInversion"/>
+    <rule ref="category/java/design.xml/SimplifyConditional"/>
+    <rule ref="category/java/design.xml/SingularField"/>
+    <rule ref="category/java/design.xml/UselessOverridingMethod"/>
+
+    <!-- =========================================================================
+         ERROR PRONE - Prevenção de bugs e comportamento inesperado
+         ========================================================================= -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <properties>
+            <property name="allowCommentedBlocks" value="true"/>
+        </properties>
+    </rule>
+    <!-- EmptyFinallyBlock, EmptyIfStmt, EmptyWhileStmt removidos no PMD 7.x -->
+    <rule ref="category/java/errorprone.xml/AvoidBranchingStatementAsLastInLoop"/>
+    <rule ref="category/java/errorprone.xml/CloseResource"/>
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals"/>
+    <rule ref="category/java/errorprone.xml/EqualsNull"/>
+    <!-- MissingBreakInSwitch renomeado para ImplicitSwitchFallThrough no PMD 7.x -->
+    <rule ref="category/java/errorprone.xml/ImplicitSwitchFallThrough"/>
+    <!-- Regras críticas para sistema de saúde -->
+    <rule ref="category/java/errorprone.xml/AvoidCatchingThrowable"/>
+    <!-- AvoidCatchingGenericException removido no PMD 7.x -->
+    <rule ref="category/java/errorprone.xml/DoNotThrowExceptionInFinally"/>
+    <rule ref="category/java/errorprone.xml/ReturnEmptyCollectionRatherThanNull"/>
+    <rule ref="category/java/errorprone.xml/AvoidDecimalLiteralsInBigDecimalConstructor"/>
+    <rule ref="category/java/errorprone.xml/AvoidMultipleUnaryOperators"/>
+    <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
+    <rule ref="category/java/errorprone.xml/CheckSkipResult"/>
+    <rule ref="category/java/errorprone.xml/ClassCastExceptionWithToArray"/>
+    <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices"/>
+    <rule ref="category/java/errorprone.xml/JumbledIncrementer"/>
+    <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
+    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode"/>
+    <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock"/>
+    <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
+    <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary"/>
+    <rule ref="category/java/errorprone.xml/UnusedNullCheckInEquals"/>
+    <rule ref="category/java/errorprone.xml/UselessOperationOnImmutable"/>
+
+    <!-- =========================================================================
+         MULTITHREADING - Segurança em ambiente concorrente
+         ========================================================================= -->
+    <rule ref="category/java/multithreading.xml/AvoidSynchronizedAtMethodLevel"/>
+    <rule ref="category/java/multithreading.xml/AvoidThreadGroup"/>
+    <rule ref="category/java/multithreading.xml/DontCallThreadRun"/>
+    <rule ref="category/java/multithreading.xml/DoubleCheckedLocking"/>
+    <rule ref="category/java/multithreading.xml/NonThreadSafeSingleton"/>
+    <rule ref="category/java/multithreading.xml/UseConcurrentHashMap"/>
+    <rule ref="category/java/multithreading.xml/UseNotifyAllInsteadOfNotify"/>
+    <rule ref="category/java/multithreading.xml/UnsynchronizedStaticFormatter"/>
+    <!-- DoNotUseThreads removida: gera falsos-positivos em ThreadFactory de
+         Executors (padrão idiomático) e em Thread.sleep/currentThread. -->
+
+    <!-- =========================================================================
+         SECURITY - Regras de segurança defensiva (críticas para sistema de saúde)
+         .......................................................................
+         OBSERVAÇÃO: SAST profundo (SQLi, XSS, XXE, deserialização, path
+         traversal, criptografia fraca) é responsabilidade do SpotBugs com o
+         plugin FindSecBugs, configurado no hubsaude-parent. As regras abaixo
+         cobrem práticas defensivas detectáveis estaticamente pelo PMD.
+         ========================================================================= -->
+    <rule ref="category/java/security.xml/HardCodedCryptoKey"/>
+    <rule ref="category/java/security.xml/InsecureCryptoIv"/>
+    <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP"/>
+    <rule ref="category/java/errorprone.xml/AvoidCatchingNPE"/>
+    <rule ref="category/java/errorprone.xml/DoNotTerminateVM"/>
+    <rule ref="category/java/errorprone.xml/AssignmentInOperand">
+        <properties>
+            <!-- Permite o idioma 'while ((line = reader.readLine()) != null)',
+                 amplamente usado para leitura de streams. Mantém a detecção
+                 em if/for/expressões, onde o risco de bug sutil é maior. -->
+            <property name="allowWhile" value="true"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/errorprone.xml/ProperCloneImplementation"/>
+    <rule ref="category/java/errorprone.xml/SuspiciousEqualsMethodName"/>
+    <rule ref="category/java/errorprone.xml/AvoidAccessibilityAlteration"/>
+
+    <!-- =========================================================================
+         DOCUMENTATION - Documentação Javadoc (política do projeto: pt-BR)
+         ......................................................................
+         Exigência: classes/interfaces/enums top-level e métodos públicos
+         devem possuir Javadoc. Métodos com @Override e campos são ignorados
+         para reduzir ruído em DTOs/Records e hierarquias de teste.
+         ========================================================================= -->
+    <rule ref="category/java/documentation.xml/CommentRequired">
+        <properties>
+            <property name="classCommentRequirement"               value="Required"/>
+            <property name="methodWithOverrideCommentRequirement"  value="Ignored"/>
+            <property name="publicMethodCommentRequirement"        value="Required"/>
+            <property name="protectedMethodCommentRequirement"     value="Ignored"/>
+            <property name="fieldCommentRequirement"               value="Ignored"/>
+            <property name="enumCommentRequirement"                value="Required"/>
+            <property name="serialVersionUIDCommentRequired"       value="Ignored"/>
+            <property name="serialPersistentFieldsCommentRequired" value="Ignored"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/documentation.xml/UncommentedEmptyConstructor"/>
+    <rule ref="category/java/documentation.xml/UncommentedEmptyMethodBody"/>
+
+    <!-- =========================================================================
+         PERFORMANCE - Otimização e eficiência
+         ========================================================================= -->
+    <rule ref="category/java/performance.xml/StringInstantiation"/>
+    <rule ref="category/java/performance.xml/UseStringBufferForStringAppends"/>
+    <rule ref="category/java/performance.xml/AddEmptyString"/>
+    <rule ref="category/java/performance.xml/AppendCharacterWithChar"/>
+    <rule ref="category/java/performance.xml/AvoidArrayLoops"/>
+    <rule ref="category/java/performance.xml/BigIntegerInstantiation"/>
+    <rule ref="category/java/performance.xml/ConsecutiveAppendsShouldReuse"/>
+    <rule ref="category/java/performance.xml/ConsecutiveLiteralAppends">
+        <properties>
+            <!-- threshold=4 alinhado ao default do PMD; threshold=2 era
+                 ruidoso em logs/SQL/mensagens com literais separados por
+                 variáveis. -->
+            <property name="threshold" value="4"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/performance.xml/InefficientEmptyStringCheck"/>
+    <rule ref="category/java/performance.xml/InefficientStringBuffering"/>
+    <rule ref="category/java/performance.xml/InsufficientStringBufferDeclaration"/>
+    <rule ref="category/java/performance.xml/OptimizableToArrayCall"/>
+    <rule ref="category/java/performance.xml/StringToString"/>
+    <rule ref="category/java/performance.xml/TooFewBranchesForSwitch"/>
+    <rule ref="category/java/performance.xml/UseArrayListInsteadOfVector"/>
+    <rule ref="category/java/performance.xml/UseArraysAsList"/>
+    <rule ref="category/java/performance.xml/UseIndexOfChar"/>
+    <rule ref="category/java/performance.xml/UselessStringValueOf"/>
+</ruleset>

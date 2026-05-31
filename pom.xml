@@ -4,12 +4,9 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Biblioteca standalone, sem <parent> e sem import de BOM:
-         POM auto-suficiente, resolvivel a partir de qualquer
-         repositorio (Maven Central, mirrors corporativos, etc.). -->
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.1.10-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
 
     <name>HubSaúde Cliente Java</name>
     <description>Cliente Java para facilitar a obtenção de tokens de acesso ao HubSaúde via SMART Backend Services (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.</description>
@@ -18,7 +15,7 @@
 
     <organization>
         <name>Estado de Goiás — Secretaria de Estado da Saúde (SES-GO)</name>
-        <url>https://www.saude.go.gov.br/</url>
+        <url>https://hub.saude.go.gov.br/</url>
     </organization>
 
     <licenses>
@@ -102,6 +99,19 @@
         <maven-dependency-plugin.version>3.8.1</maven-dependency-plugin.version>
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
         <spotbugs-maven-plugin.version>4.9.3.0</spotbugs-maven-plugin.version>
+
+        <!-- Plugins do perfil `quality` (verificacoes estaticas) -->
+        <maven-checkstyle-plugin.version>3.3.1</maven-checkstyle-plugin.version>
+        <maven-pmd-plugin.version>3.26.0</maven-pmd-plugin.version>
+        <checkstyle.version>10.21.4</checkstyle.version>
+
+        <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
+        <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
+        <!-- OWASP Dependency-Check: desligavel via -DdependencyCheckSkip=true -->
+        <dependencyCheckSkip>false</dependencyCheckSkip>
+        <!-- CVSS minimo para falhar o build (default 7).
+             Use -DfailBuildOnCVSS=11 para modo report-only (nunca falha). -->
+        <failBuildOnCVSS>7</failBuildOnCVSS>
 
         <!-- Plugins do perfil `release` -->
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
@@ -403,6 +413,50 @@
                     <artifactId>spotbugs-maven-plugin</artifactId>
                     <version>${spotbugs-maven-plugin.version}</version>
                 </plugin>
+                <!-- Checkstyle: configuracao local (POM auto-suficiente,
+                     sem dependencia de hubsaude-build-tools). -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>${maven-checkstyle-plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.puppycrawl.tools</groupId>
+                            <artifactId>checkstyle</artifactId>
+                            <version>${checkstyle.version}</version>
+                        </dependency>
+                    </dependencies>
+                    <configuration>
+                        <configLocation>checkstyle.xml</configLocation>
+                        <consoleOutput>true</consoleOutput>
+                        <failsOnError>true</failsOnError>
+                        <failOnViolation>true</failOnViolation>
+                        <violationSeverity>warning</violationSeverity>
+                        <linkXRef>false</linkXRef>
+                    </configuration>
+                </plugin>
+                <!-- PMD: ruleset local (POM auto-suficiente). -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-pmd-plugin</artifactId>
+                    <version>${maven-pmd-plugin.version}</version>
+                    <configuration>
+                        <rulesets>
+                            <ruleset>pmd-rules.xml</ruleset>
+                        </rulesets>
+                        <printFailingErrors>true</printFailingErrors>
+                        <linkXRef>false</linkXRef>
+                    </configuration>
+                </plugin>
+                <!-- OWASP Dependency-Check (perfil `security`). -->
+                <plugin>
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <version>${dependency-check-maven.version}</version>
+                    <configuration>
+                        <failBuildOnCVSS>${failBuildOnCVSS}</failBuildOnCVSS>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -635,6 +689,143 @@
                                 </configuration>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Perfil `quality`: verificacoes estaticas de qualidade (CI/CD).
+             Replica o perfil homonimo do hubsaude-parent, porem
+             auto-suficiente: usa as configuracoes locais checkstyle.xml,
+             pmd-rules.xml e spotbugs-exclude.xml (este projeto e publicado
+             publicamente e nao herda do parent).
+             Uso: `mvn -P quality verify`. -->
+        <profile>
+            <id>quality</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>checkstyle</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-pmd-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>pmd</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>spotbugs</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Perfil `security`: analise de vulnerabilidades em dependencias
+             (OWASP Dependency-Check). Replica o perfil homonimo do
+             hubsaude-parent, porem auto-suficiente: usa o arquivo local
+             owasp-suppression.xml em vez de desempacota-lo do
+             hubsaude-build-tools (este projeto e publicado publicamente e
+             nao herda do parent).
+             Uso: `mvn -P security verify` (requer NVD_API_KEY no ambiente).
+             Pular: `-DdependencyCheckSkip=true`. -->
+        <profile>
+            <id>security</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <!-- Le da env var NVD_API_KEY automaticamente. -->
+                            <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+
+                            <!-- Aumenta o delay entre requests se bater rate limit. -->
+                            <nvdApiDelay>3500</nvdApiDelay>
+
+                            <!-- Cache da base NVD: revalida no maximo uma vez por semana. -->
+                            <nvdValidForHours>168</nvdValidForHours>
+
+                            <!-- Permite pular a analise via -DdependencyCheckSkip=true. -->
+                            <skip>${dependencyCheckSkip}</skip>
+
+                            <!-- OSS Index - credenciais do settings.xml (server id: ossindex). -->
+                            <ossIndexServerId>ossindex</ossIndexServerId>
+
+                            <!--
+                                Desabilita analisadores especificos de outros
+                                ecossistemas que nao se aplicam a um projeto
+                                Java puro. O AssemblyAnalyzer, em particular,
+                                exige o runtime do .NET 8 instalado e lanca
+                                InitializationException quando ausente,
+                                derrubando o build inteiro.
+                            -->
+                            <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                            <nuspecAnalyzerEnabled>false</nuspecAnalyzerEnabled>
+                            <nugetconfAnalyzerEnabled>false</nugetconfAnalyzerEnabled>
+                            <msbuildAnalyzerEnabled>false</msbuildAnalyzerEnabled>
+                            <nodeAnalyzerEnabled>false</nodeAnalyzerEnabled>
+                            <nodeAuditAnalyzerEnabled>false</nodeAuditAnalyzerEnabled>
+                            <yarnAuditAnalyzerEnabled>false</yarnAuditAnalyzerEnabled>
+                            <pnpmAuditAnalyzerEnabled>false</pnpmAuditAnalyzerEnabled>
+                            <retireJsAnalyzerEnabled>false</retireJsAnalyzerEnabled>
+                            <golangDepEnabled>false</golangDepEnabled>
+                            <golangModEnabled>false</golangModEnabled>
+                            <rubygemsAnalyzerEnabled>false</rubygemsAnalyzerEnabled>
+                            <bundleAuditAnalyzerEnabled>false</bundleAuditAnalyzerEnabled>
+                            <cocoapodsAnalyzerEnabled>false</cocoapodsAnalyzerEnabled>
+                            <swiftPackageManagerAnalyzerEnabled>false</swiftPackageManagerAnalyzerEnabled>
+                            <swiftPackageResolvedAnalyzerEnabled>false</swiftPackageResolvedAnalyzerEnabled>
+                            <pyDistributionAnalyzerEnabled>false</pyDistributionAnalyzerEnabled>
+                            <pyPackageAnalyzerEnabled>false</pyPackageAnalyzerEnabled>
+                            <pipAnalyzerEnabled>false</pipAnalyzerEnabled>
+                            <pipfileAnalyzerEnabled>false</pipfileAnalyzerEnabled>
+                            <poetryAnalyzerEnabled>false</poetryAnalyzerEnabled>
+
+                            <!-- default 7; override via -DfailBuildOnCVSS=11 (report-only). -->
+                            <failBuildOnCVSS>${failBuildOnCVSS}</failBuildOnCVSS>
+                            <!-- Emite HTML (humano) e JSON (consumo por ferramentas). -->
+                            <formats>
+                                <format>HTML</format>
+                                <format>JSON</format>
+                            </formats>
+                            <suppressionFiles>
+                                <suppressionFile>${project.basedir}/owasp-suppression.xml</suppressionFile>
+                            </suppressionFiles>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
