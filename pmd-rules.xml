@@ -45,7 +45,7 @@
     <!-- =========================================================================
          CODE STYLE - Consistência e legibilidade do código
          ========================================================================= -->
-    <rule ref="category/java/codestyle.xml/UnnecessaryLocalBeforeReturn"/>
+    <rule ref="category/java/codestyle.xml/VariableCanBeInlined"/>
     <rule ref="category/java/codestyle.xml/UselessParentheses"/>
     <rule ref="category/java/codestyle.xml/UnnecessaryImport"/>
     <rule ref="category/java/codestyle.xml/UnnecessaryModifier"/>
@@ -73,7 +73,7 @@
     <rule ref="category/java/codestyle.xml/LocalVariableNamingConventions"/>
     <rule ref="category/java/codestyle.xml/FormalParameterNamingConventions"/>
     <rule ref="category/java/codestyle.xml/PackageCase"/>
-    <rule ref="category/java/codestyle.xml/GenericsNaming"/>
+    <rule ref="category/java/codestyle.xml/TypeParameterNamingConventions"/>
     <rule ref="category/java/codestyle.xml/ShortClassName">
         <properties>
             <!-- 3 caracteres: permite acrônimos consagrados (Ssl, Uri, etc.) -->
@@ -202,7 +202,7 @@
     <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
     <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary"/>
     <rule ref="category/java/errorprone.xml/UnusedNullCheckInEquals"/>
-    <rule ref="category/java/errorprone.xml/UselessOperationOnImmutable"/>
+    <rule ref="category/java/errorprone.xml/UselessPureMethodCall"/>
 
     <!-- =========================================================================
          MULTITHREADING - Segurança em ambiente concorrente
