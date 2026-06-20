@@ -695,6 +695,34 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <!--
+                        Gate anti-SNAPSHOT no release (mesma política do parent
+                        e do reactor hubsaude-foundation; ADR-33). Este projeto
+                        é standalone (sem <parent>) e publicado publicamente.
+                    -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>enforce-release</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireReleaseVersion>
+                                            <message>Release não pode ter versão -SNAPSHOT.</message>
+                                        </requireReleaseVersion>
+                                        <requireReleaseDeps>
+                                            <message>Nenhuma dependência -SNAPSHOT é permitida em release.</message>
+                                            <onlyWhenRelease>true</onlyWhenRelease>
+                                        </requireReleaseDeps>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                 </plugins>
             </build>
         </profile>
