@@ -6,7 +6,7 @@
 
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.3.0-SNAPSHOT</version>
+    <version>0.3.2-SNAPSHOT</version>
 
     <name>HubSaúde Cliente Java</name>
     <description>Cliente Java para facilitar a obtenção de tokens de acesso ao HubSaúde via SMART Backend Services (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.</description>
