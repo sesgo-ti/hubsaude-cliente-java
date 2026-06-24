@@ -574,7 +574,6 @@
                         <dependency>io.jsonwebtoken:jjwt-impl</dependency>
                         <dependency>io.jsonwebtoken:jjwt-jackson</dependency>
                         <dependency>ch.qos.logback:logback-classic</dependency>
-                        <dependency>org.springframework.boot:spring-boot-configuration-processor</dependency>
                         <dependency>org.junit.jupiter:junit-jupiter</dependency>
                         <dependency>com.tngtech.archunit:archunit-junit5</dependency>
                     </usedDependencies>
