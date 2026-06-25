@@ -1,8 +1,8 @@
 # hubsaude-cliente-java
 
+[![Version](https://img.shields.io/badge/Version-0.3.5-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
-[![Version](https://img.shields.io/badge/Version-0.3.5-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 Cliente Java para obtenção de tokens de acesso ao HubSaúde via
