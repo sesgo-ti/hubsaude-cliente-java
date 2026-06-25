@@ -21,6 +21,7 @@
 package br.gov.go.saude.hubsaude.client;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -205,9 +206,45 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
             return simulatorJar.toAbsolutePath();
         }
 
+        // Fallback: execução direta pela IDE (ex.: IntelliJ IDEA), sem a fase
+        // Maven 'pre-integration-test' que dispara o maven-dependency-plugin
+        // (copy-simulator). Como o hubsaude-simulador é dependência test-scope,
+        // o JAR executável (Spring Boot) já está em ~/.m2 e no classpath de
+        // teste montado pela IDE — basta localizá-lo ali.
+        final Path fromClasspath = resolveSimulatorJarFromClasspath();
+        if (fromClasspath != null) {
+            LOG.info("JAR do simulador resolvido via classpath de teste: {}", fromClasspath);
+            return fromClasspath;
+        }
+
         throw new IllegalStateException(
-                "Não foi possível localizar o JAR do hubsaude-simulador em " + simulatorJar + ". " +
-                        "Execute 'mvn verify' para que o maven-dependency-plugin copie o artefato.");
+                "Não foi possível localizar o JAR do hubsaude-simulador em " + simulatorJar
+                        + " nem no classpath de teste. Rode 'mvn verify' (o maven-dependency-plugin "
+                        + "copia o artefato) ou garanta que a dependência de teste "
+                        + "br.gov.go.saude.hubsaude:hubsaude-simulador esteja resolvida em ~/.m2.");
+    }
+
+    /**
+     * Localiza o JAR executável do simulador entre as entradas do classpath
+     * de teste, ignorando os artefatos {@code -sources}/{@code -javadoc}.
+     *
+     * @return caminho absoluto do JAR, ou {@code null} se ausente do classpath
+     */
+    private Path resolveSimulatorJarFromClasspath() {
+        final String classpath = System.getProperty("java.class.path", "");
+        for (final String entry : classpath.split(File.pathSeparator)) {
+            final Path candidate = Paths.get(entry);
+            final Path fileName = candidate.getFileName();
+            final String name = fileName != null ? fileName.toString() : "";
+            if (name.startsWith("hubsaude-simulador")
+                    && name.endsWith(".jar")
+                    && !name.endsWith("-sources.jar")
+                    && !name.endsWith("-javadoc.jar")
+                    && Files.exists(candidate)) {
+                return candidate.toAbsolutePath();
+            }
+        }
+        return null;
     }
 
     /**
