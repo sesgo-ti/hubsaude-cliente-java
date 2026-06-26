@@ -583,7 +583,7 @@ public final class SmartTokenClientBuilder {
             if (!node.has("token_endpoint")) {
                 throw new SmartTokenException("A resposta de smart-configuration não contém 'token_endpoint'");
             }
-            return node.get("token_endpoint").asText();
+            return node.get("token_endpoint").asString();
         }
     }
 

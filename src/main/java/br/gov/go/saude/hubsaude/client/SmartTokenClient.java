@@ -908,7 +908,7 @@ public final class SmartTokenClient {
         if (!node.has("access_token")) {
             throw new SmartTokenException("Resposta não contém 'access_token'");
         }
-        final String accessToken = node.get("access_token").asText();
+        final String accessToken = node.get("access_token").asString();
         final int expiresIn = node.has("expires_in") ? node.get("expires_in").asInt() : 3600;
         return new TokenResponse(accessToken, expiresIn, jsonBody);
     }
