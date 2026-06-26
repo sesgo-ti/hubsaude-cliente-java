@@ -76,7 +76,7 @@
         <bouncycastle.version>1.84</bouncycastle.version>
         <jackson3.version>3.1.2</jackson3.version>
         <slf4j.version>2.0.17</slf4j.version>
-        <spotbugs-annotations.version>4.9.3</spotbugs-annotations.version>
+        <spotbugs-annotations.version>4.10.2</spotbugs-annotations.version>
         <junit-jupiter.version>6.0.3</junit-jupiter.version>
         <assertj.version>3.27.7</assertj.version>
         <logback.version>1.5.34</logback.version>
@@ -99,7 +99,7 @@
         <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
-        <spotbugs-maven-plugin.version>4.9.8.4</spotbugs-maven-plugin.version>
+        <spotbugs-maven-plugin.version>4.10.2.0</spotbugs-maven-plugin.version>
 
         <!-- Plugins do perfil `quality` (verificacoes estaticas) -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
@@ -117,7 +117,7 @@
         <!-- Plugins do perfil `release` -->
         <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
-        <cyclonedx-maven-plugin.version>2.9.2</cyclonedx-maven-plugin.version>
+        <cyclonedx-maven-plugin.version>2.9.1</cyclonedx-maven-plugin.version>
     </properties>
 
     <distributionManagement>
