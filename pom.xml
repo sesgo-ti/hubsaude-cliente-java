@@ -104,7 +104,7 @@
         <!-- Plugins do perfil `quality` (verificacoes estaticas) -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
-        <checkstyle.version>13.5.0</checkstyle.version>
+        <checkstyle.version>13.6.0</checkstyle.version>
 
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
