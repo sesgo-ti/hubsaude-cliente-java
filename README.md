@@ -195,7 +195,7 @@ mvn test       # unitários
 mvn verify     # unitários + integração (sobe o hubsaude-simulador)
 ```
 
-## Publicação (release)
+## Publicação de nova versão (release)
 
 Publicação no GitHub Packages é disparada **exclusivamente por tag**
 (ADR-36), no padrão `cliente-java-v<MAJOR>.<MINOR>.<PATCH>` (ADR-33):
