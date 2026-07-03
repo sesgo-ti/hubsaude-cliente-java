@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigInteger;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -35,11 +36,16 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 
 import javax.net.ssl.SSLContext;
+
+import io.jsonwebtoken.Jwts;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -341,6 +347,212 @@ abstract class SmartTokenClientIntegrationTestBase {
                 assertThat(accessToken)
                                 .isNotBlank()
                                 .contains(".");
+        }
+
+        // ==================== Testes do elemento kid (issue #408) ==========
+        //
+        // Testes de caracterização do comportamento do Servidor de
+        // Autorização (SA) do HubSaúde (hubsaude-smart-iam, embutido no
+        // hubsaude-simulador) em relação ao elemento "kid" (JOSE header).
+        //
+        // Referência normativa: docs/design/concerns/
+        // client-assertion-contexto-ig.md (§3.2 e §5.1) — "kid" é
+        // obrigatório quando o cliente possui múltiplas chaves registradas
+        // e "kid" desconhecido deve resultar em 401 invalid_client.
+        //
+        // Se algum destes testes falhar após atualização do simulador,
+        // o comportamento do SA quanto ao "kid" mudou — revisar a
+        // documentação e a issue #408.
+
+        @Test
+        @DisplayName("SA emite access token com kid no header JOSE")
+        void saEmiteAccessTokenComKidNoHeader() throws Exception {
+                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                                .tokenEndpoint(getTokenEndpoint())
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .serverTrustAnchor(simulatorCert)
+                                .build();
+
+                final String accessToken = tokenClient.obtainToken("system/Patient.rs");
+                final String kid = extrairKidDoHeaderJwt(accessToken);
+
+                assertThat(kid)
+                                .as("SA deve incluir 'kid' no header do access token emitido")
+                                .isNotBlank();
+        }
+
+        @Test
+        @DisplayName("kid do access token corresponde ao kid publicado no JWKS do SA")
+        void kidDoAccessTokenCorrespondeAoJwks() throws Exception {
+                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                                .tokenEndpoint(getTokenEndpoint())
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .serverTrustAnchor(simulatorCert)
+                                .build();
+
+                final String accessToken = tokenClient.obtainToken("system/Patient.rs");
+                final String kidDoToken = extrairKidDoHeaderJwt(accessToken);
+                final String kidDoJwks = extrairKidDoJwks();
+
+                assertThat(kidDoToken)
+                                .as("kid do access token deve permitir localizar a chave no JWKS")
+                                .isEqualTo(kidDoJwks);
+        }
+
+        @Test
+        @DisplayName("SA aceita client_assertion sem kid (chave única registrada)")
+        void saAceitaClientAssertionSemKid() throws Exception {
+                final String assertion = construirClientAssertion(null);
+
+                final HttpResponse<String> response = solicitarTokenDireto(assertion);
+
+                assertThat(response.statusCode())
+                                .as("Com uma única chave registrada, kid é dispensável (concern §5.1)")
+                                .isEqualTo(200);
+                assertThat(response.body()).contains("access_token");
+        }
+
+        @Test
+        @DisplayName("SA atual ignora kid do client_assertion (não valida kid desconhecido)")
+        void saIgnoraKidDesconhecidoNoClientAssertion() throws Exception {
+                // Caracterização: o SA atual NÃO lê o kid do client_assertion —
+                // valida a assinatura com a única chave registrada do cliente.
+                // O concern normativo (§5.1) prevê 401 invalid_client
+                // ("kid desconhecido") quando houver suporte a múltiplas chaves.
+                final String assertion =
+                                construirClientAssertion("kid-desconhecido-" + UUID.randomUUID());
+
+                final HttpResponse<String> response = solicitarTokenDireto(assertion);
+
+                assertThat(response.statusCode())
+                                .as("SA atual ignora o kid do client_assertion; se este teste "
+                                                + "falhar, o SA passou a validar kid (ver issue #408)")
+                                .isEqualTo(200);
+                assertThat(response.body()).contains("access_token");
+        }
+
+        @Test
+        @DisplayName("JWKS do SA publica kid para cada chave")
+        void jwksDoSaPublicaKid() throws Exception {
+                final String kid = extrairKidDoJwks();
+
+                assertThat(kid)
+                                .as("Toda chave publicada no JWKS do SA deve ter kid")
+                                .isNotBlank();
+        }
+
+        // ==================== Auxiliares do kid ====================
+
+        private String getCertsEndpoint() {
+                return getSimulatorBaseUrl() + "/certs";
+        }
+
+        /**
+         * Constrói um {@code client_assertion} JWT assinado com a chave do
+         * cliente de teste, opcionalmente com o elemento {@code kid} no
+         * header JOSE.
+         *
+         * @param kid identificador de chave; {@code null} omite o elemento
+         * @return JWT compacto pronto para envio ao token endpoint
+         */
+        private String construirClientAssertion(final String kid) throws Exception {
+                final var privateKey = PemLoader.loadPrivateKey(keyFile);
+                final Instant now = Instant.now();
+                final var builder = Jwts.builder()
+                                .issuer(CLIENT_ID)
+                                .subject(CLIENT_ID)
+                                .audience().add(getTokenEndpoint()).and()
+                                .issuedAt(Date.from(now))
+                                .expiration(Date.from(now.plusSeconds(60)))
+                                .id(UUID.randomUUID().toString());
+                if (kid != null) {
+                        builder.header().add("kid", kid).and();
+                }
+                return builder.signWith(privateKey, Jwts.SIG.RS384).compact();
+        }
+
+        /**
+         * Envia o {@code client_assertion} diretamente ao token endpoint do
+         * SA (POST form-urlencoded), com mTLS usando as credenciais do
+         * cliente de teste.
+         */
+        private HttpResponse<String> solicitarTokenDireto(final String assertion)
+                        throws Exception {
+                final SSLContext mtlsContext = SslContextFactory.buildSslContext(
+                                simulatorCert,
+                                SslContextFactory.DEFAULT_TLS_PROTOCOL,
+                                PemLoader.loadPrivateKey(keyFile),
+                                PemLoader.loadCertificate(certFile));
+
+                final HttpClient client = HttpClient.newBuilder()
+                                .sslContext(mtlsContext)
+                                .connectTimeout(Duration.ofSeconds(10))
+                                .build();
+
+                final String body = "grant_type=client_credentials"
+                                + "&client_assertion_type=" + URLEncoder.encode(
+                                                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                                                StandardCharsets.UTF_8)
+                                + "&client_assertion=" + URLEncoder.encode(
+                                                assertion, StandardCharsets.UTF_8)
+                                + "&scope=" + URLEncoder.encode(
+                                                "system/Patient.rs", StandardCharsets.UTF_8);
+
+                final HttpRequest request = HttpRequest.newBuilder()
+                                .uri(URI.create(getTokenEndpoint()))
+                                .header("Content-Type", "application/x-www-form-urlencoded")
+                                .timeout(Duration.ofSeconds(30))
+                                .POST(HttpRequest.BodyPublishers.ofString(body))
+                                .build();
+
+                final HttpResponse<String> response = client.send(
+                                request, HttpResponse.BodyHandlers.ofString());
+                log.debug("Token endpoint (direto): status={} body={}",
+                                response.statusCode(), response.body());
+                return response;
+        }
+
+        /** Decodifica o header JOSE do JWT e retorna o valor de {@code kid}. */
+        private static String extrairKidDoHeaderJwt(final String jwt) {
+                final String headerJson = new String(
+                                Base64.getUrlDecoder().decode(jwt.split("\\.")[0]),
+                                StandardCharsets.UTF_8);
+                final JsonNode node = new ObjectMapper().readTree(headerJson);
+                return node.has("kid") ? node.get("kid").asString() : null;
+        }
+
+        /** Obtém o {@code kid} da primeira chave publicada no JWKS do SA. */
+        private String extrairKidDoJwks() throws Exception {
+                final HttpClient client = HttpClient.newBuilder()
+                                .sslContext(simulatorSslContext)
+                                .connectTimeout(Duration.ofSeconds(10))
+                                .build();
+
+                final HttpRequest request = HttpRequest.newBuilder()
+                                .uri(URI.create(getCertsEndpoint()))
+                                .timeout(Duration.ofSeconds(30))
+                                .GET()
+                                .build();
+
+                final HttpResponse<String> response = client.send(
+                                request, HttpResponse.BodyHandlers.ofString());
+                assertThat(response.statusCode())
+                                .as("JWKS deve estar disponível em " + getCertsEndpoint())
+                                .isEqualTo(200);
+
+                final JsonNode keys = new ObjectMapper()
+                                .readTree(response.body()).get("keys");
+                assertThat(keys)
+                                .as("JWKS deve conter ao menos uma chave")
+                                .isNotNull();
+                assertThat(keys.size()).isPositive();
+
+                final JsonNode kid = keys.get(0).get("kid");
+                return kid != null ? kid.asString() : null;
         }
 
         // ==================== Métodos Auxiliares ====================
