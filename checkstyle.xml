@@ -60,6 +60,22 @@
         <module name="IllegalImport">
             <property name="illegalPkgs" value="sun, com.sun"/>
         </module>
+        <!-- REC-27 (issue #584): AssertJ é a biblioteca única de asserção
+             em código de teste (convenção em docs/QUALITY-GATE.md do
+             monorepo). Proíbe imports (normais e static) de JUnit
+             Assertions e de org.hamcrest. Exceção: matchers Hamcrest
+             usados de forma idiomática com MockMvc jsonPath continuam
+             permitidos via nome totalmente qualificado inline (sem
+             import). -->
+        <module name="IllegalImport">
+            <property name="severity" value="error"/>
+            <property name="regexp" value="true"/>
+            <property name="illegalPkgs" value="org\.hamcrest"/>
+            <property name="illegalClasses"
+                      value="^org\.junit\.jupiter\.api\.Assertions(\..+)?$"/>
+            <message key="import.illegal"
+                     value="Import proibido: {0} — use AssertJ (org.assertj.core.api.Assertions); convenção REC-27 em docs/QUALITY-GATE.md."/>
+        </module>
         <module name="ImportOrder">
             <property name="groups" value="java,javax,jakarta,org,com"/>
             <property name="ordered" value="true"/>

@@ -748,6 +748,22 @@
                                     <goal>check</goal>
                                 </goals>
                             </execution>
+                            <!-- REC-27 (issue #584): convenção de asserção
+                                 única (AssertJ) aplicada como erro ao
+                                 código de teste. -->
+                            <execution>
+                                <id>checkstyle-tests</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <configLocation>checkstyle-tests.xml</configLocation>
+                                    <sourceDirectories>
+                                        <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
+                                    </sourceDirectories>
+                                </configuration>
+                            </execution>
                         </executions>
                     </plugin>
                     <plugin>
