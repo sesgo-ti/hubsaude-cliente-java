@@ -331,6 +331,13 @@ public final class SmartTokenClient {
     /** Limite máximo para sanitização de respostas de erro. */
     private static final int MAX_ERROR_RESPONSE_LENGTH = 500;
 
+    /**
+     * Quantidade fixa de locks usados no striping de {@link #scopeLocks}.
+     * Limita a memória a O(N) independentemente do número de scopes
+     * distintos (ver issue #731).
+     */
+    private static final int SCOPE_LOCK_STRIPES = 32;
+
     /** Encoder Base64 URL-safe sem padding. */
     private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
@@ -346,8 +353,20 @@ public final class SmartTokenClient {
     /** Cache de tokens por scope. */
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
 
-    /** Lock para evitar múltiplas renovações simultâneas do mesmo scope. */
-    private final Map<String, ReentrantLock> scopeLocks = new ConcurrentHashMap<>();
+    /**
+     * Locks (lock striping) para evitar múltiplas renovações simultâneas
+     * do mesmo scope.
+     *
+     * <p>
+     * Cada scope é mapeado de forma determinística a um dos
+     * {@link #SCOPE_LOCK_STRIPES} locks via hash. Scopes distintos podem
+     * compartilhar o mesmo lock (contenção falsa ocasional), mas o
+     * single-flight por scope é preservado e a memória é fixa —
+     * independentemente da quantidade de scopes distintos usados ao longo
+     * da vida do cliente.
+     * </p>
+     */
+    private final ReentrantLock[] scopeLocks;
 
     /**
      * Cria o cliente carregando chave privada e certificado de arquivos PEM.
@@ -488,6 +507,10 @@ public final class SmartTokenClient {
                 ? tokenCacheMarginSeconds
                 : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
         this.jwtAlgorithm = jwtAlgorithm != null ? jwtAlgorithm : DEFAULT_JWT_ALGORITHM;
+        this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
+        for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
+            this.scopeLocks[i] = new ReentrantLock();
+        }
         this.httpClient = HttpClient.newBuilder()
                 .sslContext(context)
                 .connectTimeout(faultToleranceConfig.connectTimeout())
@@ -602,8 +625,8 @@ public final class SmartTokenClient {
             }
         }
 
-        // Usa lock por scope para evitar múltiplas requisições simultâneas
-        final ReentrantLock lock = scopeLocks.computeIfAbsent(normalizedScope, k -> new ReentrantLock());
+        // Lock por scope (striping) para evitar requisições simultâneas
+        final ReentrantLock lock = scopeLockFor(normalizedScope);
         lock.lock();
         try {
             // Double-check após adquirir o lock
@@ -619,6 +642,17 @@ public final class SmartTokenClient {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Retorna o lock associado ao scope via striping: o hash do scope
+     * seleciona um dos {@link #SCOPE_LOCK_STRIPES} locks fixos. O mesmo
+     * scope sempre mapeia para o mesmo lock, preservando o single-flight
+     * por scope; scopes distintos podem compartilhar um lock.
+     */
+    ReentrantLock scopeLockFor(final String scope) {
+        final int index = Math.floorMod(scope.hashCode(), SCOPE_LOCK_STRIPES);
+        return scopeLocks[index];
     }
 
     /**

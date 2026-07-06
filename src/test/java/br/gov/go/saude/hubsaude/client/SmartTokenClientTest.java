@@ -637,6 +637,76 @@ class SmartTokenClientTest {
                 assertThat(errors.get()).isZero();
         }
 
+        @Test
+        void scopeLocksDevemSerLimitadosEDeterministicos() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                // Simula scopes dinâmicos (ex.: por paciente): a quantidade de
+                // locks distintos deve permanecer limitada (issue #731).
+                final java.util.Set<Object> locks = java.util.Collections
+                                .newSetFromMap(new java.util.IdentityHashMap<>());
+                final int numScopes = 10_000;
+                for (int i = 0; i < numScopes; i++) {
+                        locks.add(client.scopeLockFor("patient/" + i + ".read"));
+                }
+                assertThat(locks).hasSizeLessThanOrEqualTo(32);
+
+                // O mesmo scope deve sempre mapear para o mesmo lock
+                // (preserva o single-flight por scope).
+                assertThat(client.scopeLockFor("system/Patient.rs"))
+                                .isSameAs(client.scopeLockFor("system/Patient.rs"));
+        }
+
+        @Test
+        void scopeLockDeveGarantirSingleFlightPorScope() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                final String scope = "system/Patient.rs";
+                final int numThreads = 8;
+                final java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors
+                                .newFixedThreadPool(numThreads);
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(numThreads);
+                final java.util.concurrent.atomic.AtomicInteger simultaneos = new java.util.concurrent.atomic.AtomicInteger(
+                                0);
+                final java.util.concurrent.atomic.AtomicInteger maxSimultaneos = new java.util.concurrent.atomic.AtomicInteger(
+                                0);
+
+                // Todas as threads disputam o lock do mesmo scope: dentro da
+                // seção crítica, nunca deve haver mais de uma thread.
+                for (int i = 0; i < numThreads; i++) {
+                        executor.submit(() -> {
+                                final java.util.concurrent.locks.ReentrantLock lock = client.scopeLockFor(scope);
+                                lock.lock();
+                                try {
+                                        final int atual = simultaneos.incrementAndGet();
+                                        maxSimultaneos.accumulateAndGet(atual, Math::max);
+                                        Thread.sleep(10);
+                                        simultaneos.decrementAndGet();
+                                } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                } finally {
+                                        lock.unlock();
+                                        latch.countDown();
+                                }
+                        });
+                }
+
+                assertThat(latch.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                executor.shutdown();
+
+                assertThat(maxSimultaneos.get()).isEqualTo(1);
+        }
+
         // ---------- Testes de Validação de Certificado ----------
 
         @Test
