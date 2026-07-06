@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.crypto.AEADBadTagException;
@@ -55,6 +56,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Classe de conveniência para obtenção de access tokens
@@ -109,7 +111,10 @@ import tools.jackson.databind.json.JsonMapper;
  * de sua expiração, reduzindo carga no authorization server</li>
  * <li><strong>Retry com backoff:</strong> Falhas transitórias são tratadas com
  * retry
- * exponencial (1s, 2s, 4s) até o limite configurado</li>
+ * exponencial (1s, 2s, 4s) até o limite configurado. Além de timeouts e
+ * erros de conexão, respostas HTTP 429 e 500/502/503/504 são consideradas
+ * transitórias; o cabeçalho {@code Retry-After} (segundos) é honrado em
+ * 429/503, com teto de 60s</li>
  * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em
  * aplicações multi-thread</li>
  * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
@@ -279,19 +284,18 @@ import tools.jackson.databind.json.JsonMapper;
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
 // DeclarationOrder: grouping by logical role over access modifier
-// PMD.GodClass: TODO débito técnico — extrair builder, retry e cache em
-// colaboradores dedicados em refatoração futura.
+// PMD.GodClass/TooManyMethods/CyclomaticComplexity: TODO débito técnico —
+// extrair builder, retry e cache em colaboradores dedicados em refatoração
+// futura.
 @SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass",
+    "PMD.TooManyMethods", "PMD.CyclomaticComplexity",
     "checkstyle:DeclarationOrder"})
-public final class SmartTokenClient {
+public final class SmartTokenClient implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClient.class);
 
     private static final String GRANT_TYPE = "client_credentials";
     private static final String ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
-
-    /** Delay base para retry exponencial em milissegundos. */
-    private static final long RETRY_BASE_DELAY_MS = 1000L;
 
     /** ObjectMapper compartilhado (thread-safe) com configuração de segurança. */
     private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
@@ -349,6 +353,13 @@ public final class SmartTokenClient {
     private final boolean enableTokenCache;
     private final int tokenCacheMarginSeconds;
     private final String jwtAlgorithm;
+    private final String keyId;
+
+    /** Indica se {@link #close()} já foi invocado (close idempotente). */
+    private final AtomicBoolean closed = new AtomicBoolean();
+
+    /** Sleeper usado entre tentativas de retry (padrão: {@link Thread#sleep(long)}). */
+    private volatile Sleeper sleeper = Thread::sleep;
 
     /** Cache de tokens por scope. */
     private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
@@ -475,6 +486,73 @@ public final class SmartTokenClient {
     /**
      * Construtor principal de baixo nível.
      *
+     * <p>Validações fail-fast executadas na construção:</p>
+     * <ul>
+     * <li>{@code jwtAlgorithm} é validado contra a allowlist de algoritmos
+     * suportados (famílias RS, PS e ES); valores como {@code none} ou
+     * {@code HS256} são rejeitados com {@link SmartTokenException};</li>
+     * <li>quando {@code certificate} não é {@code null}, a consistência entre
+     * a estratégia de assinatura e a chave pública do certificado é
+     * verificada (mesma semântica de
+     * {@link #verifyKeyPairConsistency(PrivateKey, X509Certificate)}).</li>
+     * </ul>
+     *
+     * @param tokenEndpoint           URL do endpoint /auth/token
+     * @param clientId                identificador do cliente
+     * @param signingStrategy         estratégia de assinatura JWT
+     * @param certificate             certificado X.509 do cliente
+     * @param sslContext              contexto SSL para o {@link HttpClient}
+     * @param faultToleranceConfig    configuração de resiliência
+     * @param enableTokenCache        se {@code true}, habilita cache de tokens
+     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
+     * @param jwtAlgorithm            algoritmo JWT (ex: RS256, ES256)
+     * @param keyId                   identificador da chave ({@code kid} do
+     *                                header JWT); {@code null} para omitir
+     */
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
+    public SmartTokenClient(
+        String tokenEndpoint,
+        String clientId,
+        SigningStrategy signingStrategy,
+        X509Certificate certificate,
+        SSLContext sslContext,
+        FaultToleranceConfig faultToleranceConfig,
+        boolean enableTokenCache,
+        int tokenCacheMarginSeconds,
+        String jwtAlgorithm,
+        String keyId
+    ) {
+        this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
+        this.clientId = Objects.requireNonNull(clientId, "clientId");
+        this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
+        final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
+        this.faultToleranceConfig = Objects.requireNonNull(faultToleranceConfig, "faultToleranceConfig");
+        this.enableTokenCache = enableTokenCache;
+        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
+                ? tokenCacheMarginSeconds
+                : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+        this.jwtAlgorithm = jwtAlgorithm != null ? jwtAlgorithm : DEFAULT_JWT_ALGORITHM;
+        // Valida o algoritmo contra a allowlist (rejeita none, HS256, etc.)
+        SigningStrategyFactory.jwtAlgorithmToJava(this.jwtAlgorithm);
+        this.keyId = keyId;
+        this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
+        for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
+            this.scopeLocks[i] = new ReentrantLock();
+        }
+        if (certificate != null) {
+            verifyStrategyCertificateConsistency(this.signingStrategy, certificate);
+        }
+        this.httpClient = HttpClient.newBuilder()
+                .sslContext(context)
+                .connectTimeout(faultToleranceConfig.connectTimeout())
+                .build();
+        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={} alg={}",
+                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries(), this.jwtAlgorithm);
+    }
+
+    /**
+     * Construtor de compatibilidade (sem {@code keyId}).
+     *
      * @param tokenEndpoint           URL do endpoint /auth/token
      * @param clientId                identificador do cliente
      * @param signingStrategy         estratégia de assinatura JWT
@@ -497,26 +575,9 @@ public final class SmartTokenClient {
         int tokenCacheMarginSeconds,
         String jwtAlgorithm
     ) {
-        this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
-        this.clientId = Objects.requireNonNull(clientId, "clientId");
-        this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
-        final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
-        this.faultToleranceConfig = Objects.requireNonNull(faultToleranceConfig, "faultToleranceConfig");
-        this.enableTokenCache = enableTokenCache;
-        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
-                ? tokenCacheMarginSeconds
-                : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
-        this.jwtAlgorithm = jwtAlgorithm != null ? jwtAlgorithm : DEFAULT_JWT_ALGORITHM;
-        this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
-        for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
-            this.scopeLocks[i] = new ReentrantLock();
-        }
-        this.httpClient = HttpClient.newBuilder()
-                .sslContext(context)
-                .connectTimeout(faultToleranceConfig.connectTimeout())
-                .build();
-        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={} alg={}",
-                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries(), this.jwtAlgorithm);
+        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
+                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds,
+                jwtAlgorithm, null);
     }
 
     /**
@@ -557,6 +618,62 @@ public final class SmartTokenClient {
     }
 
     /**
+     * Validação fail-fast de consistência entre a estratégia de assinatura e
+     * o certificado do cliente.
+     *
+     * <p>
+     * Realiza uma assinatura de teste por meio da própria estratégia (o que
+     * funciona inclusive para HSM/PKCS#11, pois a assinatura é delegada ao
+     * hardware) e a verifica com a chave pública do certificado, usando o
+     * mesmo algoritmo e parâmetros da estratégia.
+     * </p>
+     *
+     * <p>
+     * <strong>Limitação:</strong> a verificação só é possível quando a
+     * estratégia é uma {@link PrivateKeySigningStrategy}, pois é necessário
+     * conhecer o algoritmo JCA para verificar a assinatura. Estratégias
+     * customizadas (implementações próprias de {@link SigningStrategy}) são
+     * aceitas sem validação.
+     * </p>
+     *
+     * @param strategy    estratégia de assinatura a validar
+     * @param certificate certificado X.509 com a chave pública correspondente
+     * @throws SmartTokenException se a assinatura de teste não puder ser
+     *                             verificada com a chave pública do certificado
+     */
+    private static void verifyStrategyCertificateConsistency(
+            final SigningStrategy strategy,
+            final X509Certificate certificate) {
+        if (!(strategy instanceof PrivateKeySigningStrategy pkStrategy)) {
+            LOG.debug("Estratégia de assinatura customizada: consistência com o"
+                    + " certificado não pode ser verificada automaticamente");
+            return;
+        }
+        try {
+            final byte[] challenge = "key-pair-consistency-check".getBytes(StandardCharsets.UTF_8);
+            final byte[] signature = pkStrategy.sign(challenge);
+
+            final Signature verifier = Signature.getInstance(pkStrategy.getAlgorithm());
+            if (pkStrategy.getParameterSpec() != null) {
+                verifier.setParameter(pkStrategy.getParameterSpec());
+            }
+            verifier.initVerify(certificate.getPublicKey());
+            verifier.update(challenge);
+            if (!verifier.verify(signature)) {
+                throw new SmartTokenException(
+                        "Chave privada não corresponde ao certificado: assinatura inválida");
+            }
+            LOG.trace("Verificação de consistência estratégia-certificado concluída com sucesso");
+        } catch (SmartTokenException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new SmartTokenException(
+                    "Falha ao verificar consistência entre chave privada e certificado: "
+                            + ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * Cria um novo {@link SmartTokenClientBuilder} para configuração fluente do
      * cliente.
      *
@@ -576,8 +693,11 @@ public final class SmartTokenClient {
      * </p>
      *
      * <p>
-     * Em caso de falhas transitórias (timeout, erro de rede), o método
-     * realiza retry com backoff exponencial até o limite configurado.
+     * Em caso de falhas transitórias (timeout, erro de rede, HTTP 429 ou
+     * HTTP 500/502/503/504), o método realiza retry com backoff exponencial
+     * até o limite configurado. Quando o servidor envia {@code Retry-After}
+     * (em segundos) em respostas 429/503, o valor é honrado com teto de 60s.
+     * Demais respostas 4xx não são retriadas.
      * </p>
      *
      * @param scope scopes separados por espaço (ex: {@code "system/Patient.rs"})
@@ -617,31 +737,133 @@ public final class SmartTokenClient {
             throws IOException, InterruptedException {
         final String normalizedScope = scope == null ? "" : scope.trim();
 
-        if (enableTokenCache) {
-            final CachedToken cached = tokenCache.get(normalizedScope);
-            if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
-                LOG.debug("Retornando token em cache para clientId={} scope={}", clientId, normalizedScope);
-                return fromCache(cached);
-            }
+        final TokenResponse early = cachedResponseIfValid(normalizedScope);
+        if (early != null) {
+            return early;
         }
 
-        // Lock por scope (striping) para evitar requisições simultâneas
+        // Usa lock por scope (striping) para evitar múltiplas requisições
+        // simultâneas. O lock é adquirido por tentativa e liberado antes do
+        // backoff, de modo que a espera entre tentativas NÃO ocorre em seção
+        // crítica. A garantia de single-flight vale por tentativa: apenas uma
+        // thread executa a requisição HTTP de um scope por vez; entre
+        // tentativas, outra thread pode adquirir o lock, mas o double-check
+        // do cache evita requisições redundantes quando o token já foi
+        // renovado. Scopes distintos podem compartilhar o mesmo lock (ver
+        // scopeLockFor), sem afetar a correção.
         final ReentrantLock lock = scopeLockFor(normalizedScope);
-        lock.lock();
-        try {
-            // Double-check após adquirir o lock
-            if (enableTokenCache) {
-                final CachedToken cached = tokenCache.get(normalizedScope);
-                if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
-                    LOG.debug("Token renovado por outra thread para clientId={} scope={}", clientId, normalizedScope);
-                    return fromCache(cached);
-                }
-            }
+        LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, normalizedScope);
 
-            return obtainTokenWithRetry(normalizedScope);
-        } finally {
-            lock.unlock();
+        final int maxRetries = faultToleranceConfig.maxRetries();
+        IOException lastException = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            lock.lock();
+            try {
+                final TokenResponse cached = cachedResponseIfValid(normalizedScope);
+                if (cached != null) {
+                    return cached;
+                }
+                return doObtainToken(normalizedScope);
+            } catch (IOException ex) {
+                // Lança SmartTokenException/IOException se não retriável
+                lastException = retriableOrRethrow(ex);
+            } finally {
+                lock.unlock();
+            }
+            waitBeforeNextAttempt(attempt, maxRetries, lastException);
         }
+        throw new SmartTokenException(
+                "Falha após " + maxRetries + " tentativas: "
+                        + (lastException != null ? lastException.getMessage() : "sem causa capturada"),
+                lastException);
+    }
+
+    /**
+     * Retorna o token em cache para o scope, quando o cache está habilitado
+     * e o token ainda é válido; caso contrário, {@code null}.
+     *
+     * @param normalizedScope scope normalizado
+     * @return resposta reconstruída do cache ou {@code null}
+     */
+    private TokenResponse cachedResponseIfValid(final String normalizedScope) {
+        if (!enableTokenCache) {
+            return null;
+        }
+        final CachedToken cached = tokenCache.get(normalizedScope);
+        if (cached != null && cached.isValid(tokenCacheMarginSeconds)) {
+            LOG.debug("Retornando token em cache para clientId={} scope={}",
+                    clientId, normalizedScope);
+            return fromCache(cached);
+        }
+        return null;
+    }
+
+    /**
+     * Classifica a exceção de I/O: devolve-a quando é transitória (timeout,
+     * falha de conexão ou HTTP 429/5xx) para que o chamador realize retry;
+     * caso contrário, propaga.
+     *
+     * @param ex exceção capturada na tentativa
+     * @return a própria exceção, quando retriável
+     * @throws IOException         quando a exceção não é retriável
+     * @throws SmartTokenException quando a falha aparenta ser rejeição do
+     *                             certificado de cliente no mTLS
+     */
+    private IOException retriableOrRethrow(final IOException ex) throws IOException {
+        if (ex instanceof HttpTimeoutException
+                || ex instanceof java.net.ConnectException
+                || ex instanceof RetriableHttpStatusException) {
+            return ex;
+        }
+        if (isLikelyClientCertificateRejection(ex)) {
+            LOG.error("Falha de TLS após handshake mTLS para clientId={} endpoint={}: {}."
+                    + " Causa provável: certificado de cliente rejeitado pelo servidor"
+                    + " (revogado, expirado ou não confiável) — o servidor abortou a conexão"
+                    + " em vez de retornar uma resposta HTTP de erro.",
+                    clientId, tokenEndpoint, ex.toString());
+            throw new SmartTokenException(
+                    "Conexão TLS abortada pelo servidor após o handshake mTLS contra "
+                            + tokenEndpoint
+                            + ". Causa provável: certificado de cliente rejeitado"
+                            + " (revogado, expirado ou não confiável)."
+                            + " Verifique a validade do certificado em uso e, se ele estiver"
+                            + " correto, contate o operador do servidor de autorização —"
+                            + " a resposta esperada nesse cenário seria um alerta TLS"
+                            + " (certificate_revoked/certificate_expired) ou HTTP 401,"
+                            + " e não o encerramento abrupto da conexão.",
+                    ex);
+        }
+        throw ex;
+    }
+
+    /**
+     * Aguarda o backoff entre tentativas — FORA da seção crítica (o lock por
+     * scope já foi liberado pelo chamador). Na última tentativa apenas
+     * registra a falha.
+     *
+     * <p>O delay é calculado por {@link RetryPolicy#computeRetryDelayMs}:
+     * honra {@code Retry-After} (teto de 60s) ou aplica backoff exponencial
+     * (1s, 2s, 4s...).</p>
+     *
+     * @param attempt       tentativa que acabou de falhar (1-based)
+     * @param maxRetries    total de tentativas configurado
+     * @param lastException exceção da tentativa
+     * @throws InterruptedException se a thread for interrompida no sleep
+     */
+    private void waitBeforeNextAttempt(
+            final int attempt, final int maxRetries, final IOException lastException)
+            throws InterruptedException {
+        if (attempt >= maxRetries) {
+            LOG.error("Todas as {} tentativas falharam para clientId={}", maxRetries, clientId);
+            return;
+        }
+        final long retryAfterMs = lastException instanceof RetriableHttpStatusException retriable
+                ? retriable.retryAfterMillis()
+                : -1L;
+        final long delayMs = RetryPolicy.computeRetryDelayMs(attempt, retryAfterMs);
+        LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
+                attempt, maxRetries, clientId, lastException.getMessage(), delayMs);
+        sleeper.sleep(delayMs);
     }
 
     /**
@@ -712,49 +934,44 @@ public final class SmartTokenClient {
         return jwtAlgorithm;
     }
 
-    private TokenResponse obtainTokenWithRetry(final String scope) throws IOException, InterruptedException {
-        LOG.debug("Iniciando obtenção de token para clientId={} scope={}", clientId, scope);
+    /**
+     * Retorna o identificador de chave ({@code kid}) configurado, se houver.
+     *
+     * @return valor do {@code kid} incluído no header do client_assertion,
+     *         ou {@code null} quando não configurado
+     */
+    public String getKeyId() {
+        return keyId;
+    }
 
-        IOException lastException = null;
-        for (int attempt = 1; attempt <= faultToleranceConfig.maxRetries(); attempt++) {
-            try {
-                return doObtainToken(scope);
-            } catch (HttpTimeoutException | java.net.ConnectException ex) {
-                lastException = ex;
-                if (attempt < faultToleranceConfig.maxRetries()) {
-                    final long delayMs = RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
-                    LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
-                            attempt, faultToleranceConfig.maxRetries(), clientId, ex.getMessage(), delayMs);
-                    Thread.sleep(delayMs);
-                } else {
-                    LOG.error("Todas as {} tentativas falharam para clientId={}",
-                            faultToleranceConfig.maxRetries(), clientId);
-                }
-            } catch (IOException ex) {
-                if (isLikelyClientCertificateRejection(ex)) {
-                    LOG.error("Falha de TLS após handshake mTLS para clientId={} endpoint={}: {}."
-                            + " Causa provável: certificado de cliente rejeitado pelo servidor"
-                            + " (revogado, expirado ou não confiável) — o servidor abortou a conexão"
-                            + " em vez de retornar uma resposta HTTP de erro.",
-                            clientId, tokenEndpoint, ex.toString());
-                    throw new SmartTokenException(
-                            "Conexão TLS abortada pelo servidor após o handshake mTLS contra "
-                                    + tokenEndpoint
-                                    + ". Causa provável: certificado de cliente rejeitado"
-                                    + " (revogado, expirado ou não confiável)."
-                                    + " Verifique a validade do certificado em uso e, se ele estiver"
-                                    + " correto, contate o operador do servidor de autorização —"
-                                    + " a resposta esperada nesse cenário seria um alerta TLS"
-                                    + " (certificate_revoked/certificate_expired) ou HTTP 401,"
-                                    + " e não o encerramento abrupto da conexão.",
-                            ex);
-                }
-                throw ex;
-            }
+    /**
+     * Substitui o sleeper usado no backoff. Visibilidade package-private,
+     * destinado exclusivamente a testes.
+     *
+     * @param sleeper implementação alternativa de sleep
+     */
+    void setSleeper(final Sleeper sleeper) {
+        this.sleeper = Objects.requireNonNull(sleeper, "sleeper");
+    }
+
+    /**
+     * Fecha o {@link HttpClient} interno, liberando threads e conexões.
+     *
+     * <p>
+     * O {@code HttpClient} é sempre criado internamente por esta classe
+     * (não há injeção de cliente HTTP externo), portanto é seguro fechá-lo
+     * aqui. Chamadas subsequentes a {@link #obtainToken(String)} após o
+     * fechamento falharão.
+     * </p>
+     *
+     * <p>Este método é idempotente: invocações repetidas não têm efeito.</p>
+     */
+    @Override
+    public void close() {
+        if (closed.compareAndSet(false, true)) {
+            httpClient.close();
+            LOG.debug("SmartTokenClient fechado para clientId={}", clientId);
         }
-        throw new SmartTokenException(
-                "Falha após " + faultToleranceConfig.maxRetries() + " tentativas: "
-                        + lastException.getMessage(), lastException);
     }
 
     /**
@@ -806,9 +1023,13 @@ public final class SmartTokenClient {
         final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         final int statusCode = response.statusCode();
-        if (statusCode == HTTP_TOO_MANY_REQUESTS) {
-            LOG.warn("Rate limit atingido (HTTP 429) para clientId={}", clientId);
-            throw new SmartTokenException("Rate limit atingido (HTTP 429). Tente novamente mais tarde.");
+        if (RetryPolicy.isRetriableStatus(statusCode)) {
+            final long retryAfterMs = RetryPolicy.parseRetryAfterMillis(response, statusCode);
+            LOG.warn("Resposta transitória HTTP {} para clientId={}", statusCode, clientId);
+            final String detail = statusCode == HTTP_TOO_MANY_REQUESTS
+                    ? "Rate limit atingido (HTTP 429). Tente novamente mais tarde."
+                    : "HTTP " + statusCode + " — " + sanitizeErrorResponse(response.body());
+            throw new RetriableHttpStatusException(detail, statusCode, retryAfterMs);
         }
 
         if (statusCode != HTTP_OK) {
@@ -861,8 +1082,20 @@ public final class SmartTokenClient {
             throw new SmartTokenException("Falha ao serializar payload do JWT", e);
         }
 
-        // Constrói o header JWT dinamicamente com o algoritmo configurado
-        final String jwtHeader = "{\"alg\":\"" + jwtAlgorithm + "\",\"typ\":\"JWT\"}";
+        // Constrói o header JWT via Jackson (escape correto e seguro),
+        // incluindo o kid quando configurado
+        final ObjectNode headerNode = OBJECT_MAPPER.createObjectNode();
+        headerNode.put("alg", jwtAlgorithm);
+        headerNode.put("typ", "JWT");
+        if (keyId != null && !keyId.isBlank()) {
+            headerNode.put("kid", keyId);
+        }
+        final String jwtHeader;
+        try {
+            jwtHeader = OBJECT_MAPPER.writeValueAsString(headerNode);
+        } catch (JacksonException e) {
+            throw new SmartTokenException("Falha ao serializar header do JWT", e);
+        }
 
         // Codifica header e payload em Base64Url
         final String headerB64 = BASE64_URL_ENCODER.encodeToString(
@@ -950,18 +1183,26 @@ public final class SmartTokenClient {
     /**
      * Sanitiza a resposta de erro para evitar vazamento de tokens em logs.
      *
+     * <p>
+     * A redação de tokens é aplicada <strong>antes</strong> do truncamento,
+     * garantindo que nenhum token apareça mesmo em respostas longas.
+     * </p>
+     *
      * @param responseBody corpo da resposta HTTP
      * @return resposta sanitizada
      */
     static String sanitizeErrorResponse(final String responseBody) {
-        if (responseBody == null || responseBody.length() > MAX_ERROR_RESPONSE_LENGTH) {
-            return responseBody == null ? "<empty>"
-                    : responseBody.substring(0, MAX_ERROR_RESPONSE_LENGTH) + "...";
+        if (responseBody == null) {
+            return "<empty>";
         }
-        // Remove possíveis tokens do erro (JSON e form-encoded)
-        return responseBody
+        // Remove possíveis tokens do erro (JSON e form-encoded) ANTES de truncar
+        final String redacted = responseBody
                 .replaceAll("(\"(?:access_token|token)\")\\s*:\\s*\"[^\"]*\"", "$1:\"[REDACTED]\"")
                 .replaceAll("(access_token|token)=[^&\\s]*", "$1=[REDACTED]");
+        if (redacted.length() > MAX_ERROR_RESPONSE_LENGTH) {
+            return redacted.substring(0, MAX_ERROR_RESPONSE_LENGTH) + "...";
+        }
+        return redacted;
     }
 
     /**
@@ -1095,6 +1336,52 @@ public final class SmartTokenClient {
     }
 
     /**
+     * Abstração injetável de sleep para backoff, permitindo testes
+     * determinísticos sem depender de tempo real.
+     */
+    @FunctionalInterface
+    interface Sleeper {
+        /**
+         * Suspende a thread corrente pelo tempo indicado.
+         *
+         * @param millis duração em milissegundos
+         * @throws InterruptedException se a thread for interrompida
+         */
+        void sleep(long millis) throws InterruptedException;
+    }
+
+    /**
+     * Exceção interna para respostas HTTP transitórias (429/5xx) passíveis
+     * de retry, transportando o delay sugerido pelo servidor via
+     * {@code Retry-After}, quando presente.
+     */
+    static final class RetriableHttpStatusException extends IOException {
+
+        private static final long serialVersionUID = 1L;
+
+        /** Código de status HTTP que motivou a exceção. */
+        private final int statusCode;
+
+        /** Delay sugerido pelo servidor em ms; {@code -1} quando ausente. */
+        private final long retryAfterMillis;
+
+        RetriableHttpStatusException(
+                final String message, final int statusCode, final long retryAfterMillis) {
+            super(message);
+            this.statusCode = statusCode;
+            this.retryAfterMillis = retryAfterMillis;
+        }
+
+        int statusCode() {
+            return statusCode;
+        }
+
+        long retryAfterMillis() {
+            return retryAfterMillis;
+        }
+    }
+
+    /**
      * Representa um token em cache com seu tempo de expiração.
      */
     record CachedToken(String accessToken, Instant expiresAt) {
@@ -1107,6 +1394,17 @@ public final class SmartTokenClient {
         boolean isValid(final int marginSeconds) {
             return Instant.now().plusSeconds(marginSeconds).isBefore(expiresAt);
         }
+
+        /**
+         * Representação textual com o token mascarado, evitando exposição
+         * acidental em logs.
+         *
+         * @return string sem o valor do access token
+         */
+        @Override
+        public String toString() {
+            return "CachedToken[accessToken=[REDACTED], expiresAt=" + expiresAt + "]";
+        }
     }
 
     /**
@@ -1118,5 +1416,17 @@ public final class SmartTokenClient {
      *                    {@code null} quando o token é servido a partir do cache
      */
     public record TokenResponse(String accessToken, int expiresIn, String rawJson) {
+
+        /**
+         * Representação textual com o token e o JSON cru mascarados,
+         * evitando exposição acidental em logs.
+         *
+         * @return string sem o valor do access token nem o corpo cru
+         */
+        @Override
+        public String toString() {
+            return "TokenResponse[accessToken=[REDACTED], expiresIn=" + expiresIn
+                    + ", rawJson=[REDACTED]]";
+        }
     }
 }

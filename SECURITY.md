@@ -2,7 +2,7 @@
 
 ## Versões suportadas
 
-Apenas a versão **MAJOR mais recente** publicada no Maven Central recebe
+Apenas a versão **MAJOR mais recente** publicada no GitHub Packages recebe
 correções de segurança. Versões anteriores são consideradas fim-de-vida
 (EOL) a partir do lançamento de uma nova MAJOR.
 
@@ -60,4 +60,5 @@ anonimato.
 ## Escopo
 
 Este documento cobre o artefato publicado como
-`br.gov.go.saude:hubsaude-cliente-java` no Maven Central.
+`br.gov.go.saude.hubsaude:hubsaude-cliente-java` no GitHub Packages
+(`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`).

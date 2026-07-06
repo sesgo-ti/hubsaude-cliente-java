@@ -26,6 +26,8 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Security;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.util.Objects;
 
 /**
@@ -63,6 +65,18 @@ import java.util.Objects;
  * @see PrivateKeySigningStrategy
  */
 public final class SigningStrategyFactory {
+
+    /** Comprimento do salt PSS (bytes) para PS256, igual ao digest SHA-256. */
+    private static final int PSS_SALT_LEN_256 = 32;
+
+    /** Comprimento do salt PSS (bytes) para PS384, igual ao digest SHA-384. */
+    private static final int PSS_SALT_LEN_384 = 48;
+
+    /** Comprimento do salt PSS (bytes) para PS512, igual ao digest SHA-512. */
+    private static final int PSS_SALT_LEN_512 = 64;
+
+    /** Trailer field padrão (0xBC) conforme PKCS#1 v2.1. */
+    private static final int PSS_TRAILER_FIELD = 1;
 
     private SigningStrategyFactory() {
         // Factory não instanciável
@@ -275,16 +289,36 @@ public final class SigningStrategyFactory {
      *   <tr><td>RS256</td><td>SHA256withRSA</td><td>RSA PKCS#1 v1.5 + SHA-256</td></tr>
      *   <tr><td>RS384</td><td>SHA384withRSA</td><td>RSA PKCS#1 v1.5 + SHA-384</td></tr>
      *   <tr><td>RS512</td><td>SHA512withRSA</td><td>RSA PKCS#1 v1.5 + SHA-512</td></tr>
-     *   <tr><td>PS256</td><td>SHA256withRSAandMGF1</td><td>RSA-PSS + SHA-256</td></tr>
-     *   <tr><td>PS384</td><td>SHA384withRSAandMGF1</td><td>RSA-PSS + SHA-384</td></tr>
-     *   <tr><td>PS512</td><td>SHA512withRSAandMGF1</td><td>RSA-PSS + SHA-512</td></tr>
-     *   <tr><td>ES256</td><td>SHA256withECDSA</td><td>ECDSA P-256 + SHA-256</td></tr>
-     *   <tr><td>ES384</td><td>SHA384withECDSA</td><td>ECDSA P-384 + SHA-384</td></tr>
-     *   <tr><td>ES512</td><td>SHA512withECDSA</td><td>ECDSA P-521 + SHA-512</td></tr>
+     *   <tr><td>PS256</td><td>RSASSA-PSS</td><td>RSA-PSS + SHA-256 (requer
+     *       {@link PSSParameterSpec} — ver {@link #pssParameterSpecFor(String)})</td></tr>
+     *   <tr><td>PS384</td><td>RSASSA-PSS</td><td>RSA-PSS + SHA-384 (requer
+     *       {@link PSSParameterSpec})</td></tr>
+     *   <tr><td>PS512</td><td>RSASSA-PSS</td><td>RSA-PSS + SHA-512 (requer
+     *       {@link PSSParameterSpec})</td></tr>
+     *   <tr><td>ES256</td><td>SHA256withECDSAinP1363Format</td><td>ECDSA P-256 + SHA-256,
+     *       assinatura R||S conforme RFC 7518 §3.4</td></tr>
+     *   <tr><td>ES384</td><td>SHA384withECDSAinP1363Format</td><td>ECDSA P-384 + SHA-384,
+     *       assinatura R||S conforme RFC 7518 §3.4</td></tr>
+     *   <tr><td>ES512</td><td>SHA512withECDSAinP1363Format</td><td>ECDSA P-521 + SHA-512,
+     *       assinatura R||S conforme RFC 7518 §3.4</td></tr>
      * </table>
      *
+     * <p>
+     * <strong>Nota (ES*):</strong> a RFC 7518 §3.4 exige a concatenação crua
+     * {@code R || S} na assinatura ECDSA de um JWS — e não a codificação DER
+     * produzida por {@code SHAxxxwithECDSA}. Por isso o mapeamento usa as
+     * variantes {@code inP1363Format} do JDK.
+     * </p>
+     *
+     * <p>
+     * <strong>Nota (PS*):</strong> o nome JCA padrão do JDK para RSA-PSS é
+     * {@code RSASSA-PSS}, que exige parâmetros explícitos. Use
+     * {@link #fromPrivateKeyForJwt(PrivateKey, String)} para obter uma
+     * estratégia já configurada com o {@link PSSParameterSpec} correto.
+     * </p>
+     *
      * @param jwtAlgorithm algoritmo no formato JWT/JWA (ex: RS256, RS384, PS256)
-     * @return algoritmo no formato Java/JCA (ex: SHA256withRSA, SHA384withRSA)
+     * @return algoritmo no formato Java/JCA (ex: SHA256withRSA, RSASSA-PSS)
      * @throws SmartTokenException se o algoritmo não for reconhecido
      */
     public static String jwtAlgorithmToJava(final String jwtAlgorithm) {
@@ -294,17 +328,65 @@ public final class SigningStrategyFactory {
             case "RS256" -> "SHA256withRSA";
             case "RS384" -> "SHA384withRSA";
             case "RS512" -> "SHA512withRSA";
-            // RSA-PSS
-            case "PS256" -> "SHA256withRSAandMGF1";
-            case "PS384" -> "SHA384withRSAandMGF1";
-            case "PS512" -> "SHA512withRSAandMGF1";
-            // ECDSA
-            case "ES256" -> "SHA256withECDSA";
-            case "ES384" -> "SHA384withECDSA";
-            case "ES512" -> "SHA512withECDSA";
+            // RSA-PSS (parâmetros via PSSParameterSpec — ver pssParameterSpecFor)
+            case "PS256", "PS384", "PS512" -> "RSASSA-PSS";
+            // ECDSA em formato P1363 (R||S), conforme RFC 7518 §3.4
+            case "ES256" -> "SHA256withECDSAinP1363Format";
+            case "ES384" -> "SHA384withECDSAinP1363Format";
+            case "ES512" -> "SHA512withECDSAinP1363Format";
             default -> throw new SmartTokenException(
                     "Algoritmo JWT não suportado: " + jwtAlgorithm
                             + ". Algoritmos válidos: RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512");
         };
+    }
+
+    /**
+     * Retorna o {@link PSSParameterSpec} adequado para algoritmos JWT PS*.
+     *
+     * <p>
+     * Conforme a RFC 7518 §3.5, o salt deve ter o mesmo comprimento do
+     * digest e a MGF é MGF1 com o mesmo digest.
+     * </p>
+     *
+     * @param jwtAlgorithm algoritmo JWT (ex: PS256)
+     * @return parâmetros PSS para PS256/PS384/PS512; {@code null} para os demais
+     */
+    public static PSSParameterSpec pssParameterSpecFor(final String jwtAlgorithm) {
+        Objects.requireNonNull(jwtAlgorithm, "jwtAlgorithm não pode ser null");
+        return switch (jwtAlgorithm.toUpperCase(java.util.Locale.ROOT)) {
+            case "PS256" -> new PSSParameterSpec(
+                    "SHA-256", "MGF1", MGF1ParameterSpec.SHA256,
+                    PSS_SALT_LEN_256, PSS_TRAILER_FIELD);
+            case "PS384" -> new PSSParameterSpec(
+                    "SHA-384", "MGF1", MGF1ParameterSpec.SHA384,
+                    PSS_SALT_LEN_384, PSS_TRAILER_FIELD);
+            case "PS512" -> new PSSParameterSpec(
+                    "SHA-512", "MGF1", MGF1ParameterSpec.SHA512,
+                    PSS_SALT_LEN_512, PSS_TRAILER_FIELD);
+            default -> null;
+        };
+    }
+
+    /**
+     * Cria estratégia de assinatura a partir de um algoritmo JWT (JWA).
+     *
+     * <p>
+     * Converte o algoritmo JWT para o nome JCA correspondente e, quando
+     * necessário (PS256/PS384/PS512), configura o {@link PSSParameterSpec}
+     * exigido pelo algoritmo {@code RSASSA-PSS} do JDK.
+     * </p>
+     *
+     * @param privateKey   chave privada compatível com o algoritmo
+     * @param jwtAlgorithm algoritmo JWT (ex: RS256, PS256, ES256)
+     * @return estratégia de assinatura configurada
+     * @throws SmartTokenException se o algoritmo não for reconhecido
+     */
+    public static SigningStrategy fromPrivateKeyForJwt(
+            final PrivateKey privateKey,
+            final String jwtAlgorithm) {
+        Objects.requireNonNull(privateKey, "privateKey não pode ser null");
+        final String javaAlgorithm = jwtAlgorithmToJava(jwtAlgorithm);
+        return new PrivateKeySigningStrategy(
+                privateKey, null, javaAlgorithm, pssParameterSpecFor(jwtAlgorithm));
     }
 }

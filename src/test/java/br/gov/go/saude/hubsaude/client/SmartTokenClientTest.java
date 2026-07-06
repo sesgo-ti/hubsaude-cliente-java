@@ -365,24 +365,87 @@ class SmartTokenClientTest {
 
         @Test
         void deveRespeitarBackoffExponencialNoRetry() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
-                                .tokenEndpoint("https://host-inexistente.local:9999/auth/token")
-                                .clientId(CLIENT_ID)
-                                .privateKeyPem(keyFile)
-                                .certificatePem(certFile)
-                                .connectTimeout(Duration.ofMillis(200))
-                                .maxRetries(2)
-                                .build();
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        final byte[] resp = "{\"error\":\"unavailable\"}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(503, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .maxRetries(3)
+                                        .build();
 
-                final long start = System.currentTimeMillis();
+                        // Captura os delays em vez de dormir de fato (teste determinístico)
+                        final java.util.List<Long> delays = java.util.Collections.synchronizedList(
+                                        new java.util.ArrayList<>());
+                        client.setSleeper(delays::add);
 
-                assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
-                                .isInstanceOf(SmartTokenException.class)
-                                .hasMessageContaining("Falha após 2 tentativas");
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("Falha após 3 tentativas");
 
-                final long elapsed = System.currentTimeMillis() - start;
-                // Com maxRetries=2, deve haver 1 retry com delay base de 1000ms
-                assertThat(elapsed).isGreaterThanOrEqualTo(900L);
+                        // Backoff exponencial: 1000ms, 2000ms (sem Retry-After no 503)
+                        assertThat(delays).containsExactly(1000L, 2000L);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveHonrarRetryAfterEm503() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        if (calls.incrementAndGet() == 1) {
+                                exchange.getResponseHeaders().add("Retry-After", "7");
+                                final byte[] resp = "{\"error\":\"unavailable\"}".getBytes(StandardCharsets.UTF_8);
+                                exchange.sendResponseHeaders(503, resp.length);
+                                try (var os = exchange.getResponseBody()) {
+                                        os.write(resp);
+                                }
+                        } else {
+                                final byte[] resp = "{\"access_token\":\"tok-retry\",\"expires_in\":3600}"
+                                                .getBytes(StandardCharsets.UTF_8);
+                                exchange.sendResponseHeaders(200, resp.length);
+                                try (var os = exchange.getResponseBody()) {
+                                        os.write(resp);
+                                }
+                        }
+                });
+                server.start();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .maxRetries(2)
+                                        .build();
+
+                        final java.util.List<Long> delays = java.util.Collections.synchronizedList(
+                                        new java.util.ArrayList<>());
+                        client.setSleeper(delays::add);
+
+                        final String token = client.obtainToken("system/Patient.rs");
+
+                        assertThat(token).isEqualTo("tok-retry");
+                        // Retry-After: 7 segundos honrado (em vez do backoff de 1000ms)
+                        assertThat(delays).containsExactly(7000L);
+                } finally {
+                        server.stop(0);
+                }
         }
 
         @Test
@@ -1409,6 +1472,242 @@ class SmartTokenClientTest {
                 } finally {
                         server.stop(0);
                 }
+        }
+
+        // ---------- Testes issue #725 ----------
+
+        @Test
+        void deveRedigirTokenAntesDeTruncarRespostaGrande() {
+                // Corpo > 500 chars com o token após a posição de truncamento
+                final String token = "eyJtokenSuperSecretoQueNaoPodeVazar12345";
+                final String response = "{\"error\":\"invalid\",\"padding\":\""
+                                + "x".repeat(600)
+                                + "\",\"access_token\":\"" + token + "\"}";
+                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+
+                assertThat(sanitized).doesNotContain(token);
+                assertThat(sanitized).endsWith("...");
+                assertThat(sanitized.length()).isLessThanOrEqualTo(503);
+
+                // Corpo > 500 chars com o token ANTES do ponto de truncamento:
+                // a redação deve ocorrer antes do truncamento
+                final String response2 = "{\"access_token\":\"" + token + "\",\"padding\":\""
+                                + "y".repeat(600) + "\"}";
+                final String sanitized2 = SmartTokenClient.sanitizeErrorResponse(response2);
+
+                assertThat(sanitized2).doesNotContain(token);
+                assertThat(sanitized2).contains("[REDACTED]");
+                assertThat(sanitized2).endsWith("...");
+        }
+
+        @Test
+        void deveAssinarClientAssertionComEs256EmFormatoP1363() throws Exception {
+                final KeyPairGenerator ecGen = KeyPairGenerator.getInstance("EC");
+                ecGen.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+                final KeyPair ecPair = ecGen.generateKeyPair();
+
+                final SigningStrategy strategy = SigningStrategyFactory
+                                .fromPrivateKeyForJwt(ecPair.getPrivate(), "ES256");
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, null, SSLContext.getDefault(),
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 30, "ES256");
+
+                final String assertion = client.buildClientAssertion();
+
+                // jjwt valida assinaturas ES256 em formato R||S (RFC 7518 §3.4);
+                // uma assinatura DER seria rejeitada aqui
+                final Claims claims = Jwts.parser()
+                                .verifyWith(ecPair.getPublic())
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+
+                assertThat(claims.getSubject()).isEqualTo(CLIENT_ID);
+        }
+
+        @Test
+        void deveAssinarClientAssertionComPs256ValidadoPorJjwt() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory
+                                .fromPrivateKeyForJwt(privateKey, "PS256");
+                final SmartTokenClient client = new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 30, "PS256");
+
+                final String assertion = client.buildClientAssertion();
+
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+
+                assertThat(claims.getSubject()).isEqualTo(CLIENT_ID);
+
+                // Header deve declarar PS256
+                final String headerJson = new String(
+                                java.util.Base64.getUrlDecoder().decode(assertion.split("\\.")[0]),
+                                StandardCharsets.UTF_8);
+                assertThat(headerJson).contains("\"alg\":\"PS256\"");
+        }
+
+        @Test
+        void deveIncluirKidNoHeaderQuandoConfigurado() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .keyId("minha-chave-1")
+                                .build();
+
+                final String assertion = client.buildClientAssertion();
+                final String headerJson = new String(
+                                java.util.Base64.getUrlDecoder().decode(assertion.split("\\.")[0]),
+                                StandardCharsets.UTF_8);
+
+                assertThat(headerJson).contains("\"kid\":\"minha-chave-1\"");
+                assertThat(client.getKeyId()).isEqualTo("minha-chave-1");
+
+                // Assinatura continua válida
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+                assertThat(claims.getSubject()).isEqualTo(CLIENT_ID);
+        }
+
+        @Test
+        void naoDeveIncluirKidNoHeaderPorPadrao() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                final String assertion = client.buildClientAssertion();
+                final String headerJson = new String(
+                                java.util.Base64.getUrlDecoder().decode(assertion.split("\\.")[0]),
+                                StandardCharsets.UTF_8);
+
+                assertThat(headerJson).doesNotContain("\"kid\"");
+                assertThat(headerJson).contains("\"alg\":\"RS256\"");
+                assertThat(headerJson).contains("\"typ\":\"JWT\"");
+        }
+
+        @Test
+        void deveFalharConstrutorComChaveECertificadoIncompativeis() throws Exception {
+                // Chave recém-gerada, diferente da chave do clientCertificate
+                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+                gen.initialize(2048);
+                final KeyPair outroPar = gen.generateKeyPair();
+                final SigningStrategy strategy = SigningStrategyFactory
+                                .fromPrivateKey(outroPar.getPrivate());
+
+                assertThatThrownBy(() -> new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 30, "RS256"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("não corresponde");
+        }
+
+        @Test
+        void deveFalharConstrutorComAlgoritmoNone() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+
+                assertThatThrownBy(() -> new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 30, "none"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("não suportado");
+        }
+
+        @Test
+        void deveFalharConstrutorComAlgoritmoHs256() throws Exception {
+                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
+
+                assertThatThrownBy(() -> new SmartTokenClient(
+                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
+                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
+                                true, 30, "HS256"))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("não suportado");
+        }
+
+        @Test
+        void toStringDeTokenResponseNaoDeveExporToken() {
+                final var response = new SmartTokenClient.TokenResponse(
+                                "token-super-secreto", 3600,
+                                "{\"access_token\":\"token-super-secreto\"}");
+
+                assertThat(response.toString()).doesNotContain("token-super-secreto");
+                assertThat(response.toString()).contains("[REDACTED]");
+                // Acesso direto continua funcionando
+                assertThat(response.accessToken()).isEqualTo("token-super-secreto");
+        }
+
+        @Test
+        void toStringDeCachedTokenNaoDeveExporToken() {
+                final var cached = new SmartTokenClient.CachedToken(
+                                "token-super-secreto", java.time.Instant.now().plusSeconds(60));
+
+                assertThat(cached.toString()).doesNotContain("token-super-secreto");
+                assertThat(cached.toString()).contains("[REDACTED]");
+                assertThat(cached.accessToken()).isEqualTo("token-super-secreto");
+        }
+
+        @Test
+        void deveRejeitarTokenEndpointHttpNaoLocal() {
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .tokenEndpoint("http://exemplo.com/auth/token")
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build())
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("https");
+        }
+
+        @Test
+        void deveRejeitarFhirBaseHttpNaoLocal() {
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .fhirBase("http://exemplo.com/fhir")
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build())
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("https");
+        }
+
+        @Test
+        void devePermitirHttpParaLocalhost() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint("http://localhost:8080/auth/token")
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                assertThat(client.getTokenEndpoint()).isEqualTo("http://localhost:8080/auth/token");
+        }
+
+        @Test
+        void closeDeveSerIdempotente() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                client.close();
+                client.close(); // segunda chamada não deve lançar exceção
         }
 
         // ---------- helpers ----------

@@ -481,6 +481,32 @@ class SmartTokenClientBuilderTest {
         }
     }
 
+    @Test
+    @DisplayName("Deve rejeitar token_endpoint descoberto com esquema http não-local")
+    void deveRejeitarTokenEndpointDescobertoHttpNaoLocal() throws Exception {
+        final String jsonResponse = "{\"token_endpoint\":\"http://exemplo.com/auth/token\"}";
+
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            exchange.sendResponseHeaders(200, jsonResponse.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort();
+
+            assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
+                    baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("https");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     // ==================== build com clientKeyStore (mTLS via KeyStore) ====================
 
     @Test

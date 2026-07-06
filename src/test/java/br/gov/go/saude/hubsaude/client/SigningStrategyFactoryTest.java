@@ -282,6 +282,84 @@ class SigningStrategyFactoryTest {
                 .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
+    void deveMapearEsParaFormatoP1363() {
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("ES256"))
+                .isEqualTo("SHA256withECDSAinP1363Format");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("ES384"))
+                .isEqualTo("SHA384withECDSAinP1363Format");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("ES512"))
+                .isEqualTo("SHA512withECDSAinP1363Format");
+    }
+
+    @Test
+    void deveMapearPsParaRsassaPss() {
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("PS256")).isEqualTo("RSASSA-PSS");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("PS384")).isEqualTo("RSASSA-PSS");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("PS512")).isEqualTo("RSASSA-PSS");
+    }
+
+    @Test
+    void deveRejeitarAlgoritmoNone() {
+        assertThatThrownBy(() -> SigningStrategyFactory.jwtAlgorithmToJava("none"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("não suportado");
+        assertThatThrownBy(() -> SigningStrategyFactory.jwtAlgorithmToJava("HS256"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("não suportado");
+    }
+
+    @Test
+    void deveRetornarPssParameterSpecCorretoPorVariante() {
+        final var ps256 = SigningStrategyFactory.pssParameterSpecFor("PS256");
+        assertThat(ps256.getDigestAlgorithm()).isEqualTo("SHA-256");
+        assertThat(ps256.getSaltLength()).isEqualTo(32);
+
+        final var ps384 = SigningStrategyFactory.pssParameterSpecFor("PS384");
+        assertThat(ps384.getDigestAlgorithm()).isEqualTo("SHA-384");
+        assertThat(ps384.getSaltLength()).isEqualTo(48);
+
+        final var ps512 = SigningStrategyFactory.pssParameterSpecFor("PS512");
+        assertThat(ps512.getDigestAlgorithm()).isEqualTo("SHA-512");
+        assertThat(ps512.getSaltLength()).isEqualTo(64);
+
+        assertThat(SigningStrategyFactory.pssParameterSpecFor("RS256")).isNull();
+    }
+
+    @Test
+    void fromPrivateKeyForJwtDeveAssinarEs256Verificavel() throws Exception {
+        final KeyPairGenerator ecGen = KeyPairGenerator.getInstance("EC");
+        ecGen.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        final KeyPair ecPair = ecGen.generateKeyPair();
+
+        final SigningStrategy strategy = SigningStrategyFactory
+                .fromPrivateKeyForJwt(ecPair.getPrivate(), "ES256");
+        final byte[] data = "dados-teste".getBytes(StandardCharsets.UTF_8);
+        final byte[] signature = strategy.sign(data);
+
+        // Assinatura P1363 de P-256 tem exatamente 64 bytes (R||S)
+        assertThat(signature).hasSize(64);
+
+        final Signature verifier = Signature.getInstance("SHA256withECDSAinP1363Format");
+        verifier.initVerify(ecPair.getPublic());
+        verifier.update(data);
+        assertThat(verifier.verify(signature)).isTrue();
+    }
+
+    @Test
+    void fromPrivateKeyForJwtDeveAssinarPs256Verificavel() throws Exception {
+        final SigningStrategy strategy = SigningStrategyFactory
+                .fromPrivateKeyForJwt(privateKey, "PS256");
+        final byte[] data = "dados-teste".getBytes(StandardCharsets.UTF_8);
+        final byte[] signature = strategy.sign(data);
+
+        final Signature verifier = Signature.getInstance("RSASSA-PSS");
+        verifier.setParameter(SigningStrategyFactory.pssParameterSpecFor("PS256"));
+        verifier.initVerify(publicKey);
+        verifier.update(data);
+        assertThat(verifier.verify(signature)).isTrue();
+    }
+
     private static java.security.cert.X509Certificate generateSelfSignedCert(
             final PrivateKey privKey, final PublicKey pubKey) throws Exception {
         final long now = System.currentTimeMillis();

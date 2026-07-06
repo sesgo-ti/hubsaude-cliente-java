@@ -24,6 +24,7 @@ import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Signature;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.Objects;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -65,6 +66,7 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
     private final PrivateKey privateKey;
     private final Provider provider;
     private final String algorithm;
+    private final AlgorithmParameterSpec parameterSpec;
 
     /**
      * Cria estratégia com chave e algoritmo padrão (SHA384withRSA).
@@ -101,15 +103,39 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
      * @param provider   provider criptográfico (null = padrão da JVM)
      * @param algorithm  algoritmo de assinatura
      */
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-            justification = "Provider é efetivamente imutável - singleton/thread-safe")
     public PrivateKeySigningStrategy(
             final PrivateKey privateKey,
             final Provider provider,
             final String algorithm) {
+        this(privateKey, provider, algorithm, null);
+    }
+
+    /**
+     * Cria estratégia completa com provider e parâmetros de algoritmo.
+     *
+     * <p>
+     * Necessário para algoritmos parametrizados, como {@code RSASSA-PSS}
+     * (usado pelos algoritmos JWT PS256/PS384/PS512), que exigem um
+     * {@link java.security.spec.PSSParameterSpec} definindo digest, MGF e
+     * comprimento do salt.
+     * </p>
+     *
+     * @param privateKey    chave privada ou handle PKCS#11
+     * @param provider      provider criptográfico (null = padrão da JVM)
+     * @param algorithm     algoritmo de assinatura (ex: "RSASSA-PSS")
+     * @param parameterSpec parâmetros do algoritmo (null se não requeridos)
+     */
+    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
+            justification = "Provider e AlgorithmParameterSpec são efetivamente imutáveis")
+    public PrivateKeySigningStrategy(
+            final PrivateKey privateKey,
+            final Provider provider,
+            final String algorithm,
+            final AlgorithmParameterSpec parameterSpec) {
         this.privateKey = Objects.requireNonNull(privateKey, "privateKey não pode ser null");
         this.provider = provider; // pode ser null (usa padrão)
         this.algorithm = Objects.requireNonNull(algorithm, "algorithm não pode ser null");
+        this.parameterSpec = parameterSpec; // pode ser null (sem parâmetros)
     }
 
     /**
@@ -130,6 +156,9 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
             final Signature sig = provider != null
                     ? Signature.getInstance(algorithm, provider)
                     : Signature.getInstance(algorithm);
+            if (parameterSpec != null) {
+                sig.setParameter(parameterSpec);
+            }
             sig.initSign(privateKey);
             sig.update(data);
             return sig.sign();
@@ -145,5 +174,14 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
      */
     public String getAlgorithm() {
         return algorithm;
+    }
+
+    /**
+     * Retorna os parâmetros do algoritmo, quando configurados.
+     *
+     * @return parâmetros do algoritmo ou {@code null}
+     */
+    AlgorithmParameterSpec getParameterSpec() {
+        return parameterSpec;
     }
 }

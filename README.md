@@ -16,7 +16,7 @@ assinatura e a troca pelo *access token* no endpoint OAuth 2.0.
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.3.7-SNAPSHOT</version>
+    <version>0.3.12</version>
 </dependency>
 ```
 
@@ -65,13 +65,13 @@ try (var fis = new FileInputStream("certificado.pfx")) {
 
 SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(
         ks, "alias-da-chave", "senha-chave".toCharArray());
-X509Certificate cert = (X509Certificate) ks.getCertificate("alias-da-chave");
 
 var client = SmartTokenClient.builder()
         .tokenEndpoint("https://hub.saude.go.gov.br/auth/token")
         .clientId("meu-sistema")
         .signingStrategy(strategy)
-        .certificate(cert)
+        // mTLS com a mesma chave/certificado do KeyStore (opcional)
+        .clientKeyStore(ks, "alias-da-chave", "senha-chave".toCharArray())
         .build();
 ```
 
@@ -122,8 +122,20 @@ var client = SmartTokenClient.builder()
         .tokenCacheMarginSeconds(30)                  // margem de renovação
         .maxRetries(3)
         .jwtAlgorithm("RS256")                        // ou RS384/RS512, PS*, ES*
+        .keyId("minha-chave-2026")                    // kid no header do JWT (opcional)
         .build();
 ```
+
+O endpoint deve usar `https`; o esquema `http` é aceito apenas para
+`localhost`/`127.0.0.1` (desenvolvimento e testes locais).
+
+### Identificador de chave (`kid`)
+
+Quando o servidor de autorização publica múltiplas chaves (JWKS), use
+`keyId("...")` para incluir o header `kid` no *client assertion*,
+permitindo que o servidor selecione a chave pública correta para
+validar a assinatura. Se não configurado, o header contém apenas
+`alg` e `typ`.
 
 ### Descoberta automática do endpoint
 

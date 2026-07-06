@@ -335,7 +335,7 @@
             As regras são replicadas localmente em
             src/test/java/.../client/archrules/ClientArchRules.java
             para preservar a independência total do cliente
-            (publicado em Maven Central, sem dependência do
+            (publicado no GitHub Packages, sem dependência do
             monorepo HubSaúde).
         -->
         <dependency>

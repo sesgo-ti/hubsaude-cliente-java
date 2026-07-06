@@ -79,24 +79,43 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClientJarIT.class);
 
-    private static final int SIMULATOR_PORT = 8443;
-    private static final String BASE_URL = "https://localhost:" + SIMULATOR_PORT;
+    /** Porta efêmera alocada dinamicamente para o simulador. */
+    private int simulatorPort;
+
+    /** URL base do simulador, derivada da porta efêmera. */
+    private String baseUrl;
 
     private Process simulatorProcess;
 
     @BeforeAll
     void iniciarSimulador(@TempDir final Path tempDir) throws Exception {
-        LOG.info("☕ Iniciando simulador via ProcessBuilder...");
+        simulatorPort = allocateFreePort();
+        baseUrl = "https://localhost:" + simulatorPort;
+        LOG.info("☕ Iniciando simulador via ProcessBuilder na porta {}...", simulatorPort);
         startJarSimulator();
-        LOG.info("Simulador disponível em: {}", BASE_URL);
+        LOG.info("Simulador disponível em: {}", baseUrl);
 
         // Extrai o certificado do simulador e constrói SSLContext seguro
-        simulatorCert = extractServerCertificate("localhost", SIMULATOR_PORT);
+        simulatorCert = extractServerCertificate("localhost", simulatorPort);
         simulatorSslContext = SslContextFactory.buildSslContext(simulatorCert, SslContextFactory.DEFAULT_TLS_PROTOCOL);
         LOG.info("SSLContext construído com certificado do simulador: {}", simulatorCert.getSubjectX500Principal());
 
         // Gera credenciais de teste
         gerarCredenciais(tempDir);
+    }
+
+    /**
+     * Aloca uma porta TCP livre no host, evitando conflito com outros
+     * processos (elimina a dependência da porta fixa 8443).
+     *
+     * @return número de porta livre
+     * @throws IOException se não for possível abrir socket local
+     */
+    private static int allocateFreePort() throws IOException {
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        }
     }
 
     @AfterAll
@@ -116,7 +135,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     @Override
     protected String getSimulatorBaseUrl() {
-        return BASE_URL;
+        return baseUrl;
     }
 
     // ==================== Inicialização ====================
@@ -128,7 +147,9 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
         final ProcessBuilder pb = new ProcessBuilder(
                 "java",
                 "-Djava.security.egd=file:/dev/./urandom",
-                "-jar", jarPath.toString());
+                "-jar", jarPath.toString(),
+                "--server.port=" + simulatorPort,
+                "--server.base-url=" + baseUrl);
         pb.redirectErrorStream(true);
 
         simulatorProcess = pb.start();
@@ -160,7 +181,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
 
-        final String healthUrl = BASE_URL + "/.well-known/smart-configuration";
+        final String healthUrl = baseUrl + "/.well-known/smart-configuration";
         final int maxAttempts = 60;
         final int delayMs = 1000;
 

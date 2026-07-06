@@ -74,8 +74,9 @@ import tools.jackson.databind.json.JsonMapper;
  * @see SigningStrategy
  * @see SslContextFactory
  */
-// Padrão Builder usa nomes iguais e tem muitos campos
-@SuppressWarnings({ "checkstyle:HiddenField", "PMD.TooManyFields", "PMD.TooManyMethods" })
+// Padrão Builder usa nomes iguais e tem muitos campos/métodos fluentes
+@SuppressWarnings({ "checkstyle:HiddenField", "checkstyle:MethodCount",
+    "PMD.TooManyFields", "PMD.TooManyMethods" })
 public final class SmartTokenClientBuilder {
 
     private static final int HTTP_OK = 200;
@@ -95,6 +96,7 @@ public final class SmartTokenClientBuilder {
     private char[] clientKeyPassword;
     private String tlsProtocol = SslContextFactory.DEFAULT_TLS_PROTOCOL;
     private String jwtAlgorithm = SmartTokenClient.DEFAULT_JWT_ALGORITHM;
+    private String keyId;
     private FaultToleranceConfig faultToleranceConfig = new FaultToleranceConfig(
         SmartTokenClient.DEFAULT_CONNECT_TIMEOUT,
         SmartTokenClient.DEFAULT_REQUEST_TIMEOUT,
@@ -334,6 +336,25 @@ public final class SmartTokenClientBuilder {
     }
 
     /**
+     * Define o identificador da chave ({@code kid}) a incluir no header do
+     * JWT client_assertion.
+     *
+     * <p>
+     * O {@code kid} permite ao servidor de autorização selecionar a chave
+     * pública correta (por exemplo, em um JWKS com múltiplas chaves) para
+     * validar a assinatura do client_assertion. Opcional: quando não
+     * definido, o header contém apenas {@code alg} e {@code typ}.
+     * </p>
+     *
+     * @param keyId identificador da chave registrado junto ao servidor
+     * @return este builder
+     */
+    public SmartTokenClientBuilder keyId(final String keyId) {
+        this.keyId = keyId;
+        return this;
+    }
+
+    /**
      * Define um {@link SSLContext} customizado, substituindo o comportamento
      * padrão de {@link #serverTrustAnchor(Path)}.
      *
@@ -458,6 +479,12 @@ public final class SmartTokenClientBuilder {
             throw new IllegalStateException("É obrigatório definir tokenEndpoint ou fhirBase");
         }
         Objects.requireNonNull(clientId, "clientId é obrigatório");
+        if (tokenEndpoint != null) {
+            requireHttps(tokenEndpoint, "tokenEndpoint");
+        }
+        if (discoveryBaseUrl != null) {
+            requireHttps(discoveryBaseUrl, "fhirBase");
+        }
 
         // === Carrega credenciais do cliente primeiro (necessário para mTLS) ===
         final SigningStrategy effectiveStrategy;
@@ -471,9 +498,9 @@ public final class SmartTokenClientBuilder {
             clientKey = null;
         } else if (privateKeyPem != null) {
             clientKey = PemLoader.loadPrivateKey(privateKeyPem, privateKeyPassword);
-            // Converte algoritmo JWT para algoritmo Java e cria a estratégia
-            final String javaAlgorithm = SigningStrategyFactory.jwtAlgorithmToJava(jwtAlgorithm);
-            effectiveStrategy = SigningStrategyFactory.fromPrivateKey(clientKey, javaAlgorithm);
+            // Cria a estratégia a partir do algoritmo JWT, incluindo os
+            // parâmetros PSS quando aplicável (PS256/PS384/PS512)
+            effectiveStrategy = SigningStrategyFactory.fromPrivateKeyForJwt(clientKey, jwtAlgorithm);
         } else {
             throw new IllegalStateException(
                     "É obrigatório definir signingStrategy ou privateKeyPem");
@@ -534,12 +561,59 @@ public final class SmartTokenClientBuilder {
                 faultToleranceConfig,
                 enableTokenCache,
                 tokenCacheMarginSeconds,
-                jwtAlgorithm);
+                jwtAlgorithm,
+                keyId);
+    }
+
+    /**
+     * Exige que a URL use o esquema {@code https}, com exceção explícita
+     * para {@code localhost}/{@code 127.0.0.1} (útil em desenvolvimento e
+     * testes com servidor local).
+     *
+     * @param url   URL a validar
+     * @param campo nome do campo, usado na mensagem de erro
+     * @throws IllegalArgumentException se o esquema não for https e o host
+     *                                  não for local
+     */
+    // Endereços de loopback fazem parte da allowlist intencional para
+    // desenvolvimento/testes locais — não são IPs de serviços hardcoded.
+    @SuppressWarnings("PMD.AvoidUsingHardCodedIP")
+    static void requireHttps(final String url, final String campo) {
+        final URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    campo + " inválido: '" + url + "' não é uma URL válida", e);
+        }
+        final String scheme = uri.getScheme();
+        if ("https".equalsIgnoreCase(scheme)) {
+            return;
+        }
+        final String host = uri.getHost();
+        final boolean hostLocal = host != null
+                && ("localhost".equalsIgnoreCase(host)
+                        || "127.0.0.1".equals(host)
+                        || "[::1]".equals(host)
+                        || "::1".equals(host));
+        if ("http".equalsIgnoreCase(scheme) && hostLocal) {
+            return;
+        }
+        throw new IllegalArgumentException(
+                campo + " deve usar o esquema https (recebido: '" + url + "')."
+                        + " O esquema http é permitido apenas para localhost/127.0.0.1,"
+                        + " em desenvolvimento e testes locais.");
     }
 
     /**
      * Descobre o token_endpoint consultando o /.well-known/smart-configuration
      * a partir de uma URL base FHIR.
+     *
+     * <p>
+     * O valor retornado pelo servidor é validado: deve usar o esquema
+     * {@code https} (exceção para {@code localhost}/{@code 127.0.0.1}),
+     * evitando que um endpoint inseguro seja adotado silenciosamente.
+     * </p>
      *
      * @param fhirBaseUrl    URL base do servidor FHIR
      * @param sslContext     contexto SSL a ser utilizado
@@ -547,6 +621,8 @@ public final class SmartTokenClientBuilder {
      * @param requestTimeout timeout de requisição HTTP
      * @return a URL do token_endpoint resolvida dinamicamente
      * @throws IOException em caso de erro de rede ou falha de protocolo
+     * @throws IllegalArgumentException se o token_endpoint descoberto não
+     *                                  usar https (fora de localhost)
      */
     public static String discoverTokenEndpoint(
             final String fhirBaseUrl,
@@ -583,7 +659,9 @@ public final class SmartTokenClientBuilder {
             if (!node.has("token_endpoint")) {
                 throw new SmartTokenException("A resposta de smart-configuration não contém 'token_endpoint'");
             }
-            return node.get("token_endpoint").asString();
+            final String discovered = node.get("token_endpoint").asString();
+            requireHttps(discovered, "token_endpoint descoberto");
+            return discovered;
         }
     }
 

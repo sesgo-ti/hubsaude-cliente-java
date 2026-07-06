@@ -51,8 +51,13 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
    (mínimo de 85% no `hubsaude-cliente-java`).
 5. **Build verde** localmente antes de abrir PR:
    ```bash
-   mvn -pl hubsaude/projetos/hubsaude-cliente-java -am verify
+   cd hubsaude/projetos/hubsaude-cliente-java && mvn verify
    ```
+   O projeto não participa de um POM agregador na raiz do repositório —
+   o build deve ser executado dentro do diretório do projeto.
+   Opcionalmente, execute também os perfis do `pom.xml`:
+   `mvn verify -Pquality` (Checkstyle, PMD, SpotBugs, JaCoCo) e
+   `mvn verify -Psecurity` (OWASP Dependency-Check).
 6. **PR pequeno e focado**: prefira PRs de até ~400 linhas modificadas.
 7. **Descrição do PR**: explique *o quê*, *por quê* e *como testar*.
    Referencie issues com `Closes #123`.
