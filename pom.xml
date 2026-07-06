@@ -100,6 +100,10 @@
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <spotbugs-maven-plugin.version>4.10.2.0</spotbugs-maven-plugin.version>
+        <!-- FindSecBugs: SAST de seguranca no SpotBugs (perfil `quality`).
+             Mesma versao usada no hubsaude-parent (issue #736): este projeto
+             e standalone (sem <parent>) e nao herda aquela configuracao. -->
+        <findsecbugs.version>1.14.0</findsecbugs.version>
 
         <!-- Plugins do perfil `quality` (verificacoes estaticas) -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
@@ -784,6 +788,18 @@
                     <plugin>
                         <groupId>com.github.spotbugs</groupId>
                         <artifactId>spotbugs-maven-plugin</artifactId>
+                        <configuration>
+                            <!-- FindSecBugs: SAST profundo em lib
+                                 criptografica (chaves privadas, JWT, TLS).
+                                 Replica o hubsaude-parent (issue #736). -->
+                            <plugins>
+                                <plugin>
+                                    <groupId>com.h3xstream.findsecbugs</groupId>
+                                    <artifactId>findsecbugs-plugin</artifactId>
+                                    <version>${findsecbugs.version}</version>
+                                </plugin>
+                            </plugins>
+                        </configuration>
                         <executions>
                             <execution>
                                 <id>spotbugs</id>
