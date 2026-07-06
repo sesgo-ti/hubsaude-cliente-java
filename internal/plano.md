@@ -151,15 +151,18 @@ release):
 
 ### 3.3 Garantir que dependências do HubSaúde estejam publicadas
 
-`hubsaude-cliente-java` declara:
+> Atualizado em 2026-07-06 (issue #737): as dependências
+> `hubsaude-core` e `hubsaude-arch-rules`, citadas na versão
+> original deste plano, foram removidas do POM na simplificação de
+> 2026-05-17 (desacoplamento do monorepo).
 
-- `br.gov.go.saude.hubsaude:hubsaude-core` (test scope)
-- `br.gov.go.saude.hubsaude:hubsaude-arch-rules` (test scope)
+`hubsaude-cliente-java` declara hoje uma única dependência interna:
+
 - `br.gov.go.saude.hubsaude:hubsaude-simulador` (test scope)
 
 Maven Central **rejeita** artefatos cujas dependências `compile`/
-`runtime` não estejam no Central. Como as dependências acima são
-`test`, **não bloqueiam** o upload. Mas é importante garantir que:
+`runtime` não estejam no Central. Como a dependência acima é
+`test`, **não bloqueia** o upload. Mas é importante garantir que:
 
 - [ ] O `flatten-maven-plugin` (modo `oss`) está removendo
       corretamente o `<parent>` interno e resolvendo `${revision}`.
@@ -238,6 +241,13 @@ o artefato está disponível no Maven Central:
       ```
 
 ### 5.2 Seção "Dependência Maven"
+
+> **Atenção (issue #737):** os trechos abaixo usam o groupId
+> `br.gov.go.saude`, que é o groupId **futuro**, a ser adotado
+> apenas na migração para o Maven Central (ver override citado no
+> cabeçalho deste plano). O groupId **atual** do artefato, publicado
+> no GitHub Packages, é `br.gov.go.saude.hubsaude`. Não usar os
+> snippets abaixo enquanto a migração não ocorrer.
 
 Substituir o bloco atual (linhas 11–25) por algo equivalente a:
 
