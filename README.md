@@ -10,6 +10,11 @@ Cliente Java para obtenção de tokens de acesso ao HubSaúde via
 (SMART-on-FHIR). Encapsula a montagem do JWT *client assertion*, sua
 assinatura e a troca pelo *access token* no endpoint OAuth 2.0.
 
+O contrato comportamental está em [`ESPECIFICACAO.md`](ESPECIFICACAO.md)
+— requisitos normativos que refletem esta implementação e servem de
+referência para SDKs equivalentes em outras linguagens (Python,
+JavaScript/TypeScript, C#).
+
 ## Dependência Maven
 
 ```xml
