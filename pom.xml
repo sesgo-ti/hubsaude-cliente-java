@@ -544,12 +544,14 @@
                             </limits>
                         </rule>
                     </rules>
-                    <!-- Exclui métodos específicos que requerem hardware PKCS#11/HSM -->
-                    <excludes>
-                        <exclude>**/SigningStrategyFactory$*Pkcs11*</exclude>
-                    </excludes>
                 </configuration>
                 <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
                     <execution>
                         <id>jacoco-check</id>
                         <goals>

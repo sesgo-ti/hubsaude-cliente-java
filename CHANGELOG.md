@@ -12,6 +12,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   POM publicado é auto-suficiente (`flatten-maven-plugin` modo `oss`).
 - Versões das dependências declaradas explicitamente no próprio POM.
 
+### Corrigido
+- JaCoCo: removida exclusão inócua `**/SigningStrategyFactory$*Pkcs11*`
+  (JaCoCo filtra classes, não métodos; o padrão não casava nada) e
+  adicionada execução `prepare-agent`, sem a qual o `jacoco:check` era
+  pulado por ausência de `jacoco.exec` — o gate de 85% agora é
+  efetivamente aplicado (#734).
+
 ## [0.1.5] - 2026-05-20
 
 ### Adicionado
