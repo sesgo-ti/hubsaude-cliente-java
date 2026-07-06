@@ -12,11 +12,33 @@ com prioridade indicam o quanto pesam para o marco `1.0`:
 - **C** — opcional / depende de demanda real
 
 Cada item registra também um **Status** (última reconciliação com o
-código em 2026-07-06, issue #737):
+código em 2026-07-06; segunda passada no mesmo dia corrigiu estados
+que a issue #737 registrou incorretamente — itens 10, 11 e 14):
 
 - **Aberto** — nenhuma ação realizada;
 - **Parcial** — parte do item já implementada (detalhes no item);
 - **Concluído** — implementado; referência a commit/arquivo incluída.
+
+## Recalibração de expectativas (2026-07-06)
+
+A régua original assumia biblioteca pública no Maven Central. A
+publicação no Central está **adiada** (ver `plano.md`); a
+distribuição real é o GitHub Packages do monorepo, com autenticação
+e consumidores internos conhecidos. Consequências aplicadas nesta
+revisão:
+
+- infraestrutura de qualidade adicional (itens 12, 18, 19) rebaixada
+  para **C** — o projeto já roda Checkstyle, PMD, SpotBugs, JaCoCo
+  (85%), OWASP dependency-check e ArchUnit sobre ~11 classes; o
+  custo marginal supera o benefício sem demanda concreta;
+- item 8 reescopado para o caminho barato (`Automatic-Module-Name`
+  no manifest + utilitários package-private); JPMS completo fica
+  condicionado a demanda;
+- itens atrelados a consumo externo amplo (parte do 7; higiene
+  revapi/japicmp) condicionados ao destravamento do Maven Central;
+- permanecem **A** os itens de segurança de custo baixo e valor
+  real: 9 (`char[]`), 13 (hostname verification), 14 (restante da
+  sanitização) e 17 (Javadoc das exceções).
 
 ## Disposição dos itens 1–6
 
@@ -46,6 +68,10 @@ Para manter este documento sincronizado com o código:
 **Status: Parcial** — SemVer estrito já documentado no
 `CONTRIBUTING.md` (seção de versionamento). Pendente: declarar API
 pública vs. interna e estabilizar assinaturas antes do corte.
+A formalização completa (documento de compatibilidade, verificação
+automatizada) fica condicionada ao destravamento do Maven Central;
+enquanto a distribuição for interna, basta a declaração no
+`README.md`.
 
 Hoje o projeto está em `0.x` deliberadamente (API ainda em
 consolidação). Antes do `1.0.0`:
@@ -56,21 +82,26 @@ consolidação). Antes do `1.0.0`:
 - estabilizar nomes e assinaturas dos métodos do `SmartTokenClient` e
   do `SmartTokenClientBuilder` antes do corte.
 
-## 8. `module-info.java` e segregação de pacotes — **A**
+## 8. Encapsulamento do pacote e `Automatic-Module-Name` — **A**
 
-**Status: Aberto** — sem `module-info.java`; utilitários seguem no
-pacote raiz `br.gov.go.saude.hubsaude.client`.
+*(reescopado em 2026-07-06; JPMS completo rebaixado para C)*
 
-Hoje todos os 10 arquivos vivem em `br.gov.go.saude.hubsaude.client`.
-Para uma biblioteca pública em Java 21:
+**Status: Aberto** — sem `Automatic-Module-Name` no manifest;
+utilitários seguem públicos no pacote raiz.
 
-- introduzir `module-info.java` com `exports` restritos;
-- mover utilitários (`PemLoader`, `SslContextFactory`,
-  `FaultToleranceConfig`) para subpacote `internal` (ou torná-los
-  package-private), evitando que consumidores dependam de classes
-  internas;
-- `requires transitive` apenas onde tipos aparecem em assinaturas
-  públicas (ex.: `java.net.http`).
+Escopo recomendado (barato, resolve o essencial):
+
+- adicionar `Automatic-Module-Name`
+  (`br.gov.go.saude.hubsaude.client`) ao manifest do JAR, reservando
+  o nome do módulo;
+- auditar quais utilitários podem ser package-private — candidatos:
+  `PemLoader`, `SslContextFactory` (`RetryPolicy` já é
+  package-private; `FaultToleranceConfig` é construído pelo builder
+  e pode não precisar ser público).
+
+`module-info.java` completo (`exports` restritos, `requires
+transitive`) fica condicionado a demanda real de consumidores
+modulares — não fazer preemptivamente.
 
 ## 9. Auditoria do tratamento de `char[]` — **A**
 
@@ -86,35 +117,47 @@ Garantir, para todos os pontos do builder que recebem senha/PIN
   `SigningStrategy`);
 - o builder não vaza a referência para o cliente após construção.
 
-## 10. Robustez do JWT (claims `jti`, `iat`, `exp`) — **A**
+## 10. Robustez do JWT (claims `jti`, `iat`, `exp`) — **B**
 
-**Status: Parcial** — `jti` UUIDv4 único por assertion implementado
-(`SmartTokenClient`). Pendentes: tolerância configurável de clock
-skew e refresh em `invalid_grant` por skew.
+*(rebaixado de A em 2026-07-06)*
 
-- confirmar `jti` UUIDv4 e único por assertion;
-- `iat`/`exp` em `Instant.now()` truncado a segundos (evita problemas
-  com servidores que exigem epoch inteiro);
-- aceitar tolerância configurável de clock skew;
-- considerar refresh automático quando o servidor responde
-  `invalid_grant` por skew detectável.
+**Status: Parcial** — `jti` UUIDv4 único por assertion implementado;
+`iat`/`exp` já emitidos como epoch inteiro (`getEpochSecond` em
+`SmartTokenClient` — a reconciliação anterior não registrou).
+Pendente apenas: tolerância configurável de clock skew, sem relato
+de problema real — implementar sob demanda.
+
+- ~~confirmar `jti` UUIDv4 e único por assertion~~ — feito;
+- ~~`iat`/`exp` truncados a segundos~~ — feito (`getEpochSecond`);
+- aceitar tolerância configurável de clock skew — pendente;
+- ~~refresh automático quando o servidor responde `invalid_grant`
+  por skew detectável~~ — **descartado** (2026-07-06): contraria a
+  política do item 11 (nunca retry em 4xx) e dependeria de
+  heurística frágil sobre a resposta do servidor.
 
 ## 11. Retry policy com jitter — **A**
 
-**Status: Aberto** — backoff segue determinístico, sem jitter nem
-`RetryPolicy` injetável.
+**Status: Parcial** — corrigido em 2026-07-06: a reconciliação
+anterior registrou "Aberto" indevidamente. `RetryPolicy`
+(package-private) já existe: retry restrito a 429/500/502/503/504 —
+exatamente a política de idempotência pedida abaixo — e
+`Retry-After` honrado com teto de 60s. Pendente apenas: jitter.
 
-Backoff atual (1s, 2s, 4s) é determinístico e sujeito a *thundering
-herd*. Adicionar:
+- *jitter* aleatório (full jitter ou equal jitter) — **pendente**;
+- ~~política de idempotência: retry apenas em timeouts/5xx, nunca em
+  4xx (especialmente `invalid_client`, `invalid_grant`)~~ — feito
+  (`RetryPolicy.isRetriableStatus`);
+- expor a política como `RetryPolicy` injetável — rebaixado para
+  **C** (guiado por demanda real; não fazer preemptivamente).
 
-- *jitter* aleatório (full jitter ou equal jitter);
-- política de idempotência: retry apenas em timeouts/5xx, nunca em
-  4xx (especialmente `invalid_client`, `invalid_grant`);
-- expor a política como `RetryPolicy` injetável (extensibilidade).
+## 12. Observabilidade — **C**
 
-## 12. Observabilidade — **B**
+*(rebaixado de B em 2026-07-06)*
 
-**Status: Aberto.**
+**Status: Aberto** — guiado por demanda real. O cliente mantém cache
+de token: o volume de chamadas ao endpoint é baixo por natureza e o
+consumidor pode instrumentar por fora (latência/erros de
+`obtainToken`).
 
 A biblioteca já usa SLF4J. Para uso em produção:
 
@@ -135,8 +178,12 @@ Adicionar teste explícito de regressão.
 
 ## 14. Sanitização de mensagens de exceção — **A**
 
-**Status: Aberto** — auditoria e testes de contrato ainda não
-realizados.
+**Status: Parcial** — corrigido em 2026-07-06: a reconciliação
+anterior registrou "Aberto" indevidamente. `sanitizeErrorResponse`
+já implementado, aplicado aos erros HTTP de `SmartTokenClient` e
+testado (truncamento em 500 chars, null-safe). Pendente: auditar
+`SigningException` (não vazar fragmentos de chave/PIN) e testes de
+contrato para esse caso.
 
 Auditar `SmartTokenException` e `SigningException`:
 
@@ -183,9 +230,13 @@ Definir e documentar explicitamente no Javadoc:
 - impacto em consumidores que envolvem em Resilience4j / Spring
   Retry.
 
-## 18. Cobertura JaCoCo mais granular — **B**
+## 18. Cobertura JaCoCo mais granular — **C**
 
-**Status: Aberto.**
+*(rebaixado de B em 2026-07-06)*
+
+**Status: Aberto** — gate de 85% no `BUNDLE` sobre ~11 classes já é
+apertado; granularidade extra só sob evidência de classe crítica
+descoberta.
 
 Substituir gate único de 85% no `BUNDLE` por:
 
@@ -193,9 +244,15 @@ Substituir gate único de 85% no `BUNDLE` por:
 - exclusões explícitas e justificadas (apenas PKCS#11, hoje);
 - revisão periódica do `target/site/jacoco`.
 
-## 19. Mutation testing (PIT) — **B**
+## 19. Mutation testing (PIT) — **C**
 
-**Status: Aberto.**
+*(rebaixado de B em 2026-07-06)*
+
+**Status: Aberto** — rendimento decrescente para o porte atual: 11
+classes (~3,8 mil linhas), razão teste:código ≈ 1,5:1 e pipeline já
+com Checkstyle, PMD, SpotBugs, JaCoCo 85%, OWASP dependency-check e
+ArchUnit. Reavaliar apenas se surgirem defeitos que os gates atuais
+não capturam.
 
 85% de linhas + AssertJ não garante qualidade de assertion em
 biblioteca de segurança. Investir em:
@@ -228,8 +285,9 @@ Itens menores mencionados na revisão, para checklist de release `1.0`:
 - **[Aberto]** validar artefato consumido em projeto vazio
   (`mvn dependency:tree`) para detectar leak de dependências
   `provided`/`test`;
-- **[Aberto]** adotar `revapi` ou `japicmp` no CI para detectar
-  quebras acidentais entre patches;
+- **[Aberto — condicionado ao Maven Central]** adotar `revapi` ou
+  `japicmp` no CI para detectar quebras acidentais entre patches
+  (só se justifica com consumidores externos; ver `plano.md`);
 - **[Aberto]** configurar `dependabot.yml` ou Renovate específico
   para o repo;
 - **[Concluído]** habilitar `--release 21` no `maven-compiler-plugin`
