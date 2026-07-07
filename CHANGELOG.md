@@ -7,6 +7,8 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-07-07
+
 ### Segurança
 - Certificados X.509 fornecidos em memória (construtores com
   `X509Certificate`, `loadCertificateFromString`, `buildSslContext` e
