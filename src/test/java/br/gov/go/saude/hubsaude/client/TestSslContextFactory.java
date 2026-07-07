@@ -76,7 +76,7 @@ public final class TestSslContextFactory {
      * @return contexto SSL que aceita qualquer certificado (⚠️ INSEGURO)
      */
     public static SSLContext buildTrustAllSslContext(final String tlsProtocol) {
-        LOG.warn("⚠️ Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
+        LOG.warn("[!] Criando SSLContext trust-all ({}) - USO EXCLUSIVO PARA TESTES!", tlsProtocol);
         try {
             final TrustManager[] trustAll = {
                     new X509TrustManager() {

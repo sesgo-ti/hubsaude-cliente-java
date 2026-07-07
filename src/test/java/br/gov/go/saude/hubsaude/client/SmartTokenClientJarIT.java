@@ -91,7 +91,7 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
     void iniciarSimulador(@TempDir final Path tempDir) throws Exception {
         simulatorPort = allocateFreePort();
         baseUrl = "https://localhost:" + simulatorPort;
-        LOG.info("☕ Iniciando simulador via ProcessBuilder na porta {}...", simulatorPort);
+        LOG.info("Iniciando simulador via ProcessBuilder na porta {}...", simulatorPort);
         startJarSimulator();
         LOG.info("Simulador disponível em: {}", baseUrl);
 
