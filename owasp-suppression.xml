@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Arquivo de supressão compartilhado do OWASP Dependency Check para todos os
-  projetos HubSaúde. Empacotado pelo hubsaude-build-tools e desempacotado pelo
-  perfil "security" definido no hubsaude-parent.
+  Arquivo de supressão do OWASP Dependency Check específico do
+  hubsaude-cliente-java. Este projeto é standalone (não herda do
+  hubsaude-parent) e usa este arquivo local via perfil "security"
+  (ver pom.xml), em vez do arquivo compartilhado desempacotado do
+  hubsaude-build-tools.
 
   Política:
+  - Somente supressões aplicáveis às dependências declaradas no pom.xml
+    deste projeto (BouncyCastle, Jackson 3, SLF4J; jjwt, logback,
+    hubsaude-simulador e demais libs de escopo test).
   - Falsos positivos comprovados (CPE/Package mismatch).
-  - CVEs aceitos temporariamente quando NÃO há release upstream com correção
-    e/ou existe mitigação efetiva por boundary/configuração.
-  - Toda supressão temporária deve ter atributo "until" e ser reavaliada na
-    rodada do orquestrador de qualidade.
+  - CVEs aceitos temporariamente quando NÃO há release upstream com
+    correção e/ou existe mitigação efetiva verificável NESTE projeto.
+  - Preferir supressão por versão exata; evitar regex de série que
+    silencie versões futuras sem revisão.
+  - Toda supressão temporária deve ter atributo "until" e ser reavaliada
+    até essa data na rodada do orquestrador de qualidade.
 
   Documentação: https://jeremylong.github.io/DependencyCheck/general/suppression.html
 -->
@@ -19,7 +26,8 @@
          Falsos positivos
          ================================================================ -->
 
-    <!-- groupId br.gov.go.saude.hubsaude casa com CPE "go:go" do Go lang. -->
+    <!-- groupId br.gov.go.saude.hubsaude casa com CPE "go:go" do Go lang.
+         Aplica-se a este artefato e ao hubsaude-simulador (escopo test). -->
     <suppress>
         <notes><![CDATA[
         False positive: CPE "go:go" é incorretamente associado ao groupId
@@ -27,276 +35,6 @@
         ]]></notes>
         <packageUrl regex="true">^pkg:maven/br\.gov\.go\.saude\.hubsaude/.*@.*$</packageUrl>
         <cpe>cpe:/a:go:go</cpe>
-    </suppress>
-
-    <!-- org.hl7.fhir.* 6.7.9 são módulos do HL7 FHIR core (versão própria),
-         não da framework HAPI FHIR (8.8.1). O CPE mapeia incorretamente
-         a versão 6.7.9 para hapi_fhir:6.7.9 em alguns CVEs antigos. -->
-    <suppress>
-        <notes><![CDATA[
-        False positive de CPE: org.hl7.fhir.* version 6.7.9 é a HL7 core
-        structures library bundled com HAPI FHIR 8.8.1. Os números de versão
-        diferem entre HL7 core library e HAPI FHIR framework.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/ca\.uhn\.hapi\.fhir/org\.hl7\.fhir\..*@6\.7\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-33180</vulnerabilityName>
-    </suppress>
-
-    <!-- ================================================================
-         Aceites temporários por incompatibilidade upstream
-         ================================================================ -->
-
-    <!-- thymeleaf 3.1.3: Spring Boot 4.0.3 chama método removido em 3.1.5
-         (NoSuchMethodError em StandardExpressionExecutionContext). Aguardar
-         Spring Boot 4.0.4+ ou thymeleaf 3.2.x. Mitigação: templates server-side
-         do HubSaúde não recebem expressão dinâmica de fonte não confiável. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        Pinado por Spring Boot 4.0.3 (incompat com thymeleaf 3.1.5).
-        Templates HubSaúde só recebem dados estruturados internos.
-        Reavaliar quando Spring Boot 4.0.4 ou superior estiver disponível.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.thymeleaf/thymeleaf@3\.1\.[0-4]\.RELEASE$</packageUrl>
-        <vulnerabilityName>CVE-2026-40477</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Mesma justificativa do CVE-2026-40477.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.thymeleaf/thymeleaf@3\.1\.[0-4]\.RELEASE$</packageUrl>
-        <vulnerabilityName>CVE-2026-40478</vulnerabilityName>
-    </suppress>
-
-    <!-- org.hl7.fhir.utilities/validation 6.7.9: hapi-fhir 8.8.1 NÃO suporta
-         fhir-core 6.9.x (StackOverflow em ValidatorWrapper.buildInstanceValidator).
-         Mitigação: validação roda atrás do gateway com mTLS/JWT; payloads não
-         confiáveis passam pelo boundary do DefaultFhirValidationFacade. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        Pinado por hapi-fhir 8.8.1 (incompat com fhir-core 6.9.x).
-        Mitigação por gateway autenticado + boundary validation.
-        Reavaliar a cada upgrade do hapi-fhir.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/ca\.uhn\.hapi\.fhir/org\.hl7\.fhir\.utilities@6\.7\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-34359</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Mesma justificativa do CVE-2026-34359.]]></notes>
-        <packageUrl regex="true">^pkg:maven/ca\.uhn\.hapi\.fhir/org\.hl7\.fhir\.validation@6\.7\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-34361</vulnerabilityName>
-    </suppress>
-
-    <!-- libthrift 0.22.0: última release pública (sem patch para CVEs 2026).
-         Transitivo via fhir-core (serialização interna). Sem servidor Thrift
-         exposto pelo HubSaúde. Reavaliar quando Apache Thrift 0.23+ sair. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        libthrift 0.22.0 é a última release; sem patch upstream. Uso é
-        transitivo (serialização interna do fhir-core), sem servidor Thrift
-        exposto pelo HubSaúde.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.thrift/libthrift@0\.22\..*$</packageUrl>
-        <cve>CVE-2026-41605</cve>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[libthrift 0.22.0 sem patch upstream.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.thrift/libthrift@0\.22\..*$</packageUrl>
-        <cve>CVE-2026-41604</cve>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[libthrift 0.22.0 sem patch upstream.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.thrift/libthrift@0\.22\..*$</packageUrl>
-        <cve>CVE-2026-41603</cve>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[libthrift 0.22.0 sem patch upstream.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.thrift/libthrift@0\.22\..*$</packageUrl>
-        <cve>CVE-2026-41636</cve>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[libthrift 0.22.0 sem patch upstream.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.thrift/libthrift@0\.22\..*$</packageUrl>
-        <cve>CVE-2026-41602</cve>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[libthrift 0.22.0 sem patch upstream.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.thrift/libthrift@0\.22\..*$</packageUrl>
-        <cve>CVE-2025-48431</cve>
-    </suppress>
-
-    <!-- Spring Boot 4.0.3: aguardando 4.0.4 estável (atualmente só 4.1.0-RC1).
-         Mitigação: serviços rodam atrás do gateway com mTLS+JWT e actuator
-         restrito a endpoints essenciais. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        Spring Boot 4.0.3: aguardando release 4.0.4 (só 4.1.0-RC1 disponível).
-        Mitigação: gateway mTLS/JWT + actuator restrito.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@4\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-40972</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Boot 4.0.3 pinado; mitigação por gateway.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@4\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-40975</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Boot 4.0.3 pinado; mitigação por gateway.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@4\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-22733</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Boot 4.0.3 pinado; mitigação por gateway.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@4\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-40976</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Boot 4.0.3 pinado; mitigação por gateway.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@4\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-40973</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Boot 4.0.3 pinado; mitigação por gateway.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/.*@4\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-22731</vulnerabilityName>
-    </suppress>
-
-    <!-- Spring Security 7.0.3: aguardando 7.0.4 (só 7.1.0-RC1 disponível).
-         Mitigação: configuração restritiva (mTLS+JWT) + auditoria OAuth2 do
-         gateway. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        Spring Security 7.0.3: aguardando release 7.0.4 (só 7.1.0-RC1 disponível).
-        Mitigação: mTLS+JWT no gateway + auditoria OAuth2.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/.*@7\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-22747</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Security 7.0.3 pinado.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/.*@7\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-22732</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Security 7.0.3 pinado.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/.*@7\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-22754</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Spring Security 7.0.3 pinado.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/.*@7\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-22753</vulnerabilityName>
-    </suppress>
-
-    <!-- Jackson 3.0.4: pinado pelo Spring Boot 4.0.3 (incompat com 3.1.x —
-         NoClassDefFoundError em runtime). CVE-2026-29062 afeta jackson-core.
-         Mitigação: ObjectMapper do HubSaúde rejeita propriedades desconhecidas
-         e roda atrás do gateway autenticado. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        Jackson 3.0.4 pinado por Spring Boot 4.0.3 (3.1.x quebra compatibilidade
-        binária). Mitigação: ObjectMapper restritivo + gateway autenticado.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/tools\.jackson\.core/jackson-(core|databind|annotations)@3\.0\..*$</packageUrl>
-        <vulnerabilityName>CVE-2026-29062</vulnerabilityName>
-    </suppress>
-
-    <!-- Spring Framework 7.0.5: aguardando Spring Boot 4.0.4 (que pinará 7.0.7).
-         Atualizar isoladamente quebra Spring Boot 4.0.3. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        spring-web 7.0.5 pinado por Spring Boot 4.0.3 (override isolado é
-        arriscado). Mitigação por gateway mTLS+JWT.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/spring-(web|core|context|beans|aop|expression|webmvc|webflux)@7\.0\.[0-6]$</packageUrl>
-        <vulnerabilityName>CVE-2026-22740</vulnerabilityName>
-    </suppress>
-
-    <!-- opentelemetry-semconv: o CPE "opentelemetry:opentelemetry" é casado
-         com QUALQUER artefato io.opentelemetry.* da mesma versão. CVE-2026-39883
-         e CVE-2026-29181 afetam o agent (não o módulo de constantes semconv).
-         False positive efetivo: semconv só contém constantes string. -->
-    <suppress>
-        <notes><![CDATA[
-        False positive: opentelemetry-semconv contém apenas constantes string
-        de attribute keys. Os CVEs 2026-39883 e 2026-29181 afetam o agent
-        (instrumentation), não o semconv.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/io\.opentelemetry\.semconv/opentelemetry-semconv@.*$</packageUrl>
-        <vulnerabilityName>CVE-2026-39883</vulnerabilityName>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Mesma justificativa do CVE-2026-39883.]]></notes>
-        <packageUrl regex="true">^pkg:maven/io\.opentelemetry\.semconv/opentelemetry-semconv@.*$</packageUrl>
-        <vulnerabilityName>CVE-2026-29181</vulnerabilityName>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[
-        False positive: CVE-2026-39882 afeta exclusivamente a implementação
-        OpenTelemetry-Go (exporter OTLP HTTP sem cap no buffer de resposta),
-        conforme CPE oficial cpe:2.3:a:opentelemetry:opentelemetry:*:*:*:*:*:go:*:*.
-        O CPE genérico opentelemetry:opentelemetry é casado pelo dependency-check
-        contra o artefato Java io.opentelemetry.semconv:opentelemetry-semconv,
-        que contém apenas constantes string de attribute keys (sem código de
-        rede/HTTP). Sem caminho de exploração na JVM.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/io\.opentelemetry\.semconv/opentelemetry-semconv@.*$</packageUrl>
-        <vulnerabilityName>CVE-2026-39882</vulnerabilityName>
-    </suppress>
-
-    <!-- log4j-api 2.25.3: CVE-2026-34478/34479/34480/34481 têm CVSS < 7.0, mas o
-          plugin OWASP escala por bug de parsing CVSSv4 (ProviderUrgencyType
-          exception em CvssUtil.vectorToCvssV4). Suprimir até atualização do
-          dependency-check-maven. CVEs afetam Pattern Layout/JNDI parsing —
-          configuração HubSaúde não usa esses recursos. -->
-    <suppress>
-        <notes><![CDATA[
-        log4j-api 2.25.3 com CVSS<7. Suprimido por bug de parsing CVSSv4 do
-        OWASP dependency-check (escala falsamente). Configuração HubSaúde
-        usa Logback (logback-classic), não Pattern Layout do Log4j.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/log4j-(api|core|to-slf4j)@2\.25\..*$</packageUrl>
-        <cve>CVE-2026-34478</cve>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Mesma justificativa do CVE-2026-34478.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/log4j-(api|core|to-slf4j)@2\.25\..*$</packageUrl>
-        <cve>CVE-2026-34480</cve>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Mesma justificativa do CVE-2026-34478.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/log4j-(api|core|to-slf4j)@2\.25\..*$</packageUrl>
-        <cve>CVE-2026-34479</cve>
-    </suppress>
-    <suppress>
-        <notes><![CDATA[Mesma justificativa do CVE-2026-34478.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.logging\.log4j/log4j-(api|core|to-slf4j)@2\.25\..*$</packageUrl>
-        <cve>CVE-2026-34481</cve>
-    </suppress>
-
-    <!-- thymeleaf-spring6 3.1.3: mesma situação do thymeleaf core (Spring Boot
-         4.0.3 incompatível com 3.1.5). -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Mesma justificativa do thymeleaf-3.1.3 (incompat Spring Boot 4.0.3 com 3.1.5).]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.thymeleaf/thymeleaf-spring6@3\.1\.[0-4]\.RELEASE$</packageUrl>
-        <vulnerabilityName>CVE-2026-40477</vulnerabilityName>
-    </suppress>
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[Mesma justificativa do thymeleaf-3.1.3.]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.thymeleaf/thymeleaf-spring6@3\.1\.[0-4]\.RELEASE$</packageUrl>
-        <vulnerabilityName>CVE-2026-40478</vulnerabilityName>
-    </suppress>
-
-    <!-- Netty 4.2.10: pinado pelo reactor-netty-http 1.3.3 (Spring Boot 4.0.3).
-         Override do BOM via netty-bom NÃO é respeitado porque o spring-boot-
-         dependencies importa Netty antes. CVE-2026-33871 (CVSS 7.5) afeta
-         processamento HTTP/2; mitigação: gateway TLS + filtro de tamanho
-         de header já configurado. Aguardando reactor-netty 1.3.4+. -->
-    <suppress until="2026-12-31Z">
-        <notes><![CDATA[
-        Netty 4.2.10 pinado por reactor-netty 1.3.3 (Spring Boot 4.0.3).
-        Mitigação: TLS + limites de header no gateway. Aguardar reactor-netty 1.3.4.
-        ]]></notes>
-        <packageUrl regex="true">^pkg:maven/io\.netty/netty-(codec-http2|codec-http|codec-base|codec-compression|handler|buffer|transport|common)@4\.2\.(10|11)\.Final$</packageUrl>
-        <vulnerabilityName>CVE-2026-33871</vulnerabilityName>
     </suppress>
 
 </suppressions>
