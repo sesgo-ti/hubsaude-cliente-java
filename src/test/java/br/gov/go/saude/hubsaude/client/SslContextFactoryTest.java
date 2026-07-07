@@ -382,6 +382,43 @@ class SslContextFactoryTest {
                 .hasMessageContaining("Certificado expirado");
     }
 
+    @Test
+    @DisplayName("buildSslContext: Deve rejeitar certificado em memória expirado")
+    void deveRejeitarCertificadoEmMemoriaExpirado() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(365, ChronoUnit.DAYS),
+                Instant.now().minus(1, ChronoUnit.DAYS));
+
+        assertThatThrownBy(() -> SslContextFactory.buildSslContext(cert, "TLSv1.3"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado expirado");
+    }
+
+    @Test
+    @DisplayName("buildSslContext: Deve rejeitar certificado em memória ainda não válido")
+    void deveRejeitarCertificadoEmMemoriaFuturo() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        assertThatThrownBy(() -> SslContextFactory.buildSslContext(cert, "TLSv1.3"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado ainda não é válido");
+    }
+
+    @Test
+    @DisplayName("buildKeyManagers: Deve rejeitar certificado de cliente expirado")
+    void deveRejeitarCertificadoClienteExpiradoNoKeyManager() throws Exception {
+        final X509Certificate expirado = generateCert(
+                Instant.now().minus(365, ChronoUnit.DAYS),
+                Instant.now().minus(1, ChronoUnit.DAYS));
+
+        assertThatThrownBy(() -> SslContextFactory.buildKeyManagers(
+                keyPair.getPrivate(), expirado))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado expirado");
+    }
+
     // ==================== buildTrustAllSslContext (TestSslContextFactory) ====================
 
     @Test

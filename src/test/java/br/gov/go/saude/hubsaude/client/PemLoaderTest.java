@@ -159,6 +159,37 @@ class PemLoaderTest {
     }
 
     @Test
+    void deveRejeitarCertificadoExpiradoAoCarregar() throws Exception {
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        final KeyPair pair = gen.generateKeyPair();
+        final long dia = 24L * 60 * 60 * 1000;
+        final String pem = generateCertPem(pair,
+                new java.util.Date(System.currentTimeMillis() - 3 * dia),
+                new java.util.Date(System.currentTimeMillis() - 1 * dia));
+
+        assertThatThrownBy(() -> PemLoader.loadCertificateFromString(pem, "cert-expirado"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado expirado")
+                .hasMessageContaining("cert-expirado");
+    }
+
+    @Test
+    void deveRejeitarCertificadoAindaNaoValidoAoCarregar() throws Exception {
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        final KeyPair pair = gen.generateKeyPair();
+        final long dia = 24L * 60 * 60 * 1000;
+        final String pem = generateCertPem(pair,
+                new java.util.Date(System.currentTimeMillis() + 2 * dia),
+                new java.util.Date(System.currentTimeMillis() + 365 * dia));
+
+        assertThatThrownBy(() -> PemLoader.loadCertificateFromString(pem, "cert-futuro"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Certificado ainda não é válido");
+    }
+
+    @Test
     void deveLancarNullPointerExceptionParaPathNull() {
         assertThatThrownBy(() -> PemLoader.loadPrivateKey(null))
                 .isInstanceOf(NullPointerException.class);
@@ -204,6 +235,32 @@ class PemLoaderTest {
         final char[] senhaVazia = new char[0];
         // Não deve lançar exceção
         PemLoader.clearPassword(senhaVazia);
+    }
+
+    @Test
+    void deveConsumirSenhaMesmoComChaveNaoCriptografada() throws Exception {
+        final String pem = Files.readString(keyFile, StandardCharsets.UTF_8);
+        final char[] senha = "senha-desnecessaria".toCharArray();
+
+        final PrivateKey loaded = PemLoader.loadPrivateKeyFromString(pem, senha, "test");
+
+        assertThat(loaded).isNotNull();
+        // A senha é consumida (zerada) em todos os caminhos, mesmo sem uso
+        assertThat(senha).containsOnly('\0');
+    }
+
+    @Test
+    void deveIncluirOrigemNasMensagensDeErro() {
+        // RF-13.3: mensagens de erro identificam a origem (fonte) do conteúdo
+        assertThatThrownBy(() -> PemLoader.loadPrivateKeyFromString(
+                "conteudo sem PEM", null, "minha-origem"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("minha-origem");
+
+        assertThatThrownBy(() -> PemLoader.loadCertificateFromString(
+                "conteudo sem PEM", "origem-cert"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("origem-cert");
     }
 
     @Test
@@ -393,13 +450,18 @@ class PemLoaderTest {
 
     private static String generateSelfSignedCertPem(final KeyPair keyPair) throws Exception {
         final long now = System.currentTimeMillis();
-        final java.util.Date notBefore = new java.util.Date(now);
-        final java.util.Date notAfter = new java.util.Date(now + 365L * 24 * 60 * 60 * 1000);
+        return generateCertPem(keyPair, new java.util.Date(now),
+                new java.util.Date(now + 365L * 24 * 60 * 60 * 1000));
+    }
 
+    private static String generateCertPem(
+            final KeyPair keyPair,
+            final java.util.Date notBefore,
+            final java.util.Date notAfter) throws Exception {
         final org.bouncycastle.asn1.x500.X500Name issuer = new org.bouncycastle.asn1.x500.X500Name(
                 "C=BR, O=Test, CN=test-client");
 
-        final java.math.BigInteger serial = java.math.BigInteger.valueOf(now);
+        final java.math.BigInteger serial = java.math.BigInteger.valueOf(System.currentTimeMillis());
         final org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder certBuilder =
                 new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
                         issuer, serial, notBefore, notAfter, issuer, keyPair.getPublic());

@@ -129,10 +129,12 @@ public final class SslContextFactory {
      * @param trustedCert certificado X.509 do servidor a ser confiado
      * @param tlsProtocol protocolo TLS (ex: "TLSv1.3", "TLSv1.2")
      * @return contexto SSL configurado para confiar no certificado fornecido
-     * @throws SmartTokenException se o protocolo for inválido ou houver erro de
-     *                             configuração
+     * @throws SmartTokenException se o protocolo for inválido, o certificado
+     *                             estiver fora do período de validade ou
+     *                             houver erro de configuração
      */
     public static SSLContext buildSslContext(final X509Certificate trustedCert, final String tlsProtocol) {
+        checkCertificateValidity(trustedCert, subjectOf(trustedCert));
         try {
             final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
             trustStore.load(null, null);
@@ -211,13 +213,16 @@ public final class SslContextFactory {
      * @param clientKey   chave privada do cliente para mTLS
      * @param clientCert  certificado X.509 do cliente para mTLS
      * @return contexto SSL configurado com mTLS
-     * @throws SmartTokenException se houver erro de configuração
+     * @throws SmartTokenException se algum certificado estiver fora do
+     *                             período de validade ou houver erro de
+     *                             configuração
      */
     public static SSLContext buildSslContext(
             final X509Certificate trustedCert,
             final String tlsProtocol,
             final PrivateKey clientKey,
             final X509Certificate clientCert) {
+        checkCertificateValidity(trustedCert, subjectOf(trustedCert));
         try {
             final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
             trustStore.load(null, null);
@@ -260,6 +265,7 @@ public final class SslContextFactory {
         if (clientKey == null || clientCert == null) {
             return null;
         }
+        checkCertificateValidity(clientCert, subjectOf(clientCert));
         try {
             final KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
             keyStore.load(null, null);
@@ -424,12 +430,37 @@ public final class SslContextFactory {
         if (cert == null) {
             throw new SmartTokenException("Certificado inválido: " + path);
         }
+        checkCertificateValidity(cert, String.valueOf(path));
+    }
+
+    /**
+     * Verifica o período de validade do certificado (fail-fast, RF-11.4).
+     *
+     * <p>Aplicado em todos os pontos de entrada de certificados — tanto os
+     * carregados de arquivo PEM quanto os fornecidos já em memória.</p>
+     *
+     * @param cert   certificado a verificar
+     * @param source identificador da fonte para mensagens de erro (caminho
+     *               do arquivo ou subject DN)
+     * @throws SmartTokenException se expirado ou ainda não válido
+     */
+    static void checkCertificateValidity(final X509Certificate cert, final String source) {
         try {
             cert.checkValidity();
         } catch (CertificateExpiredException ex) {
-            throw new SmartTokenException("Certificado expirado: " + path, ex);
+            throw new SmartTokenException("Certificado expirado: " + source, ex);
         } catch (CertificateNotYetValidException ex) {
-            throw new SmartTokenException("Certificado ainda não é válido: " + path, ex);
+            throw new SmartTokenException("Certificado ainda não é válido: " + source, ex);
         }
+    }
+
+    /**
+     * Identificador legível do certificado para mensagens de erro.
+     *
+     * @param cert certificado
+     * @return subject DN do certificado
+     */
+    private static String subjectOf(final X509Certificate cert) {
+        return cert.getSubjectX500Principal().getName();
     }
 }

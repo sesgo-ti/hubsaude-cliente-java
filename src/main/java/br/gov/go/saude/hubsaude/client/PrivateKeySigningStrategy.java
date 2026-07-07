@@ -69,7 +69,8 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
     private final AlgorithmParameterSpec parameterSpec;
 
     /**
-     * Cria estratégia com chave e algoritmo padrão (SHA384withRSA).
+     * Cria estratégia com chave e algoritmo padrão
+     * ({@value #DEFAULT_ALGORITHM}, correspondente a RS256).
      *
      * <p>
      * Utiliza o provider padrão da JVM para operações criptográficas.

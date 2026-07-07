@@ -108,8 +108,15 @@ public final class PemLoader {
     /**
      * Carrega chave privada de string PEM.
      *
+     * <p>
+     * A senha, quando fornecida, é <strong>consumida</strong>: o array é
+     * zerado ao final da chamada, em sucesso ou erro, mesmo quando a chave
+     * não está criptografada e a senha não é utilizada (RNF de segurança —
+     * minimizar exposição de segredos em memória).
+     * </p>
+     *
      * @param pem      conteúdo PEM
-     * @param password senha (null se não criptografada)
+     * @param password senha (null se não criptografada); zerada após o uso
      * @param source   identificador da fonte para mensagens de erro
      * @return chave privada
      * @throws IOException em caso de erro de parse
@@ -150,6 +157,8 @@ public final class PemLoader {
 
             throw new SmartTokenException(
                     "Formato de chave não suportado (" + obj.getClass().getSimpleName() + "): " + source);
+        } finally {
+            clearPassword(password);
         }
     }
 
@@ -236,7 +245,9 @@ public final class PemLoader {
      * @param pem    conteúdo PEM
      * @param source identificador da fonte para mensagens de erro
      * @return certificado X.509
-     * @throws IOException em caso de erro de parse
+     * @throws IOException         em caso de erro de parse
+     * @throws SmartTokenException se não for um certificado válido ou
+     *                             estiver fora do período de validade
      */
     public static X509Certificate loadCertificateFromString(
             final String pem,
@@ -257,6 +268,7 @@ public final class PemLoader {
         if (cert == null) {
             throw new SmartTokenException("Certificado inválido: " + source);
         }
+        SslContextFactory.checkCertificateValidity(cert, source);
         return cert;
     }
 

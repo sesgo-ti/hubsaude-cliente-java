@@ -107,10 +107,12 @@ sequenceDiagram
 
 1. O SDK DEVE construir um JWS compacto (`header.payload.assinatura`),
    com cada parte codificada em **Base64URL sem padding** (RFC 7515).
-2. O header DEVE conter exatamente os campos `alg` (algoritmo
-   configurado, ver [RF-16](#rf-16--algoritmos-de-assinatura)) e
-   `typ` com valor `"JWT"`. O campo `kid` NÃO DEVE ser exigido — o
-   servidor o ignora e resolve a chave pública pelo `client_id`.
+2. O header DEVE conter os campos `alg` (algoritmo configurado, ver
+   [RF-16](#rf-16--algoritmos-de-assinatura)) e `typ` com valor
+   `"JWT"`. O campo `kid` NÃO DEVE ser exigido — o servidor o ignora
+   e resolve a chave pública pelo `client_id` — mas PODE ser incluído
+   quando o parâmetro `keyId` for configurado
+   (ver [§8](#8-parâmetros-de-configuração)).
 3. O payload DEVE conter as claims:
    - `iss` = `client_id`;
    - `sub` = `client_id`;
@@ -159,6 +161,8 @@ sequenceDiagram
      resposta (para inspeção/diagnóstico).
 3. **HTTP 429** DEVE resultar em erro imediato, **sem retry
    automático** — a decisão de aguardar e reenviar é do chamador.
+   Quando o servidor enviar o header `Retry-After`, seu valor
+   DEVERIA ser incluído na mensagem de erro, como diagnóstico.
 4. Qualquer outro status ≠ 200 DEVE resultar em erro contendo o
    status HTTP e o corpo da resposta **sanitizado**
    (ver [RNF-02](#rnf-02--sanitização-de-logs-e-mensagens-de-erro)).
@@ -227,7 +231,10 @@ sequenceDiagram
    (*bad tag*) na cadeia de causas, ou alerta `bad_record_mac` — o
    SDK DEVE falhar imediatamente (sem retry) com mensagem
    diagnóstica explicando a causa provável (certificado revogado,
-   expirado ou não confiável) e a ação sugerida.
+   expirado ou não confiável) e a ação sugerida. Falhas de validação
+   do certificado do **servidor** pelo cliente (ex.: `PKIX path
+   building failed`, certificado do servidor expirado) NÃO DEVEM ser
+   atribuídas a rejeição do certificado de cliente.
 2. Essa heurística DEVE apenas enriquecer a mensagem de erro; não
    substitui o diagnóstico do servidor.
 
@@ -483,6 +490,7 @@ suportar (referência Java: CycloneDX).
 | `serverTrustAnchor` | não | trust store da plataforma | PEM ou objeto X.509 |
 | `tlsProtocol` | não | `TLSv1.3` | Ex.: `TLSv1.2` |
 | `jwtAlgorithm` | não | `RS256` | Ver RF-16 |
+| `keyId` | não | — | Inclui `kid` no header do JWT quando informado (RF-01.2) |
 | `connectTimeout` | não | 10 s | Conexão TCP |
 | `requestTimeout` | não | 30 s | Requisição HTTP completa |
 | `assertionTtlSeconds` | não | 60 | ≤ 0 → padrão; DEVERIA ser ≤ 300 |
@@ -531,13 +539,9 @@ APIs criptográficas divergem no formato de saída ECDSA:
 - **Node**: usar `dsaEncoding: 'ieee-p1363'` em `crypto.sign`;
 - **Python** (`cryptography`): a saída é DER — converter com
   `decode_dss_signature` e concatenar `R||S` com tamanho fixo;
-- **Java**: `SHA256withECDSA` produz DER; usar as variantes
-  `...inP1363Format` ou converter.
-
-> **Atenção (implementação de referência):** a versão Java atual
-> mapeia `ES*` para `SHA*withECDSA` (saída DER) **sem conversão** para
-> `R||S`; o uso corrente do HubSaúde é com chaves RSA (`RS*`/`PS*`).
-> Novas implementações DEVEM produzir `R||S` para `ES*` (RF-16.4).
+- **Java**: `SHA256withECDSA` produz DER; a implementação de
+  referência usa as variantes `...inP1363Format` do JDK, que já
+  produzem `R||S` (RF-16.4).
 
 ### 9.4 Concorrência e modelo assíncrono
 
@@ -563,7 +567,7 @@ APIs criptográficas divergem no formato de saída ECDSA:
 | RF-04 | `SmartTokenClient.tokenCache`, `CachedToken.isValid()` |
 | RF-05 | `SmartTokenClient.scopeLockFor()` (32 stripes), `obtainTokenResponse()` |
 | RF-06 | `SmartTokenClient.invalidateCache()` (2 sobrecargas) |
-| RF-07 | `SmartTokenClient.obtainTokenWithRetry()` |
+| RF-07 | `SmartTokenClient.obtainTokenResponse()` (laço de tentativas), `RetryPolicy` |
 | RF-08 | `SmartTokenClient.isLikelyClientCertificateRejection()` |
 | RF-09 | `SmartTokenClientBuilder.discoverTokenEndpoint()` |
 | RF-10 | `SslContextFactory.buildSslContext(...)` |

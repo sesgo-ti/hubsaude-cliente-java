@@ -542,6 +542,44 @@ class SmartTokenClientBuilderTest {
     }
 
     @Test
+    @DisplayName("build: Deve consumir (zerar) as senhas fornecidas após a construção")
+    void deveZerarSenhasAposBuild() throws Exception {
+        final X509Certificate cert = new JcaX509CertificateConverter()
+                .setProvider(new BouncyCastleProvider())
+                .getCertificate(
+                        new JcaX509v3CertificateBuilder(
+                                new X500Name("CN=KeyStore-Test"),
+                                BigInteger.valueOf(System.nanoTime()),
+                                Date.from(Instant.now()),
+                                Date.from(Instant.now().plusSeconds(86400)),
+                                new X500Name("CN=KeyStore-Test"),
+                                keyPair.getPublic())
+                                .build(new JcaContentSignerBuilder("SHA256withRSA")
+                                        .build(keyPair.getPrivate())));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new java.security.cert.Certificate[]{cert});
+
+        final char[] senhaChave = "senha-nao-usada".toCharArray();
+        final char[] senhaKeyStore = "changeit".toCharArray();
+
+        final SmartTokenClient client = SmartTokenClient.builder()
+                .tokenEndpoint(TOKEN_ENDPOINT)
+                .clientId(CLIENT_ID)
+                .privateKeyPem(keyFile)
+                .privateKeyPassword(senhaChave)
+                .certificatePem(certFile)
+                .clientKeyStore(ks, "client", senhaKeyStore)
+                .build();
+
+        assertThat(client).isNotNull();
+        assertThat(senhaChave).containsOnly('\0');
+        assertThat(senhaKeyStore).containsOnly('\0');
+    }
+
+    @Test
     @DisplayName("static discoverTokenEndpoint: Deve lançar SmartTokenException quando backend falhar (HTTP != 200)")
     void deveFalharSeDiscoveryRetornarErroHttp() throws Exception {
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);

@@ -8,6 +8,16 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ## [Unreleased]
 
 ### Segurança
+- Certificados X.509 fornecidos em memória (construtores com
+  `X509Certificate`, `loadCertificateFromString`, `buildSslContext` e
+  `buildKeyManagers`) agora têm a validade temporal verificada
+  (fail-fast em certificado expirado ou ainda não válido), como já
+  ocorria para certificados carregados de arquivo (#748).
+- As senhas fornecidas ao builder (`privateKeyPassword` e a senha de
+  `clientKeyStore`) são consumidas — zeradas — ao final de `build()`,
+  inclusive em caso de erro; `loadPrivateKeyFromString` zera a senha
+  em todos os caminhos, mesmo quando a chave não é criptografada
+  (RNF-03) (#748).
 - `sanitizeErrorResponse` agora redige `access_token` **antes** de
   truncar o corpo da resposta, evitando vazamento de tokens em
   mensagens de erro longas (> 500 caracteres) (#725).
@@ -19,6 +29,22 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   para `localhost`/`127.0.0.1` (#725).
 
 ### Corrigido
+- A heurística de rejeição de certificado de cliente (RF-08) não é
+  mais acionada quando a falha decorre da validação do certificado do
+  **servidor** pelo cliente (ex.: `PKIX path building failed`,
+  certificado do servidor expirado) — a cadeia de causas com
+  `CertificateException`/`CertPath*Exception` é excluída, evitando
+  diagnóstico enganoso (#748).
+- Javadocs corrigidos: construtor padrão de `PrivateKeySigningStrategy`
+  documentava SHA384withRSA (o padrão é SHA256withRSA/RS256), nota de
+  `jwtAlgorithm(String)` afirmava que o algoritmo afetava apenas o
+  header do JWT, e `SCOPE_LOCK_STRIPES` descrevia memória O(N) em vez
+  de O(1) (#748).
+- `ESPECIFICACAO.md` atualizado: rastreabilidade RF-07 apontava método
+  inexistente (`obtainTokenWithRetry()`), nota §9.3 afirmava que ES*
+  produzia DER sem conversão (o código usa `...inP1363Format`),
+  parâmetro `keyId` ausente do §8 e RF-01.2 não mencionava o `kid`
+  opcional (#748).
 - ES256/ES384/ES512 agora produzem assinaturas no formato R||S
   (P1363), conforme RFC 7518 §3.4 — antes era emitido DER (#725).
 - PS256/PS384/PS512 agora usam `RSASSA-PSS` com `PSSParameterSpec`
@@ -50,9 +76,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   encerra o `HttpClient` interno (#725).
 
 ### Alterado
-- Retry agora considera HTTP 429 e 5xx (500/502/503/504) como
-  retriáveis, honrando o header `Retry-After` (segundos) em 429/503
-  com teto de 60s; demais 4xx continuam falhando imediatamente (#725).
+- Retry automático restrito a falhas transitórias de rede (timeouts,
+  recusa/queda de conexão TCP), conforme RF-07: respostas HTTP
+  recebidas (429/5xx inclusive) **não** sofrem retry — a decisão de
+  aguardar e reenviar é do chamador; o header `Retry-After`, quando
+  presente, é incluído na mensagem de erro como diagnóstico (#748).
+- `invalidateCache(scope)` agora loga em nível `info`, como a
+  invalidação global (RNF-02.3) (#748).
 - O backoff entre tentativas não dorme mais segurando o lock por
   escopo; a espera ocorre fora da seção crítica (#725).
 - Header do JWT montado via Jackson (`ObjectNode`) em vez de

@@ -126,5 +126,31 @@ class SmartTokenClientCertRejectionTest {
         void causaNull() {
             assertThat(SmartTokenClient.isLikelyClientCertificateRejection(null)).isFalse();
         }
+
+        @Test
+        @DisplayName("PKIX path building failed — cliente rejeitou o certificado do servidor")
+        void pkixPathBuildingFailed() {
+            // Cadeia real do JDK quando o trust anchor não valida o servidor
+            final Throwable root = new java.security.cert.CertPathBuilderException(
+                    "unable to find valid certification path to requested target");
+            final Throwable validator = new java.security.cert.CertificateException(
+                    "PKIX path building failed", root);
+            final Throwable handshake = new SSLHandshakeException("PKIX path building failed");
+            handshake.initCause(validator);
+            final Throwable ex = new IOException("TLS failure", handshake);
+
+            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isFalse();
+        }
+
+        @Test
+        @DisplayName("Certificado do servidor expirado — validação local, não rejeição mTLS")
+        void certificadoServidorExpirado() {
+            final Throwable root = new java.security.cert.CertificateExpiredException(
+                    "NotAfter: Wed Jan 01 00:00:00 BRT 2020");
+            final Throwable handshake = new SSLHandshakeException("PKIX path validation failed");
+            handshake.initCause(root);
+
+            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(handshake)).isFalse();
+        }
     }
 }

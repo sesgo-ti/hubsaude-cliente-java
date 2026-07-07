@@ -137,16 +137,17 @@ de problema real — implementar sob demanda.
 
 ## 11. Retry policy com jitter — **A**
 
-**Status: Parcial** — corrigido em 2026-07-06: a reconciliação
-anterior registrou "Aberto" indevidamente. `RetryPolicy`
-(package-private) já existe: retry restrito a 429/500/502/503/504 —
-exatamente a política de idempotência pedida abaixo — e
-`Retry-After` honrado com teto de 60s. Pendente apenas: jitter.
+**Status: Encerrado** — realinhado em #748 à ESPECIFICACAO.md
+(RF-03.3, RF-07): retry APENAS para falhas transitórias de rede
+(timeouts, recusa/queda de conexão TCP); respostas HTTP recebidas
+(429/5xx inclusive) falham imediatamente, com `Retry-After`
+reportado na mensagem de erro como diagnóstico. A política anterior
+(retry de 429/500/502/503/504 honrando `Retry-After`) foi removida.
 
-- *jitter* aleatório (full jitter ou equal jitter) — **pendente**;
-- ~~política de idempotência: retry apenas em timeouts/5xx, nunca em
-  4xx (especialmente `invalid_client`, `invalid_grant`)~~ — feito
-  (`RetryPolicy.isRetriableStatus`);
+- *jitter* aleatório — **descartado**: RF-07.4 especifica backoff
+  determinístico `1s × 2^(n−1)` sem jitter;
+- ~~política de idempotência: nunca retry de respostas HTTP~~ —
+  feito (#748, `isTransientNetworkFailure`);
 - expor a política como `RetryPolicy` injetável — rebaixado para
   **C** (guiado por demanda real; não fazer preemptivamente).
 

@@ -20,7 +20,9 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import java.io.EOFException;
 import java.io.IOException;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -109,12 +111,13 @@ import tools.jackson.databind.node.ObjectNode;
  * <li><strong>Cache de tokens:</strong> Tokens são cacheados e reutilizados até
  * próximo
  * de sua expiração, reduzindo carga no authorization server</li>
- * <li><strong>Retry com backoff:</strong> Falhas transitórias são tratadas com
- * retry
- * exponencial (1s, 2s, 4s) até o limite configurado. Além de timeouts e
- * erros de conexão, respostas HTTP 429 e 500/502/503/504 são consideradas
- * transitórias; o cabeçalho {@code Retry-After} (segundos) é honrado em
- * 429/503, com teto de 60s</li>
+ * <li><strong>Retry com backoff:</strong> Falhas transitórias de rede
+ * (timeout de conexão ou de requisição, recusa e queda de conexão TCP)
+ * são tratadas com retry exponencial (1s, 2s, 4s) até o limite
+ * configurado. Respostas HTTP recebidas (qualquer status, inclusive 429
+ * e 5xx) não sofrem retry automático: resultam em erro imediato e,
+ * quando presente, o valor de {@code Retry-After} é incluído na mensagem
+ * como diagnóstico — a decisão de aguardar e reenviar é do chamador</li>
  * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em
  * aplicações multi-thread</li>
  * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
@@ -337,8 +340,8 @@ public final class SmartTokenClient implements AutoCloseable {
 
     /**
      * Quantidade fixa de locks usados no striping de {@link #scopeLocks}.
-     * Limita a memória a O(N) independentemente do número de scopes
-     * distintos (ver issue #731).
+     * Limita a memória a O(1) — constante, independentemente do número
+     * de scopes distintos (ver issue #731).
      */
     private static final int SCOPE_LOCK_STRIPES = 32;
 
@@ -540,6 +543,8 @@ public final class SmartTokenClient implements AutoCloseable {
             this.scopeLocks[i] = new ReentrantLock();
         }
         if (certificate != null) {
+            SslContextFactory.checkCertificateValidity(certificate,
+                    certificate.getSubjectX500Principal().getName());
             verifyStrategyCertificateConsistency(this.signingStrategy, certificate);
         }
         this.httpClient = HttpClient.newBuilder()
@@ -693,11 +698,13 @@ public final class SmartTokenClient implements AutoCloseable {
      * </p>
      *
      * <p>
-     * Em caso de falhas transitórias (timeout, erro de rede, HTTP 429 ou
-     * HTTP 500/502/503/504), o método realiza retry com backoff exponencial
-     * até o limite configurado. Quando o servidor envia {@code Retry-After}
-     * (em segundos) em respostas 429/503, o valor é honrado com teto de 60s.
-     * Demais respostas 4xx não são retriadas.
+     * Em caso de falhas transitórias de rede (timeout de conexão ou de
+     * requisição, recusa ou queda de conexão TCP), o método realiza retry
+     * com backoff exponencial (1s, 2s, 4s...) até o limite configurado.
+     * Respostas HTTP recebidas (qualquer status, inclusive 429 e 5xx) não
+     * sofrem retry automático: resultam em erro imediato com o corpo
+     * sanitizado e, quando presente, o valor de {@code Retry-After} como
+     * diagnóstico — a decisão de aguardar e reenviar é do chamador.
      * </p>
      *
      * @param scope scopes separados por espaço (ex: {@code "system/Patient.rs"})
@@ -799,9 +806,11 @@ public final class SmartTokenClient implements AutoCloseable {
     }
 
     /**
-     * Classifica a exceção de I/O: devolve-a quando é transitória (timeout,
-     * falha de conexão ou HTTP 429/5xx) para que o chamador realize retry;
-     * caso contrário, propaga.
+     * Classifica a exceção de I/O: devolve-a quando representa falha
+     * transitória de rede (timeout de conexão ou de requisição, recusa ou
+     * queda de conexão TCP) para que o chamador realize retry; caso
+     * contrário, propaga. Respostas HTTP recebidas nunca chegam aqui como
+     * exceção — falham imediatamente em {@link #doObtainToken(String)}.
      *
      * @param ex exceção capturada na tentativa
      * @return a própria exceção, quando retriável
@@ -810,11 +819,6 @@ public final class SmartTokenClient implements AutoCloseable {
      *                             certificado de cliente no mTLS
      */
     private IOException retriableOrRethrow(final IOException ex) throws IOException {
-        if (ex instanceof HttpTimeoutException
-                || ex instanceof java.net.ConnectException
-                || ex instanceof RetriableHttpStatusException) {
-            return ex;
-        }
         if (isLikelyClientCertificateRejection(ex)) {
             LOG.error("Falha de TLS após handshake mTLS para clientId={} endpoint={}: {}."
                     + " Causa provável: certificado de cliente rejeitado pelo servidor"
@@ -833,7 +837,49 @@ public final class SmartTokenClient implements AutoCloseable {
                             + " e não o encerramento abrupto da conexão.",
                     ex);
         }
+        if (isTransientNetworkFailure(ex)) {
+            return ex;
+        }
         throw ex;
+    }
+
+    /**
+     * Identifica falhas transitórias de rede elegíveis a retry: timeout de
+     * conexão ou de requisição HTTP e recusa/queda de conexão TCP
+     * (conexão recusada, connection reset ou EOF prematuro).
+     *
+     * <p>A cadeia de causas é percorrida porque o {@link HttpClient}
+     * frequentemente envolve a causa original em {@link IOException}
+     * genérica (ex.: "HTTP/1.1 header parser received no bytes" com causa
+     * {@link EOFException} ou {@link SocketException}). Em algumas
+     * execuções o JDK lança essa mesma {@link IOException} sem causa
+     * anexada; por isso a mensagem também é inspecionada — ela indica
+     * conexão encerrada pelo servidor antes de qualquer byte de resposta.
+     * Falhas da camada TLS ({@link SSLException}) nunca são consideradas
+     * transitórias — são tratadas pela heurística de
+     * {@link #isLikelyClientCertificateRejection(Throwable)} ou propagadas
+     * como estão.</p>
+     *
+     * @param ex exceção de I/O capturada
+     * @return {@code true} quando a falha é transitória de rede
+     */
+    static boolean isTransientNetworkFailure(final IOException ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof SSLException) {
+                return false;
+            }
+            if (t instanceof HttpTimeoutException
+                    || t instanceof SocketException
+                    || t instanceof EOFException) {
+                return true;
+            }
+            final String msg = t.getMessage();
+            if (msg != null && msg.toLowerCase(java.util.Locale.ROOT)
+                    .contains("received no bytes")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -842,8 +888,7 @@ public final class SmartTokenClient implements AutoCloseable {
      * registra a falha.
      *
      * <p>O delay é calculado por {@link RetryPolicy#computeRetryDelayMs}:
-     * honra {@code Retry-After} (teto de 60s) ou aplica backoff exponencial
-     * (1s, 2s, 4s...).</p>
+     * backoff exponencial (1s, 2s, 4s...), sem jitter.</p>
      *
      * @param attempt       tentativa que acabou de falhar (1-based)
      * @param maxRetries    total de tentativas configurado
@@ -857,10 +902,7 @@ public final class SmartTokenClient implements AutoCloseable {
             LOG.error("Todas as {} tentativas falharam para clientId={}", maxRetries, clientId);
             return;
         }
-        final long retryAfterMs = lastException instanceof RetriableHttpStatusException retriable
-                ? retriable.retryAfterMillis()
-                : -1L;
-        final long delayMs = RetryPolicy.computeRetryDelayMs(attempt, retryAfterMs);
+        final long delayMs = RetryPolicy.computeRetryDelayMs(attempt);
         LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
                 attempt, maxRetries, clientId, lastException.getMessage(), delayMs);
         sleeper.sleep(delayMs);
@@ -908,7 +950,7 @@ public final class SmartTokenClient implements AutoCloseable {
     public void invalidateCache(final String scope) {
         final String normalizedScope = scope == null ? "" : scope.trim();
         tokenCache.remove(normalizedScope);
-        LOG.debug("Cache invalidado para clientId={} scope={}", clientId, normalizedScope);
+        LOG.info("Cache invalidado para clientId={} scope={}", clientId, normalizedScope);
     }
 
     /**
@@ -990,10 +1032,27 @@ public final class SmartTokenClient implements AutoCloseable {
      *       — equivalente do ponto anterior visto pelo lado JSSE.</li>
      * </ul>
      *
+     * <p>Falhas cuja cadeia de causas contém
+     * {@link java.security.cert.CertificateException},
+     * {@link java.security.cert.CertPathBuilderException} ou
+     * {@link java.security.cert.CertPathValidatorException} são excluídas:
+     * indicam que foi ESTE cliente que rejeitou o certificado do servidor
+     * (ex.: {@code PKIX path building failed} por trust anchor ausente ou
+     * incorreto), e não o contrário.</p>
+     *
      * <p>Esta verificação é heurística e deve ser usada apenas para enriquecer
      * mensagens de erro; não substitui o diagnóstico do servidor.
      */
     static boolean isLikelyClientCertificateRejection(final Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof java.security.cert.CertificateException
+                    || t instanceof java.security.cert.CertPathBuilderException
+                    || t instanceof java.security.cert.CertPathValidatorException) {
+                // Cliente rejeitou o certificado do SERVIDOR (validação
+                // local do trust anchor) — não é rejeição mTLS pelo servidor.
+                return false;
+            }
+        }
         for (Throwable t = ex; t != null; t = t.getCause()) {
             if (t instanceof AEADBadTagException || t instanceof SSLHandshakeException) {
                 return true;
@@ -1023,19 +1082,15 @@ public final class SmartTokenClient implements AutoCloseable {
         final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         final int statusCode = response.statusCode();
-        if (RetryPolicy.isRetriableStatus(statusCode)) {
-            final long retryAfterMs = RetryPolicy.parseRetryAfterMillis(response, statusCode);
-            LOG.warn("Resposta transitória HTTP {} para clientId={}", statusCode, clientId);
-            final String detail = statusCode == HTTP_TOO_MANY_REQUESTS
-                    ? "Rate limit atingido (HTTP 429). Tente novamente mais tarde."
-                    : "HTTP " + statusCode + " — " + sanitizeErrorResponse(response.body());
-            throw new RetriableHttpStatusException(detail, statusCode, retryAfterMs);
-        }
-
         if (statusCode != HTTP_OK) {
-            LOG.error("Falha ao obter token: HTTP {} para clientId={}", statusCode, clientId);
-            throw new SmartTokenException(
-                    "Falha ao obter token: HTTP " + statusCode + " — " + sanitizeErrorResponse(response.body()));
+            if (statusCode == HTTP_TOO_MANY_REQUESTS) {
+                LOG.warn("Rate limit (HTTP 429) para clientId={} — sem retry automático",
+                        clientId);
+            } else {
+                LOG.error("Falha ao obter token: HTTP {} para clientId={}",
+                        statusCode, clientId);
+            }
+            throw new SmartTokenException(buildHttpErrorMessage(statusCode, response));
         }
 
         final TokenResponse tokenResponse = parseTokenResponse(response.body());
@@ -1050,6 +1105,28 @@ public final class SmartTokenClient implements AutoCloseable {
 
         LOG.info("Token obtido com sucesso para clientId={}", clientId);
         return tokenResponse;
+    }
+
+    /**
+     * Monta a mensagem de erro para resposta HTTP ≠ 200: status, valor de
+     * {@code Retry-After} quando presente (apenas diagnóstico — nenhuma
+     * resposta HTTP recebida sofre retry automático; a decisão de aguardar
+     * e reenviar é do chamador) e corpo sanitizado.
+     *
+     * @param statusCode status HTTP da resposta
+     * @param response   resposta recebida do servidor de autorização
+     * @return mensagem de erro pronta para {@link SmartTokenException}
+     */
+    private static String buildHttpErrorMessage(
+            final int statusCode, final HttpResponse<String> response) {
+        final String retryAfter = response.headers().firstValue("Retry-After")
+                .map(value -> " (Retry-After: " + value.trim() + ")")
+                .orElse("");
+        final String hint = statusCode == HTTP_TOO_MANY_REQUESTS
+                ? " Rate limit atingido; a decisão de aguardar e reenviar é do chamador."
+                : "";
+        return "Falha ao obter token: HTTP " + statusCode + retryAfter
+                + " — " + sanitizeErrorResponse(response.body()) + hint;
     }
 
     /**
@@ -1348,37 +1425,6 @@ public final class SmartTokenClient implements AutoCloseable {
          * @throws InterruptedException se a thread for interrompida
          */
         void sleep(long millis) throws InterruptedException;
-    }
-
-    /**
-     * Exceção interna para respostas HTTP transitórias (429/5xx) passíveis
-     * de retry, transportando o delay sugerido pelo servidor via
-     * {@code Retry-After}, quando presente.
-     */
-    static final class RetriableHttpStatusException extends IOException {
-
-        private static final long serialVersionUID = 1L;
-
-        /** Código de status HTTP que motivou a exceção. */
-        private final int statusCode;
-
-        /** Delay sugerido pelo servidor em ms; {@code -1} quando ausente. */
-        private final long retryAfterMillis;
-
-        RetriableHttpStatusException(
-                final String message, final int statusCode, final long retryAfterMillis) {
-            super(message);
-            this.statusCode = statusCode;
-            this.retryAfterMillis = retryAfterMillis;
-        }
-
-        int statusCode() {
-            return statusCode;
-        }
-
-        long retryAfterMillis() {
-            return retryAfterMillis;
-        }
     }
 
     /**

@@ -23,6 +23,7 @@ package br.gov.go.saude.hubsaude.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -364,19 +365,25 @@ class SmartTokenClientTest {
         }
 
         @Test
-        void deveRespeitarBackoffExponencialNoRetry() throws Exception {
-                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-                                new java.net.InetSocketAddress(0), 0);
-                server.createContext("/auth/token", exchange -> {
-                        final byte[] resp = "{\"error\":\"unavailable\"}".getBytes(StandardCharsets.UTF_8);
-                        exchange.sendResponseHeaders(503, resp.length);
-                        try (var os = exchange.getResponseBody()) {
-                                os.write(resp);
+        void deveRetriarQuedaDeConexaoComBackoffExponencial() throws Exception {
+                // Servidor TCP que aceita e fecha imediatamente: queda de conexão
+                final java.net.ServerSocket server = new java.net.ServerSocket(0);
+                final java.util.concurrent.atomic.AtomicInteger accepts =
+                                new java.util.concurrent.atomic.AtomicInteger();
+                final Thread acceptor = new Thread(() -> {
+                        try {
+                                while (!server.isClosed()) {
+                                        final java.net.Socket socket = server.accept();
+                                        accepts.incrementAndGet();
+                                        socket.close();
+                                }
+                        } catch (IOException e) {
+                                // servidor encerrado ao final do teste
                         }
                 });
-                server.start();
+                acceptor.start();
                 try {
-                        final int port = server.getAddress().getPort();
+                        final int port = server.getLocalPort();
                         final SmartTokenClient client = SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
@@ -392,30 +399,38 @@ class SmartTokenClientTest {
 
                         assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
                                         .isInstanceOf(SmartTokenException.class)
-                                        .hasMessageContaining("Falha após 3 tentativas");
+                                        .hasMessageContaining("Falha após 3 tentativas")
+                                        .cause().isNotNull();
 
-                        // Backoff exponencial: 1000ms, 2000ms (sem Retry-After no 503)
+                        // Backoff exponencial sem jitter: 1000ms, 2000ms
                         assertThat(delays).containsExactly(1000L, 2000L);
+                        assertThat(accepts.get()).isEqualTo(3);
                 } finally {
-                        server.stop(0);
+                        server.close();
+                        acceptor.join(5000);
                 }
         }
 
         @Test
-        void deveHonrarRetryAfterEm503() throws Exception {
-                final java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        void deveRetriarTimeoutETerSucessoNaSegundaTentativa() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                                new java.util.concurrent.atomic.AtomicInteger();
                 final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
                                 new java.net.InetSocketAddress(0), 0);
+                final var executor = java.util.concurrent.Executors.newCachedThreadPool();
+                server.setExecutor(executor);
                 server.createContext("/auth/token", exchange -> {
                         if (calls.incrementAndGet() == 1) {
-                                exchange.getResponseHeaders().add("Retry-After", "7");
-                                final byte[] resp = "{\"error\":\"unavailable\"}".getBytes(StandardCharsets.UTF_8);
-                                exchange.sendResponseHeaders(503, resp.length);
-                                try (var os = exchange.getResponseBody()) {
-                                        os.write(resp);
+                                // Excede o requestTimeout do cliente: HttpTimeoutException
+                                try {
+                                        Thread.sleep(600);
+                                } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
                                 }
+                                exchange.sendResponseHeaders(503, -1);
+                                exchange.close();
                         } else {
-                                final byte[] resp = "{\"access_token\":\"tok-retry\",\"expires_in\":3600}"
+                                final byte[] resp = "{\"access_token\":\"tok-apos-timeout\",\"expires_in\":3600}"
                                                 .getBytes(StandardCharsets.UTF_8);
                                 exchange.sendResponseHeaders(200, resp.length);
                                 try (var os = exchange.getResponseBody()) {
@@ -431,6 +446,7 @@ class SmartTokenClientTest {
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
+                                        .requestTimeout(Duration.ofMillis(250))
                                         .maxRetries(2)
                                         .build();
 
@@ -440,19 +456,66 @@ class SmartTokenClientTest {
 
                         final String token = client.obtainToken("system/Patient.rs");
 
-                        assertThat(token).isEqualTo("tok-retry");
-                        // Retry-After: 7 segundos honrado (em vez do backoff de 1000ms)
-                        assertThat(delays).containsExactly(7000L);
+                        assertThat(token).isEqualTo("tok-apos-timeout");
+                        assertThat(delays).containsExactly(1000L);
+                        assertThat(calls.get()).isEqualTo(2);
+                } finally {
+                        server.stop(0);
+                        executor.shutdownNow();
+                }
+        }
+
+        @Test
+        void deveFalharImediatamenteEm503SemRetry() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                                new java.util.concurrent.atomic.AtomicInteger();
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        calls.incrementAndGet();
+                        exchange.getResponseHeaders().add("Retry-After", "7");
+                        final byte[] resp = "{\"error\":\"unavailable\"}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(503, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .build();
+
+                        final java.util.List<Long> delays = java.util.Collections.synchronizedList(
+                                        new java.util.ArrayList<>());
+                        client.setSleeper(delays::add);
+
+                        // Resposta HTTP recebida: erro imediato, sem retry automático;
+                        // Retry-After aparece apenas como diagnóstico na mensagem.
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("HTTP 503")
+                                        .hasMessageContaining("Retry-After: 7");
+
+                        assertThat(calls.get()).isEqualTo(1);
+                        assertThat(delays).isEmpty();
                 } finally {
                         server.stop(0);
                 }
         }
 
         @Test
-        void deveFalharComHttp429RateLimit() throws Exception {
+        void deveFalharComHttp429RateLimitSemRetry() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                                new java.util.concurrent.atomic.AtomicInteger();
                 final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
                                 new java.net.InetSocketAddress(0), 0);
                 server.createContext("/auth/token", exchange -> {
+                        calls.incrementAndGet();
                         final byte[] resp = "{\"error\":\"rate_limit_exceeded\"}".getBytes(StandardCharsets.UTF_8);
                         exchange.sendResponseHeaders(429, resp.length);
                         try (var os = exchange.getResponseBody()) {
@@ -467,22 +530,33 @@ class SmartTokenClientTest {
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .maxRetries(1)
                                         .build();
+
+                        final java.util.List<Long> delays = java.util.Collections.synchronizedList(
+                                        new java.util.ArrayList<>());
+                        client.setSleeper(delays::add);
 
                         assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
                                         .isInstanceOf(SmartTokenException.class)
-                                        .hasMessageContaining("429");
+                                        .hasMessageContaining("429")
+                                        .hasMessageContaining("rate_limit_exceeded")
+                                        .hasMessageContaining("decisão de aguardar e reenviar é do chamador");
+
+                        assertThat(calls.get()).isEqualTo(1);
+                        assertThat(delays).isEmpty();
                 } finally {
                         server.stop(0);
                 }
         }
 
         @Test
-        void deveFalharComHttpErroGenerico() throws Exception {
+        void deveFalharComHttpErroGenericoSemRetry() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                                new java.util.concurrent.atomic.AtomicInteger();
                 final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
                                 new java.net.InetSocketAddress(0), 0);
                 server.createContext("/auth/token", exchange -> {
+                        calls.incrementAndGet();
                         final byte[] resp = "{\"error\":\"server_error\"}".getBytes(StandardCharsets.UTF_8);
                         exchange.sendResponseHeaders(500, resp.length);
                         try (var os = exchange.getResponseBody()) {
@@ -497,15 +571,105 @@ class SmartTokenClientTest {
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .maxRetries(1)
                                         .build();
+
+                        final java.util.List<Long> delays = java.util.Collections.synchronizedList(
+                                        new java.util.ArrayList<>());
+                        client.setSleeper(delays::add);
 
                         assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
                                         .isInstanceOf(SmartTokenException.class)
                                         .hasMessageContaining("HTTP 500");
+
+                        assertThat(calls.get()).isEqualTo(1);
+                        assertThat(delays).isEmpty();
                 } finally {
                         server.stop(0);
                 }
+        }
+
+        @Test
+        void deveFalharImediatamenteEm400SemRetry() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                                new java.util.concurrent.atomic.AtomicInteger();
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        calls.incrementAndGet();
+                        final byte[] resp = "{\"error\":\"invalid_client\"}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(400, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .maxRetries(3)
+                                        .build();
+
+                        final java.util.List<Long> delays = java.util.Collections.synchronizedList(
+                                        new java.util.ArrayList<>());
+                        client.setSleeper(delays::add);
+
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("HTTP 400")
+                                        .hasMessageContaining("invalid_client");
+
+                        assertThat(calls.get()).isEqualTo(1);
+                        assertThat(delays).isEmpty();
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        // ---------- Testes de isTransientNetworkFailure ----------
+
+        @Test
+        void deveClassificarFalhasDeRedeComoTransitorias() {
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new java.net.http.HttpTimeoutException("timeout")))
+                                .isTrue();
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new java.net.SocketException("Connection reset")))
+                                .isTrue();
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new java.net.ConnectException("Connection refused")))
+                                .isTrue();
+                // HttpClient envolve a causa original em IOException genérica
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new IOException("HTTP/1.1 header parser received no bytes",
+                                                new java.io.EOFException("EOF reached while reading"))))
+                                .isTrue();
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new IOException("connection closed locally",
+                                                new java.net.SocketException("Connection reset"))))
+                                .isTrue();
+                // O JDK por vezes lança esta IOException sem causa anexada
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new IOException("HTTP/1.1 header parser received no bytes")))
+                                .isTrue();
+        }
+
+        @Test
+        void naoDeveClassificarFalhasTlsOuGenericasComoTransitorias() {
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new IOException("erro generico de I/O")))
+                                .isFalse();
+                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                                new javax.net.ssl.SSLHandshakeException("handshake falhou")))
+                                .isFalse();
+                // SSLException prevalece mesmo com causa de rede na cadeia
+                final javax.net.ssl.SSLException ssl = new javax.net.ssl.SSLException(
+                                "TLS abortado", new java.net.SocketException("Connection reset"));
+                assertThat(SmartTokenClient.isTransientNetworkFailure(new IOException(ssl)))
+                                .isFalse();
         }
 
         // ---------- Testes de sanitizeErrorResponse ----------
@@ -802,6 +966,28 @@ class SmartTokenClientTest {
                 assertThatThrownBy(() -> SslContextFactory.validateCertificate(certFuturo))
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("ainda não é válido");
+        }
+
+        @Test
+        void deveFalharConstrutorEmMemoriaComCertificadoExpirado() throws Exception {
+                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+                gen.initialize(2048);
+                final KeyPair pair = gen.generateKeyPair();
+
+                final String certPem = generateExpiredCertPem(pair);
+                final java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory
+                                .getInstance("X.509");
+                final X509Certificate certExpirado = (X509Certificate) cf.generateCertificate(
+                                new java.io.ByteArrayInputStream(
+                                                certPem.getBytes(StandardCharsets.UTF_8)));
+                final SSLContext ssl = SslContextFactory.buildSslContext((Path) null, "TLSv1.3");
+
+                // Certificado fornecido já em memória também é validado (fail-fast)
+                assertThatThrownBy(() -> new SmartTokenClient(
+                                "https://auth.example/token", CLIENT_ID,
+                                pair.getPrivate(), certExpirado, ssl))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("Certificado expirado");
         }
 
         // ---------- Teste do Algoritmo Dinâmico ----------
@@ -1325,6 +1511,371 @@ class SmartTokenClientTest {
 
                         // Apenas 1 request (todos normalizados para "")
                         assertThat(requestCount.get()).isEqualTo(1);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        // ==================== Testes de conformidade com a especificação (§11) ====================
+
+        @Test
+        void deveColapsarRequisicoesConcorrentesDoMesmoScope() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger requestCount =
+                                new java.util.concurrent.atomic.AtomicInteger(0);
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        requestCount.incrementAndGet();
+                        try {
+                                Thread.sleep(300); // amplia a janela de corrida
+                        } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                        }
+                        final byte[] resp = "{\"access_token\":\"single-flight\",\"expires_in\":3600}"
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(true)
+                                        .build();
+
+                        final int numThreads = 8;
+                        final var executor = java.util.concurrent.Executors.newFixedThreadPool(numThreads);
+                        final var start = new java.util.concurrent.CountDownLatch(1);
+                        final var done = new java.util.concurrent.CountDownLatch(numThreads);
+                        final var tokens = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+                        final var errors = new java.util.concurrent.atomic.AtomicInteger(0);
+
+                        for (int i = 0; i < numThreads; i++) {
+                                executor.submit(() -> {
+                                        try {
+                                                start.await();
+                                                tokens.add(client.obtainToken("system/Patient.rs"));
+                                        } catch (Exception e) {
+                                                errors.incrementAndGet();
+                                        } finally {
+                                                done.countDown();
+                                        }
+                                });
+                        }
+                        start.countDown();
+                        assertThat(done.await(15, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                        executor.shutdown();
+
+                        assertThat(errors.get()).isZero();
+                        assertThat(tokens).containsExactly("single-flight");
+                        // Single-flight: N threads simultâneas geram apenas 1 requisição HTTP
+                        assertThat(requestCount.get()).isEqualTo(1);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveRetornarTokenResponseCompletoComRawJson() throws Exception {
+                final String json = "{\"access_token\":\"resp-token\",\"expires_in\":1800,"
+                                + "\"token_type\":\"Bearer\",\"scope\":\"system/Patient.rs\"}";
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        final byte[] resp = json.getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .build();
+
+                        final SmartTokenClient.TokenResponse response =
+                                        client.obtainTokenResponse("system/Patient.rs");
+
+                        assertThat(response.accessToken()).isEqualTo("resp-token");
+                        assertThat(response.expiresIn()).isEqualTo(1800);
+                        // rawJson preserva o corpo integral para campos extras
+                        assertThat(response.rawJson()).isEqualTo(json);
+                        // toString não deve vazar o token
+                        assertThat(response.toString()).doesNotContain("resp-token");
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveEnviarFormBodyCorretoComPercentEncoding() throws Exception {
+                final java.util.concurrent.atomic.AtomicReference<String> bodyRef =
+                                new java.util.concurrent.atomic.AtomicReference<>();
+                final java.util.concurrent.atomic.AtomicReference<String> contentTypeRef =
+                                new java.util.concurrent.atomic.AtomicReference<>();
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        contentTypeRef.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+                        bodyRef.set(new String(exchange.getRequestBody().readAllBytes(),
+                                        StandardCharsets.UTF_8));
+                        final byte[] resp = "{\"access_token\":\"t\",\"expires_in\":60}"
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .build();
+
+                        client.obtainToken("system/Patient.rs");
+
+                        assertThat(contentTypeRef.get()).isEqualTo("application/x-www-form-urlencoded");
+                        final String body = bodyRef.get();
+                        assertThat(body).contains("grant_type=client_credentials");
+                        assertThat(body).contains("client_assertion_type="
+                                        + "urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer");
+                        assertThat(body).contains("&client_assertion=ey");
+                        // Percent-encoding: "/" do scope vira %2F
+                        assertThat(body).contains("&scope=system%2FPatient.rs");
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveGerarJtiUnicoPorClientAssertion() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                final Claims claims1 = Jwts.parser().verifyWith(publicKey).build()
+                                .parseSignedClaims(client.buildClientAssertion()).getPayload();
+                final Claims claims2 = Jwts.parser().verifyWith(publicKey).build()
+                                .parseSignedClaims(client.buildClientAssertion()).getPayload();
+
+                assertThat(claims1.getId()).isNotBlank();
+                assertThat(claims2.getId()).isNotBlank();
+                assertThat(claims1.getId()).isNotEqualTo(claims2.getId());
+        }
+
+        @Test
+        void deveInvalidarTodoOCacheComInvalidateCacheGlobal() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger requestCount =
+                                new java.util.concurrent.atomic.AtomicInteger(0);
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        requestCount.incrementAndGet();
+                        final byte[] resp = "{\"access_token\":\"tok\",\"expires_in\":3600}"
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(true)
+                                        .build();
+
+                        client.obtainToken("system/Patient.rs");
+                        client.obtainToken("system/Observation.rs");
+                        assertThat(requestCount.get()).isEqualTo(2);
+
+                        // RF-06.1: invalidação global remove TODOS os scopes
+                        client.invalidateCache();
+
+                        client.obtainToken("system/Patient.rs");
+                        client.obtainToken("system/Observation.rs");
+                        assertThat(requestCount.get()).isEqualTo(4);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveAplicarMargemPadraoQuandoMargemConfiguradaNegativa() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger requestCount =
+                                new java.util.concurrent.atomic.AtomicInteger(0);
+
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.createContext("/auth/token", exchange -> {
+                        requestCount.incrementAndGet();
+                        // expires_in=20s: menor que a margem padrão (30s), maior que -5s
+                        final byte[] resp = "{\"access_token\":\"curto\",\"expires_in\":20}"
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(true)
+                                        .tokenCacheMarginSeconds(-5)
+                                        .build();
+
+                        client.obtainToken("system/Patient.rs");
+                        client.obtainToken("system/Patient.rs");
+
+                        // RF-18.4b: margem negativa é substituída pela padrão (30s);
+                        // token com 20s de vida está dentro da margem -> novo request.
+                        // Se a margem -5 tivesse sido aceita, haveria apenas 1 request.
+                        assertThat(requestCount.get()).isEqualTo(2);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveExporJwtAlgorithmConfigurado() throws Exception {
+                final SmartTokenClient padrao = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+                assertThat(padrao.getJwtAlgorithm()).isEqualTo("RS256");
+
+                final SmartTokenClient ps256 = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .jwtAlgorithm("PS256")
+                                .build();
+                assertThat(ps256.getJwtAlgorithm()).isEqualTo("PS256");
+        }
+
+        @Test
+        void deveResolverTokenEndpointViaDiscoveryEExporGetter() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                server.start();
+                final int port = server.getAddress().getPort();
+                final String tokenEndpoint = "http://localhost:" + port + "/auth/token";
+                server.createContext("/.well-known/smart-configuration", exchange -> {
+                        final byte[] resp = ("{\"token_endpoint\":\"" + tokenEndpoint + "\"}")
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+
+                try {
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .fhirBase("http://localhost:" + port)
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .build();
+
+                        // RF-09.5: getter expõe o endpoint resolvido via discovery
+                        assertThat(client.getTokenEndpoint()).isEqualTo(tokenEndpoint);
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveEscaparCaracteresEspeciaisDoClientIdNoAssertion() throws Exception {
+                final String clientIdEspecial = "cli\"ent\\com aspas";
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(clientIdEspecial)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                // Se o escaping JSON estiver incorreto, o parse da assertion falha
+                final Claims claims = Jwts.parser().verifyWith(publicKey).build()
+                                .parseSignedClaims(client.buildClientAssertion()).getPayload();
+
+                assertThat(claims.getIssuer()).isEqualTo(clientIdEspecial);
+                assertThat(claims.getSubject()).isEqualTo(clientIdEspecial);
+        }
+
+        @Test
+        void naoDeveRetriarFalhaDeConfiancaTlsEmHttps() throws Exception {
+                // Servidor HTTPS com certificado self-signed NÃO confiado pelo cliente
+                final java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
+                ks.load(null, null);
+                ks.setKeyEntry("server", privateKey, "changeit".toCharArray(),
+                                new java.security.cert.Certificate[]{clientCertificate});
+                final javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory
+                                .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+                kmf.init(ks, "changeit".toCharArray());
+                final SSLContext serverCtx = SSLContext.getInstance("TLS");
+                serverCtx.init(kmf.getKeyManagers(), null, null);
+
+                final com.sun.net.httpserver.HttpsServer server = com.sun.net.httpserver.HttpsServer
+                                .create(new java.net.InetSocketAddress(0), 0);
+                server.setHttpsConfigurator(new com.sun.net.httpserver.HttpsConfigurator(serverCtx));
+                server.createContext("/auth/token", exchange -> exchange.sendResponseHeaders(200, -1));
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final java.util.List<Long> delays = new java.util.ArrayList<>();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("https://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .maxRetries(3)
+                                        .build();
+                        client.setSleeper(delays::add);
+
+                        // RF-08: falha de confiança TLS não é transitória -> sem retry
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOfAny(IOException.class, SmartTokenException.class);
+                        assertThat(delays).isEmpty();
                 } finally {
                         server.stop(0);
                 }

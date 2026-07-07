@@ -78,6 +78,36 @@ class SigningStrategyFactoryTest {
     }
 
     @Test
+    void deveAceitarAlgoritmosJwtEmMinusculas() {
+        // RF: aceitação case-insensitive de algoritmos JWT
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("rs256"))
+                .isEqualTo("SHA256withRSA");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("rs384"))
+                .isEqualTo("SHA384withRSA");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("rs512"))
+                .isEqualTo("SHA512withRSA");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("ps256"))
+                .isEqualTo("RSASSA-PSS");
+        assertThat(SigningStrategyFactory.jwtAlgorithmToJava("es256"))
+                .isEqualTo("SHA256withECDSAinP1363Format");
+        assertThat(SigningStrategyFactory.pssParameterSpecFor("ps384")).isNotNull();
+    }
+
+    @Test
+    void deveAssinarComAlgoritmoJwtEmMinusculas() throws Exception {
+        final SigningStrategy strategy =
+                SigningStrategyFactory.fromPrivateKeyForJwt(privateKey, "rs384");
+        final byte[] dados = "dados para assinar".getBytes(StandardCharsets.UTF_8);
+
+        final byte[] assinatura = strategy.sign(dados);
+
+        final Signature verifier = Signature.getInstance("SHA384withRSA");
+        verifier.initVerify(publicKey);
+        verifier.update(dados);
+        assertThat(verifier.verify(assinatura)).isTrue();
+    }
+
+    @Test
     void deveAssinarComOverloadSemSenha() throws Exception {
         final SigningStrategy strategy = SigningStrategyFactory.fromPemFile(keyFile);
         final byte[] dados = "overload sem senha".getBytes(StandardCharsets.UTF_8);

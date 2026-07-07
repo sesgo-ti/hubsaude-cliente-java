@@ -181,7 +181,14 @@ public final class SmartTokenClientBuilder {
      * ou formato OpenSSL tradicional com DEK-Info).
      * </p>
      *
-     * @param password senha da chave privada
+     * <p>
+     * O array <strong>não é copiado</strong> e é consumido por
+     * {@link #build()}: após a construção (com sucesso ou erro), o
+     * conteúdo é zerado para minimizar exposição do segredo em memória.
+     * Forneça um novo array caso precise reconstruir o cliente.
+     * </p>
+     *
+     * @param password senha da chave privada; zerada após {@link #build()}
      * @return este builder
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
@@ -241,7 +248,8 @@ public final class SmartTokenClientBuilder {
      *
      * @param keyStore    KeyStore já carregado (PKCS#11, PKCS#12, JKS)
      * @param keyAlias    alias da chave privada no KeyStore
-     * @param keyPassword senha/PIN da chave
+     * @param keyPassword senha/PIN da chave; o array não é copiado e é
+     *                    zerado após {@link #build()} (sucesso ou erro)
      * @return este builder
      */
     @SuppressWarnings("PMD.UseVarargs")
@@ -321,9 +329,12 @@ public final class SmartTokenClientBuilder {
      * </p>
      *
      * <p>
-     * <strong>Nota:</strong> O algoritmo configurado aqui define apenas o valor
-     * do campo {@code alg} no header do JWT. A {@link SigningStrategy} deve ser
-     * compatível com o algoritmo escolhido. Se usar chave RSA com algoritmo ES*,
+     * <strong>Nota:</strong> O algoritmo configurado define o valor do campo
+     * {@code alg} no header do JWT e, quando a chave é carregada pelo próprio
+     * builder ({@code privateKeyPem} ou {@code clientKeyStore}), também o
+     * algoritmo criptográfico usado na assinatura. Quando uma
+     * {@link SigningStrategy} própria é fornecida, ela deve ser compatível
+     * com o algoritmo escolhido — se usar chave RSA com algoritmo ES*,
      * a assinatura falhará.
      * </p>
      *
@@ -465,6 +476,14 @@ public final class SmartTokenClientBuilder {
     /**
      * Constrói a instância de {@link SmartTokenClient}.
      *
+     * <p>
+     * As senhas fornecidas via {@link #privateKeyPassword(char[])} e
+     * {@link #clientKeyStore(KeyStore, String, char[])} são consumidas:
+     * os arrays são zerados ao final desta chamada, em sucesso ou erro
+     * (minimiza exposição de segredos em memória). Para construir outro
+     * cliente, forneça as senhas novamente.
+     * </p>
+     *
      * @return cliente configurado
      * @throws IOException           se os arquivos PEM não puderem ser lidos
      * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem
@@ -472,6 +491,22 @@ public final class SmartTokenClientBuilder {
      */
     @SuppressWarnings({ "PMD.CyclomaticComplexity", "PMD.NPathComplexity" })
     public SmartTokenClient build() throws IOException {
+        try {
+            return doBuild();
+        } finally {
+            PemLoader.clearPassword(privateKeyPassword);
+            PemLoader.clearPassword(clientKeyPassword);
+        }
+    }
+
+    /**
+     * Lógica de construção propriamente dita; ver {@link #build()}.
+     *
+     * @return cliente configurado
+     * @throws IOException se os arquivos PEM não puderem ser lidos
+     */
+    @SuppressWarnings({ "PMD.CyclomaticComplexity", "PMD.NPathComplexity" })
+    private SmartTokenClient doBuild() throws IOException {
         if (tokenEndpoint != null && discoveryBaseUrl != null) {
             throw new IllegalStateException("Defina tokenEndpoint OU fhirBase, não ambos");
         }
