@@ -21,7 +21,7 @@ JavaScript/TypeScript, C#).
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.3.12</version>
+    <version>0.3.13</version>
 </dependency>
 ```
 
