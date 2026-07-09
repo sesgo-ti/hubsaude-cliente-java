@@ -70,8 +70,8 @@ class SigningStrategyFactoryTest {
 
         assertThat(assinatura).isNotNull().hasSizeGreaterThan(0);
 
-        // Verificar assinatura (RS256 = SHA256withRSA)
-        final Signature verifier = Signature.getInstance("SHA256withRSA");
+        // Verificar assinatura (default RS384 = SHA384withRSA)
+        final Signature verifier = Signature.getInstance("SHA384withRSA");
         verifier.initVerify(publicKey);
         verifier.update(dados);
         assertThat(verifier.verify(assinatura)).isTrue();
@@ -126,8 +126,8 @@ class SigningStrategyFactoryTest {
 
         assertThat(assinatura).isNotNull();
 
-        // Verificar assinatura (RS256 = SHA256withRSA)
-        final Signature verifier = Signature.getInstance("SHA256withRSA");
+        // Verificar assinatura (default RS384 = SHA384withRSA)
+        final Signature verifier = Signature.getInstance("SHA384withRSA");
         verifier.initVerify(publicKey);
         verifier.update(dados);
         assertThat(verifier.verify(assinatura)).isTrue();
@@ -143,8 +143,8 @@ class SigningStrategyFactoryTest {
 
         assertThat(assinatura).isNotNull();
 
-        // Verificar assinatura (RS256 = SHA256withRSA)
-        final Signature verifier = Signature.getInstance("SHA256withRSA");
+        // Verificar assinatura (default RS384 = SHA384withRSA)
+        final Signature verifier = Signature.getInstance("SHA384withRSA");
         verifier.initVerify(publicKey);
         verifier.update(dados);
         assertThat(verifier.verify(assinatura)).isTrue();
@@ -189,25 +189,25 @@ class SigningStrategyFactoryTest {
     }
 
     @Test
-    void deveUsarAlgoritmoRS256PorPadrao() throws Exception {
+    void deveUsarAlgoritmoRS384PorPadrao() throws Exception {
         final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-        final byte[] dados = "teste RS256".getBytes(StandardCharsets.UTF_8);
+        final byte[] dados = "teste RS384".getBytes(StandardCharsets.UTF_8);
 
         final byte[] assinatura = strategy.sign(dados);
 
-        // Verificar com SHA256withRSA (RS256) - deve funcionar
-        final Signature sha256Verifier = Signature.getInstance("SHA256withRSA");
-        sha256Verifier.initVerify(publicKey);
-        sha256Verifier.update(dados);
-        assertThat(sha256Verifier.verify(assinatura)).isTrue();
-
-        // Verificar com SHA384withRSA (RS384) - deve falhar
-        // Comportamento varia entre JVMs: pode lançar SignatureException ou retornar false
+        // Verificar com SHA384withRSA (RS384) - deve funcionar
         final Signature sha384Verifier = Signature.getInstance("SHA384withRSA");
         sha384Verifier.initVerify(publicKey);
         sha384Verifier.update(dados);
+        assertThat(sha384Verifier.verify(assinatura)).isTrue();
+
+        // Verificar com SHA256withRSA (RS256) - deve falhar
+        // Comportamento varia entre JVMs: pode lançar SignatureException ou retornar false
+        final Signature sha256Verifier = Signature.getInstance("SHA256withRSA");
+        sha256Verifier.initVerify(publicKey);
+        sha256Verifier.update(dados);
         try {
-            final boolean result = sha384Verifier.verify(assinatura);
+            final boolean result = sha256Verifier.verify(assinatura);
             assertThat(result).isFalse();
         } catch (java.security.SignatureException e) {
             // Algumas JVMs lançam exceção ao invés de retornar false - também é válido
@@ -251,8 +251,8 @@ class SigningStrategyFactoryTest {
 
         final byte[] assinatura = strategy.sign(dados);
 
-        // Verificar (RS256 = SHA256withRSA)
-        final Signature verifier = Signature.getInstance("SHA256withRSA");
+        // Verificar (default RS384 = SHA384withRSA)
+        final Signature verifier = Signature.getInstance("SHA384withRSA");
         verifier.initVerify(publicKey);
         verifier.update(dados);
         assertThat(verifier.verify(assinatura)).isTrue();

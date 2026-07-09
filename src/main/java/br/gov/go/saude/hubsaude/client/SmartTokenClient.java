@@ -32,7 +32,6 @@ import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.PrivateKey;
-import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -68,7 +67,7 @@ import tools.jackson.databind.node.ObjectNode;
  * Abstrai toda a complexidade de:
  * <ul>
  * <li>Leitura da chave privada PEM</li>
- * <li>Montagem do {@code client_assertion} JWT (assinado com RS256 por padrão)</li>
+ * <li>Montagem do {@code client_assertion} JWT (assinado com RS384 por padrão)</li>
  * <li>Comunicação HTTP com o endpoint {@code /auth/token}</li>
  * </ul>
  *
@@ -329,8 +328,11 @@ public final class SmartTokenClient implements AutoCloseable {
     /** Protocolo TLS padrão. */
     public static final String DEFAULT_TLS_PROTOCOL = SslContextFactory.DEFAULT_TLS_PROTOCOL;
 
-    /** Algoritmo JWT padrão. */
-    public static final String DEFAULT_JWT_ALGORITHM = "RS256";
+    /**
+     * Algoritmo JWT padrão (RS384 — concern client-assertion-contexto-ig.md
+     * §3.2: o Servidor de Autorização aceita apenas RS384 e ES384).
+     */
+    public static final String DEFAULT_JWT_ALGORITHM = "RS384";
 
     /** Tamanho inicial do StringBuilder para form body. */
     private static final int FORM_BODY_INITIAL_CAPACITY = 128;
@@ -348,6 +350,21 @@ public final class SmartTokenClient implements AutoCloseable {
     /** Encoder Base64 URL-safe sem padding. */
     private static final Base64.Encoder BASE64_URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
+    /**
+     * Formato do alias de IG no claim {@code hub_ctx.ig} (concern
+     * client-assertion-contexto-ig.md §3.4).
+     */
+    private static final java.util.regex.Pattern HUB_CTX_IG_PATTERN =
+            java.util.regex.Pattern.compile("^[a-z][a-z0-9-]{1,30}$");
+
+    /**
+     * Formato SemVer completo (MAJOR.MINOR.PATCH, sem pre-release/build) do
+     * claim {@code hub_ctx.versao} (concern client-assertion-contexto-ig.md
+     * §3.4).
+     */
+    private static final java.util.regex.Pattern HUB_CTX_VERSAO_PATTERN =
+            java.util.regex.Pattern.compile("^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$");
+
     private final String tokenEndpoint;
     private final String clientId;
     private final SigningStrategy signingStrategy;
@@ -357,6 +374,8 @@ public final class SmartTokenClient implements AutoCloseable {
     private final int tokenCacheMarginSeconds;
     private final String jwtAlgorithm;
     private final String keyId;
+    private final String hubCtxIg;
+    private final String hubCtxVersao;
 
     /** Indica se {@link #close()} já foi invocado (close idempotente). */
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -497,7 +516,10 @@ public final class SmartTokenClient implements AutoCloseable {
      * <li>quando {@code certificate} não é {@code null}, a consistência entre
      * a estratégia de assinatura e a chave pública do certificado é
      * verificada (mesma semântica de
-     * {@link #verifyKeyPairConsistency(PrivateKey, X509Certificate)}).</li>
+     * {@link #verifyKeyPairConsistency(PrivateKey, X509Certificate)});</li>
+     * <li>quando o contexto de IG é fornecido, {@code hubCtxIg} e
+     * {@code hubCtxVersao} são validados contra os formatos do concern
+     * client-assertion-contexto-ig.md §3.4.</li>
      * </ul>
      *
      * @param tokenEndpoint           URL do endpoint /auth/token
@@ -508,7 +530,78 @@ public final class SmartTokenClient implements AutoCloseable {
      * @param faultToleranceConfig    configuração de resiliência
      * @param enableTokenCache        se {@code true}, habilita cache de tokens
      * @param tokenCacheMarginSeconds margem em segundos antes da expiração
-     * @param jwtAlgorithm            algoritmo JWT (ex: RS256, ES256)
+     * @param jwtAlgorithm            algoritmo JWT (ex: RS384, ES384)
+     * @param keyId                   identificador da chave ({@code kid} do
+     *                                header JWT); {@code null} para omitir
+     * @param hubCtxIg                alias do Guia de Implementação para o
+     *                                claim {@code hub_ctx.ig}; {@code null}
+     *                                para omitir o claim
+     * @param hubCtxVersao            versão SemVer do Guia de Implementação
+     *                                para o claim {@code hub_ctx.versao};
+     *                                {@code null} para omitir o claim
+     */
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
+    public SmartTokenClient(
+        String tokenEndpoint,
+        String clientId,
+        SigningStrategy signingStrategy,
+        X509Certificate certificate,
+        SSLContext sslContext,
+        FaultToleranceConfig faultToleranceConfig,
+        boolean enableTokenCache,
+        int tokenCacheMarginSeconds,
+        String jwtAlgorithm,
+        String keyId,
+        String hubCtxIg,
+        String hubCtxVersao
+    ) {
+        this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
+        this.clientId = Objects.requireNonNull(clientId, "clientId");
+        this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
+        final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
+        this.faultToleranceConfig = Objects.requireNonNull(faultToleranceConfig, "faultToleranceConfig");
+        this.enableTokenCache = enableTokenCache;
+        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
+                ? tokenCacheMarginSeconds
+                : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+        this.jwtAlgorithm = jwtAlgorithm != null ? jwtAlgorithm : DEFAULT_JWT_ALGORITHM;
+        // Valida o algoritmo contra a allowlist (rejeita none, HS256, etc.)
+        SigningStrategyFactory.jwtAlgorithmToJava(this.jwtAlgorithm);
+        this.keyId = keyId;
+        if (hubCtxIg != null || hubCtxVersao != null) {
+            validateHubContext(hubCtxIg, hubCtxVersao);
+        }
+        this.hubCtxIg = hubCtxIg;
+        this.hubCtxVersao = hubCtxVersao;
+        this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
+        for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
+            this.scopeLocks[i] = new ReentrantLock();
+        }
+        if (certificate != null) {
+            SslContextFactory.checkCertificateValidity(certificate,
+                    certificate.getSubjectX500Principal().getName());
+            KeyCertificateConsistency.verifyStrategy(this.signingStrategy, certificate);
+        }
+        this.httpClient = HttpClient.newBuilder()
+                .sslContext(context)
+                .connectTimeout(faultToleranceConfig.connectTimeout())
+                .build();
+        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={} alg={}",
+                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries(), this.jwtAlgorithm);
+    }
+
+    /**
+     * Construtor de compatibilidade (sem contexto de IG).
+     *
+     * @param tokenEndpoint           URL do endpoint /auth/token
+     * @param clientId                identificador do cliente
+     * @param signingStrategy         estratégia de assinatura JWT
+     * @param certificate             certificado X.509 do cliente
+     * @param sslContext              contexto SSL para o {@link HttpClient}
+     * @param faultToleranceConfig    configuração de resiliência
+     * @param enableTokenCache        se {@code true}, habilita cache de tokens
+     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
+     * @param jwtAlgorithm            algoritmo JWT (ex: RS384, ES384)
      * @param keyId                   identificador da chave ({@code kid} do
      *                                header JWT); {@code null} para omitir
      */
@@ -525,34 +618,9 @@ public final class SmartTokenClient implements AutoCloseable {
         String jwtAlgorithm,
         String keyId
     ) {
-        this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
-        this.clientId = Objects.requireNonNull(clientId, "clientId");
-        this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
-        final SSLContext context = Objects.requireNonNull(sslContext, "sslContext");
-        this.faultToleranceConfig = Objects.requireNonNull(faultToleranceConfig, "faultToleranceConfig");
-        this.enableTokenCache = enableTokenCache;
-        this.tokenCacheMarginSeconds = tokenCacheMarginSeconds > 0
-                ? tokenCacheMarginSeconds
-                : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
-        this.jwtAlgorithm = jwtAlgorithm != null ? jwtAlgorithm : DEFAULT_JWT_ALGORITHM;
-        // Valida o algoritmo contra a allowlist (rejeita none, HS256, etc.)
-        SigningStrategyFactory.jwtAlgorithmToJava(this.jwtAlgorithm);
-        this.keyId = keyId;
-        this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
-        for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
-            this.scopeLocks[i] = new ReentrantLock();
-        }
-        if (certificate != null) {
-            SslContextFactory.checkCertificateValidity(certificate,
-                    certificate.getSubjectX500Principal().getName());
-            verifyStrategyCertificateConsistency(this.signingStrategy, certificate);
-        }
-        this.httpClient = HttpClient.newBuilder()
-                .sslContext(context)
-                .connectTimeout(faultToleranceConfig.connectTimeout())
-                .build();
-        LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={} alg={}",
-                clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries(), this.jwtAlgorithm);
+        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
+                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds,
+                jwtAlgorithm, keyId, null, null);
     }
 
     /**
@@ -566,7 +634,7 @@ public final class SmartTokenClient implements AutoCloseable {
      * @param faultToleranceConfig    configuração de resiliência
      * @param enableTokenCache        se {@code true}, habilita cache de tokens
      * @param tokenCacheMarginSeconds margem em segundos antes da expiração
-     * @param jwtAlgorithm            algoritmo JWT (ex: RS256, ES256)
+     * @param jwtAlgorithm            algoritmo JWT (ex: RS384, ES384)
      */
     @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
     public SmartTokenClient(
@@ -623,58 +691,26 @@ public final class SmartTokenClient implements AutoCloseable {
     }
 
     /**
-     * Validação fail-fast de consistência entre a estratégia de assinatura e
-     * o certificado do cliente.
+     * Valida o par de valores do claim {@code hub_ctx} contra os formatos do
+     * concern client-assertion-contexto-ig.md §3.4: {@code ig} segue
+     * {@code [a-z][a-z0-9-]{1,30}} e {@code versao} é SemVer completo
+     * {@code MAJOR.MINOR.PATCH} (sem pre-release/build).
      *
-     * <p>
-     * Realiza uma assinatura de teste por meio da própria estratégia (o que
-     * funciona inclusive para HSM/PKCS#11, pois a assinatura é delegada ao
-     * hardware) e a verifica com a chave pública do certificado, usando o
-     * mesmo algoritmo e parâmetros da estratégia.
-     * </p>
-     *
-     * <p>
-     * <strong>Limitação:</strong> a verificação só é possível quando a
-     * estratégia é uma {@link PrivateKeySigningStrategy}, pois é necessário
-     * conhecer o algoritmo JCA para verificar a assinatura. Estratégias
-     * customizadas (implementações próprias de {@link SigningStrategy}) são
-     * aceitas sem validação.
-     * </p>
-     *
-     * @param strategy    estratégia de assinatura a validar
-     * @param certificate certificado X.509 com a chave pública correspondente
-     * @throws SmartTokenException se a assinatura de teste não puder ser
-     *                             verificada com a chave pública do certificado
+     * @param ig     alias do Guia de Implementação
+     * @param versao versão SemVer do Guia de Implementação
+     * @throws IllegalArgumentException se qualquer valor for nulo ou não
+     *                                  seguir o formato exigido
      */
-    private static void verifyStrategyCertificateConsistency(
-            final SigningStrategy strategy,
-            final X509Certificate certificate) {
-        if (!(strategy instanceof PrivateKeySigningStrategy pkStrategy)) {
-            LOG.debug("Estratégia de assinatura customizada: consistência com o"
-                    + " certificado não pode ser verificada automaticamente");
-            return;
+    static void validateHubContext(final String ig, final String versao) {
+        if (ig == null || !HUB_CTX_IG_PATTERN.matcher(ig).matches()) {
+            throw new IllegalArgumentException(
+                    "hub_ctx.ig inválido: '" + ig + "' (use minúsculas, dígitos e hífen,"
+                            + " iniciando por letra, 2 a 31 caracteres)");
         }
-        try {
-            final byte[] challenge = "key-pair-consistency-check".getBytes(StandardCharsets.UTF_8);
-            final byte[] signature = pkStrategy.sign(challenge);
-
-            final Signature verifier = Signature.getInstance(pkStrategy.getAlgorithm());
-            if (pkStrategy.getParameterSpec() != null) {
-                verifier.setParameter(pkStrategy.getParameterSpec());
-            }
-            verifier.initVerify(certificate.getPublicKey());
-            verifier.update(challenge);
-            if (!verifier.verify(signature)) {
-                throw new SmartTokenException(
-                        "Chave privada não corresponde ao certificado: assinatura inválida");
-            }
-            LOG.trace("Verificação de consistência estratégia-certificado concluída com sucesso");
-        } catch (SmartTokenException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new SmartTokenException(
-                    "Falha ao verificar consistência entre chave privada e certificado: "
-                            + ex.getMessage(), ex);
+        if (versao == null || !HUB_CTX_VERSAO_PATTERN.matcher(versao).matches()) {
+            throw new IllegalArgumentException(
+                    "hub_ctx.versao inválido: '" + versao
+                            + "' (use SemVer completo MAJOR.MINOR.PATCH, ex.: 0.0.1)");
         }
     }
 
@@ -1151,6 +1187,14 @@ public final class SmartTokenClient implements AutoCloseable {
         claims.put("iat", iat);
         claims.put("exp", exp);
         claims.put("jti", jti);
+        if (hubCtxIg != null && hubCtxVersao != null) {
+            // Claim de contexto do HubSaúde: IG e versão pretendidos
+            // (concern client-assertion-contexto-ig.md §3.4)
+            final Map<String, Object> hubCtx = new LinkedHashMap<>();
+            hubCtx.put("ig", hubCtxIg);
+            hubCtx.put("versao", hubCtxVersao);
+            claims.put("hub_ctx", hubCtx);
+        }
 
         final String payload;
         try {
@@ -1286,33 +1330,13 @@ public final class SmartTokenClient implements AutoCloseable {
      * Validação fail-fast de consistência entre chave privada e certificado.
      *
      * <p>
-     * Este método realiza uma assinatura de teste com a chave privada e verifica
-     * o resultado usando a chave pública extraída do certificado. Se a verificação
-     * falhar, significa que os arquivos não formam um par criptográfico válido.
+     * Realiza uma assinatura de teste com a chave privada e a verifica com a
+     * chave pública extraída do certificado, detectando erros de configuração
+     * (arquivos trocados, chave corrompida, certificado regenerado) na
+     * inicialização — antes de qualquer tentativa de obter tokens. Executada
+     * automaticamente na construção do {@link SmartTokenClient} quando são
+     * fornecidos {@link PrivateKey} e {@link X509Certificate} diretamente.
      * </p>
-     *
-     * <h3>Propósito</h3>
-     * <p>
-     * Detectar <strong>erros de configuração na inicialização</strong>, antes de
-     * qualquer tentativa de obter tokens. Sem esta validação, o erro só seria
-     * descoberto quando o authorization server rejeitasse o JWT — uma falha mais
-     * difícil de diagnosticar.
-     * </p>
-     *
-     * <h3>Quando é executado</h3>
-     * <p>
-     * Automaticamente durante a construção do {@link SmartTokenClient} quando
-     * são fornecidos objetos {@link PrivateKey} e {@link X509Certificate}
-     * diretamente
-     * (não via arquivo PEM ou {@link SigningStrategy}).
-     * </p>
-     *
-     * <h3>Cenários detectados</h3>
-     * <ul>
-     * <li>Arquivos trocados (certificado de um sistema, chave de outro)</li>
-     * <li>Chave privada corrompida ou truncada</li>
-     * <li>Certificado regenerado sem atualizar a chave</li>
-     * </ul>
      *
      * @param privateKey  chave privada a validar
      * @param certificate certificado X.509 contendo a chave pública correspondente
@@ -1322,49 +1346,7 @@ public final class SmartTokenClient implements AutoCloseable {
     public static void verifyKeyPairConsistency(
             final PrivateKey privateKey,
             final X509Certificate certificate) {
-        try {
-            // Determina o algoritmo de assinatura baseado no tipo da chave
-            final String signatureAlgorithm = determineSignatureAlgorithm(privateKey);
-
-            final byte[] challenge = "key-pair-consistency-check".getBytes(StandardCharsets.UTF_8);
-            final Signature signer = Signature.getInstance(signatureAlgorithm);
-            signer.initSign(privateKey);
-            signer.update(challenge);
-            final byte[] signature = signer.sign();
-
-            final Signature verifier = Signature.getInstance(signatureAlgorithm);
-            verifier.initVerify(certificate.getPublicKey());
-            verifier.update(challenge);
-
-            if (!verifier.verify(signature)) {
-                throw new SmartTokenException(
-                        "Chave privada não corresponde ao certificado: assinatura inválida");
-            }
-            LOG.trace("Verificação de consistência key-cert concluída com sucesso");
-        } catch (SmartTokenException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new SmartTokenException(
-                    "Falha ao verificar consistência entre chave privada e certificado: " + ex.getMessage(), ex);
-        }
-    }
-
-    /**
-     * Determina o algoritmo de assinatura apropriado para o tipo de chave.
-     *
-     * @param privateKey chave privada
-     * @return algoritmo de assinatura compatível
-     */
-    private static String determineSignatureAlgorithm(final PrivateKey privateKey) {
-        final String keyAlgorithm = privateKey.getAlgorithm();
-        return switch (keyAlgorithm) {
-            case "RSA" -> "SHA256withRSA";
-            case "EC" -> "SHA256withECDSA";
-            case "Ed25519" -> "Ed25519";
-            case "Ed448" -> "Ed448";
-            default -> throw new SmartTokenException(
-                    "Tipo de chave não suportado para validação: " + keyAlgorithm);
-        };
+        KeyCertificateConsistency.verifyKeyPair(privateKey, certificate);
     }
 
     /**

@@ -197,7 +197,7 @@ class SmartTokenClientTest {
 
         @Test
         void deveFalharVerifyKeyPairConsistencyComChaveIncompativel() throws Exception {
-                // Cria chave EC (incompatível com SHA256withRSA usado internamente)
+                // Cria chave EC (incompatível com SHA384withRSA usado internamente)
                 final KeyPairGenerator ecGen = KeyPairGenerator.getInstance("EC");
                 ecGen.initialize(256);
                 final KeyPair ecPair = ecGen.generateKeyPair();
@@ -1780,7 +1780,7 @@ class SmartTokenClientTest {
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .build();
-                assertThat(padrao.getJwtAlgorithm()).isEqualTo("RS256");
+                assertThat(padrao.getJwtAlgorithm()).isEqualTo("RS384");
 
                 final SmartTokenClient ps256 = SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
@@ -2145,8 +2145,109 @@ class SmartTokenClientTest {
                                 StandardCharsets.UTF_8);
 
                 assertThat(headerJson).doesNotContain("\"kid\"");
-                assertThat(headerJson).contains("\"alg\":\"RS256\"");
+                assertThat(headerJson).contains("\"alg\":\"RS384\"");
                 assertThat(headerJson).contains("\"typ\":\"JWT\"");
+        }
+
+        @Test
+        void deveUsarRs384ComoAlgoritmoPadrao() throws Exception {
+                // Concern client-assertion-contexto-ig.md §3.2: alg DEVE ser
+                // RS384 ou ES384; o padrão do SDK é RS384 (issue #361).
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                assertThat(client.getJwtAlgorithm()).isEqualTo("RS384");
+
+                final String assertion = client.buildClientAssertion();
+                final String headerJson = new String(
+                                java.util.Base64.getUrlDecoder().decode(assertion.split("\\.")[0]),
+                                StandardCharsets.UTF_8);
+                assertThat(headerJson).contains("\"alg\":\"RS384\"");
+
+                // jjwt verifica a assinatura conforme o alg do header: se a
+                // estratégia assinasse com SHA-256, o parse falharia aqui.
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+                assertThat(claims.getSubject()).isEqualTo(CLIENT_ID);
+        }
+
+        @Test
+        void deveIncluirHubCtxQuandoConfigurado() throws Exception {
+                // Concern client-assertion-contexto-ig.md §3.4: o claim
+                // hub_ctx declara o IG e a versão pretendidos.
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .hubContext("hemograma", "0.0.1")
+                                .build();
+
+                final String assertion = client.buildClientAssertion();
+                final String payloadJson = new String(
+                                java.util.Base64.getUrlDecoder().decode(assertion.split("\\.")[1]),
+                                StandardCharsets.UTF_8);
+                assertThat(payloadJson)
+                                .contains("\"hub_ctx\":{\"ig\":\"hemograma\",\"versao\":\"0.0.1\"}");
+
+                // Assinatura continua válida com o claim adicional
+                final Claims claims = Jwts.parser()
+                                .verifyWith(publicKey)
+                                .build()
+                                .parseSignedClaims(assertion)
+                                .getPayload();
+                assertThat(claims.getSubject()).isEqualTo(CLIENT_ID);
+        }
+
+        @Test
+        void naoDeveIncluirHubCtxPorPadrao() throws Exception {
+                final SmartTokenClient client = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build();
+
+                final String assertion = client.buildClientAssertion();
+                final String payloadJson = new String(
+                                java.util.Base64.getUrlDecoder().decode(assertion.split("\\.")[1]),
+                                StandardCharsets.UTF_8);
+                assertThat(payloadJson).doesNotContain("\"hub_ctx\"");
+        }
+
+        @Test
+        void deveRejeitarHubContextComFormatoInvalido() {
+                // Concern §3.4: ig segue [a-z][a-z0-9-]{1,30} e versao é
+                // SemVer completo MAJOR.MINOR.PATCH (sem pre-release/build).
+                final var builder = SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile);
+
+                assertThatThrownBy(() -> builder.hubContext("Hemograma", "0.0.1"))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("ig");
+                assertThatThrownBy(() -> builder.hubContext("a", "0.0.1"))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("ig");
+                assertThatThrownBy(() -> builder.hubContext("hemograma", "1.2"))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("versao");
+                assertThatThrownBy(() -> builder.hubContext("hemograma", "1.2.3-rc.1"))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("versao");
+                assertThatThrownBy(() -> builder.hubContext(null, "1.2.3"))
+                                .isInstanceOf(IllegalArgumentException.class);
+                assertThatThrownBy(() -> builder.hubContext("hemograma", null))
+                                .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test

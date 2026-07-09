@@ -99,6 +99,8 @@ public final class SmartTokenClientBuilder {
     private String tlsProtocol = SslContextFactory.DEFAULT_TLS_PROTOCOL;
     private String jwtAlgorithm = SmartTokenClient.DEFAULT_JWT_ALGORITHM;
     private String keyId;
+    private String hubCtxIg;
+    private String hubCtxVersao;
     private FaultToleranceConfig faultToleranceConfig = new FaultToleranceConfig(
         SmartTokenClient.DEFAULT_CONNECT_TIMEOUT,
         SmartTokenClient.DEFAULT_REQUEST_TIMEOUT,
@@ -316,17 +318,15 @@ public final class SmartTokenClientBuilder {
      * Define o algoritmo JWT para assinatura do client_assertion.
      *
      * <p>
-     * Algoritmos suportados:
+     * O Servidor de Autorização do HubSaúde aceita apenas <strong>RS384</strong>
+     * e <strong>ES384</strong> (concern client-assertion-contexto-ig.md §3.2).
+     * Algoritmos suportados pelo SDK:
      * <ul>
-     *   <li><strong>RS256</strong> (padrão) — RSA PKCS#1 v1.5 + SHA-256</li>
-     *   <li><strong>RS384</strong> — RSA PKCS#1 v1.5 + SHA-384</li>
-     *   <li><strong>RS512</strong> — RSA PKCS#1 v1.5 + SHA-512</li>
-     *   <li><strong>PS256</strong> — RSA-PSS + SHA-256</li>
-     *   <li><strong>PS384</strong> — RSA-PSS + SHA-384</li>
-     *   <li><strong>PS512</strong> — RSA-PSS + SHA-512</li>
-     *   <li><strong>ES256</strong> — ECDSA + SHA-256 (P-256)</li>
+     *   <li><strong>RS384</strong> (padrão) — RSA PKCS#1 v1.5 + SHA-384</li>
      *   <li><strong>ES384</strong> — ECDSA + SHA-384 (P-384)</li>
-     *   <li><strong>ES512</strong> — ECDSA + SHA-512 (P-521)</li>
+     *   <li>RS256, RS512, PS256, PS384, PS512, ES256 e ES512 — aceitos pelo
+     *   SDK para uso com outros servidores de autorização, mas rejeitados
+     *   pelo HubSaúde</li>
      * </ul>
      * </p>
      *
@@ -340,11 +340,36 @@ public final class SmartTokenClientBuilder {
      * a assinatura falhará.
      * </p>
      *
-     * @param jwtAlgorithm nome do algoritmo JWT (ex: RS384, RS256)
+     * @param jwtAlgorithm nome do algoritmo JWT (ex: RS384, ES384)
      * @return este builder
      */
     public SmartTokenClientBuilder jwtAlgorithm(final String jwtAlgorithm) {
         this.jwtAlgorithm = jwtAlgorithm;
+        return this;
+    }
+
+    /**
+     * Define o contexto de Guia de Implementação (claim {@code hub_ctx}) do
+     * client_assertion.
+     *
+     * <p>
+     * O claim {@code hub_ctx} declara o IG e a versão pretendidos na sessão
+     * (concern client-assertion-contexto-ig.md §3.4). Quando não definido, o
+     * claim é omitido — servidores que o exigem rejeitarão o assertion.
+     * </p>
+     *
+     * @param ig     alias do Guia de Implementação (minúsculas, dígitos e
+     *               hífen, iniciando por letra — ex.: {@code hemograma})
+     * @param versao versão SemVer completa do IG ({@code MAJOR.MINOR.PATCH},
+     *               sem pre-release — ex.: {@code 0.0.1})
+     * @return este builder
+     * @throws IllegalArgumentException se {@code ig} ou {@code versao} não
+     *                                  seguirem o formato exigido
+     */
+    public SmartTokenClientBuilder hubContext(final String ig, final String versao) {
+        SmartTokenClient.validateHubContext(ig, versao);
+        this.hubCtxIg = ig;
+        this.hubCtxVersao = versao;
         return this;
     }
 
@@ -599,7 +624,9 @@ public final class SmartTokenClientBuilder {
                 enableTokenCache,
                 tokenCacheMarginSeconds,
                 jwtAlgorithm,
-                keyId);
+                keyId,
+                hubCtxIg,
+                hubCtxVersao);
     }
 
     /**

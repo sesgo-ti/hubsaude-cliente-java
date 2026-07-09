@@ -121,7 +121,15 @@ sequenceDiagram
    - `exp` = `iat` + TTL configurado (padrão **60 s**; ver
      [§8](#8-parâmetros-de-configuração));
    - `jti` = identificador único por assertion (UUID aleatório),
-     que NÃO DEVE ser reutilizado.
+     que NÃO DEVE ser reutilizado;
+   - `hub_ctx` = objeto `{"ig": "<alias>", "versao": "<semver>"}` com o
+     contexto de Guia de Implementação pretendido, quando configurado
+     via `hubContext(ig, versao)` (concern
+     `client-assertion-contexto-ig.md` §3.4). O `ig` DEVE seguir
+     `[a-z][a-z0-9-]{1,30}` e a `versao` DEVE ser SemVer completo
+     `MAJOR.MINOR.PATCH` (sem pre-release); valores inválidos DEVEM
+     ser rejeitados na configuração. Quando não configurado, o claim
+     DEVE ser omitido.
 4. O TTL DEVERIA ser ≤ 300 s: o servidor rejeita `exp` superior a
    `iat + 300` (contrato do simulador).
 5. A serialização JSON do payload DEVE aplicar *escaping* correto
@@ -347,7 +355,8 @@ sequenceDiagram
 #### RF-16 — Algoritmos de assinatura
 
 1. O algoritmo JWT (`alg`) DEVE ser configurável; o padrão DEVE ser
-   **RS256**.
+   **RS384** — o Servidor de Autorização do HubSaúde aceita apenas
+   `RS384` e `ES384` (concern `client-assertion-contexto-ig.md` §3.2).
 2. O SDK DEVE suportar, no mínimo: `RS256`, `RS384`, `RS512`
    (RSA PKCS#1 v1.5), `PS256`, `PS384`, `PS512` (RSA-PSS) e
    `ES256`, `ES384`, `ES512` (ECDSA). Valor não reconhecido DEVE
@@ -489,8 +498,9 @@ suportar (referência Java: CycloneDX).
 | `clientKeyStore` (+alias, senha) | não | — | mTLS via keystore (PKCS#11/12, JKS) |
 | `serverTrustAnchor` | não | trust store da plataforma | PEM ou objeto X.509 |
 | `tlsProtocol` | não | `TLSv1.3` | Ex.: `TLSv1.2` |
-| `jwtAlgorithm` | não | `RS256` | Ver RF-16 |
+| `jwtAlgorithm` | não | `RS384` | Ver RF-16 |
 | `keyId` | não | — | Inclui `kid` no header do JWT quando informado (RF-01.2) |
+| `hubContext` (ig, versao) | não | — | Inclui o claim `hub_ctx` no assertion (RF-01.3) |
 | `connectTimeout` | não | 10 s | Conexão TCP |
 | `requestTimeout` | não | 30 s | Requisição HTTP completa |
 | `assertionTtlSeconds` | não | 60 | ≤ 0 → padrão; DEVERIA ser ≤ 300 |

@@ -60,8 +60,11 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  */
 public final class PrivateKeySigningStrategy implements SigningStrategy {
 
-    /** Algoritmo padrão (RS256). */
-    public static final String DEFAULT_ALGORITHM = "SHA256withRSA";
+    /**
+     * Algoritmo padrão (RS384 — concern client-assertion-contexto-ig.md
+     * §3.2).
+     */
+    public static final String DEFAULT_ALGORITHM = "SHA384withRSA";
 
     private final PrivateKey privateKey;
     private final Provider provider;
@@ -70,7 +73,7 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
 
     /**
      * Cria estratégia com chave e algoritmo padrão
-     * ({@value #DEFAULT_ALGORITHM}, correspondente a RS256).
+     * ({@value #DEFAULT_ALGORITHM}, correspondente a RS384).
      *
      * <p>
      * Utiliza o provider padrão da JVM para operações criptográficas.

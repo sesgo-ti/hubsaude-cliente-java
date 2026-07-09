@@ -126,13 +126,23 @@ var client = SmartTokenClient.builder()
         .enableTokenCache(true)
         .tokenCacheMarginSeconds(30)                  // margem de renovação
         .maxRetries(3)
-        .jwtAlgorithm("RS256")                        // ou RS384/RS512, PS*, ES*
+        .jwtAlgorithm("RS384")                        // padrão: RS384 (HubSaúde aceita RS384/ES384)
         .keyId("minha-chave-2026")                    // kid no header do JWT (opcional)
+        .hubContext("hemograma", "0.0.1")             // claim hub_ctx: IG e versão pretendidos
         .build();
 ```
 
 O endpoint deve usar `https`; o esquema `http` é aceito apenas para
 `localhost`/`127.0.0.1` (desenvolvimento e testes locais).
+
+### Contexto de Guia de Implementação (`hub_ctx`)
+
+O claim proprietário `hub_ctx` declara o Guia de Implementação (IG) e a
+versão pretendidos na sessão (concern `client-assertion-contexto-ig.md`
+§3.4). Configure com `hubContext(ig, versao)`: o `ig` usa minúsculas,
+dígitos e hífen (ex.: `hemograma`) e a `versao` é SemVer completo
+`MAJOR.MINOR.PATCH` (ex.: `0.0.1`). Quando não configurado, o claim é
+omitido — servidores que o exigem rejeitarão o assertion.
 
 ### Identificador de chave (`kid`)
 
