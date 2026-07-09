@@ -74,7 +74,9 @@ import tools.jackson.databind.json.JsonMapper;
  * @see SigningStrategy
  * @see SslContextFactory
  */
-// Padrão Builder usa nomes iguais e tem muitos campos/métodos fluentes
+// Padrão Builder usa nomes iguais e tem muitos campos/métodos fluentes.
+// TODO débito técnico — agrupar parâmetros correlatos para reduzir campos
+// e métodos fluentes. Rastreado na issue #1032.
 @SuppressWarnings({ "checkstyle:HiddenField", "checkstyle:MethodCount",
     "PMD.TooManyFields", "PMD.TooManyMethods" })
 public final class SmartTokenClientBuilder {

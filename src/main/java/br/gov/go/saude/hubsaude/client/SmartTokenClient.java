@@ -289,7 +289,7 @@ import tools.jackson.databind.node.ObjectNode;
 // DeclarationOrder: grouping by logical role over access modifier
 // PMD.GodClass/TooManyMethods/CyclomaticComplexity: TODO débito técnico —
 // extrair builder, retry e cache em colaboradores dedicados em refatoração
-// futura.
+// futura. Rastreado na issue #1032.
 @SuppressWarnings({"PMD.CouplingBetweenObjects", "PMD.GodClass",
     "PMD.TooManyMethods", "PMD.CyclomaticComplexity",
     "checkstyle:DeclarationOrder"})
