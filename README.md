@@ -211,6 +211,11 @@ String token = cb.executeSupplier(() -> client.obtainToken(scope));
 | `signature verification failed` | Certificado não corresponde à chave | Compare *modulus*: `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5` |
 | `connection timed out` | Firewall ou endpoint incorreto | Verifique conectividade e URL |
 
+Para diagnóstico aprofundado de **confiança de certificado SSL/TLS**
+(erros `PKIX path building failed` / `SSL handshake failed`, com
+snippets em Java, C#, Node.js e OpenSSL), consulte o
+[guia de troubleshooting TLS](docs/troubleshooting.md).
+
 Para experimentar o fluxo completo localmente sem ambiente de
 homologação, use a ferramenta irmã
 [`hubsaude-cliente-cli`](../hubsaude-cliente-cli/).

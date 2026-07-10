@@ -263,9 +263,12 @@ biblioteca de segurança. Investir em:
 
 ## 20. Organização de arquivos na raiz — **C**
 
-**Status: Concluído** (disposição alternativa) — `backlog.md`,
-`plano.md` e `problemas.md` foram movidos para `internal/`
-(commit `f7d9b16`, 2026-05-22), em vez de `docs/` como sugerido.
+**Status: Concluído** — `backlog.md`, `plano.md` e `problemas.md` foram
+inicialmente movidos para `internal/` (commit `f7d9b16`, 2026-05-22);
+posteriormente (#733) `problemas.md` foi promovido a
+`docs/troubleshooting.md` — por ser guia de integradores, não registro
+interno — e linkado a partir da seção Troubleshooting do `README.md`.
+`backlog.md` e `plano.md` permanecem em `internal/`.
 A raiz mantém apenas os arquivos de release.
 
 `problemas.md` e `plano.md` na raiz misturam documentação operacional

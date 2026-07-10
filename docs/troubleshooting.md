@@ -1,7 +1,12 @@
 # Guia para Verificação e Resolução de Problemas de Confiança em Certificados SSL/TLS
 
 Este guia é direcionado ao desenvolvedor que está integrando um sistema
-com o HubSaúde, em https://fhir.saude.go.gov.br. 
+com o HubSaúde, em https://hub.saude.go.gov.br. 
+
+> **Nota:** o host `hub.saude.go.gov.br` é **ilustrativo** (o mesmo dos
+> exemplos do [README](../README.md)); use o endpoint informado no seu
+> credenciamento.
+
 O foco é ajudar a detectar se há problemas de confiança no certificado 
 SSL/TLS do servidor (por exemplo, se o root CA não for reconhecido 
 pelo seu ambiente). 
@@ -17,14 +22,14 @@ o certificado deve ser confiável automaticamente. Teste primeiro!
 
 ## Detecção de problemas
 
-Aqui, mostramos como tentar uma conexão HTTPS simples ao endpoint https://fhir.saude.go.gov.br e capturar erros relacionados a certificados (ex.: "PKIX path building failed" ou "SSL handshake failed"). Se a conexão falhar com erro de confiança, prossiga para a seção de resolução.
+Aqui, mostramos como tentar uma conexão HTTPS simples ao endpoint https://hub.saude.go.gov.br e capturar erros relacionados a certificados (ex.: "PKIX path building failed" ou "SSL handshake failed"). Se a conexão falhar com erro de confiança, prossiga para a seção de resolução.
 
 ### Usando OpenSSL (Linha de Comando - Qualquer Plataforma)
 OpenSSL é uma ferramenta gratuita e essencial para troubleshooting. Instale via pacote do seu SO (ex.: `apt install openssl` no Linux, ou via Homebrew no macOS).
 
 Comando para testar a conexão e verificar a cadeia:
 ```
-openssl s_client -connect fhir.saude.go.gov.br:443 -servername fhir.saude.go.gov.br < /dev/null
+openssl s_client -connect hub.saude.go.gov.br:443 -servername hub.saude.go.gov.br < /dev/null
 ```
 
 - **O que observar:**
@@ -38,21 +43,22 @@ openssl s_client -connect fhir.saude.go.gov.br:443 -servername fhir.saude.go.gov
 
 Para um check rápido da validade:
 ```
-echo | openssl s_client -connect fhir.saude.go.gov.br:443 -servername fhir.saude.go.gov.br 2>/dev/null | openssl x509 -noout -dates
+echo | openssl s_client -connect hub.saude.go.gov.br:443 -servername hub.saude.go.gov.br 2>/dev/null | openssl x509 -noout -dates
 ```
 
 ### Em Java
 Use um snippet simples para testar. Compile e rode com `javac Test.java && java Test`. Ajuste para sua versão de JDK.
 
 ```java
+import java.net.URI;
 import java.net.URL;
 import javax.net.ssl.HttpsURLConnection;
 
 public class HttpsTest {
     public static void main(String[] args) {
-        String endpoint = "https://fhir.saude.go.gov.br";
+        String endpoint = "https://hub.saude.go.gov.br";
         try {
-            URL url = new URL(endpoint);
+            URL url = URI.create(endpoint).toURL();
             HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.connect();
@@ -80,7 +86,7 @@ using System.Threading.Tasks;
 
 class Program {
     static async Task Main(string[] args) {
-        string endpoint = "https://fhir.saude.go.gov.br";
+        string endpoint = "https://hub.saude.go.gov.br";
         using var client = new HttpClient();
         try {
             HttpResponseMessage response = await client.GetAsync(endpoint);
@@ -108,7 +114,7 @@ Rode com `node test.js`. Use Node.js 14+ para melhor suporte a TLS.
 ```javascript
 const https = require('https');
 
-const endpoint = 'https://fhir.saude.go.gov.br';
+const endpoint = 'https://hub.saude.go.gov.br';
 
 https.get(endpoint, (res) => {
     console.log('Conexão bem-sucedida! Código:', res.statusCode);
@@ -137,7 +143,7 @@ manualmente.
 Use OpenSSL para extrair a cadeia completa e identificar o root:
 
 ```
-echo | openssl s_client -connect fhir.saude.go.gov.br:443 -servername fhir.saude.go.gov.br -showcerts 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > chain.pem
+echo | openssl s_client -connect hub.saude.go.gov.br:443 -servername hub.saude.go.gov.br -showcerts 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > chain.pem
 ```
 
 - Isso salva a cadeia em `chain.pem`.
@@ -199,7 +205,7 @@ const options = {
     ca: [fs.readFileSync('/path/to/root.pem')]
 };
 
-https.get('https://fhir.saude.go.gov.br', options, (res) => {
+https.get('https://hub.saude.go.gov.br', options, (res) => {
     // ...
 });
 ```
@@ -207,7 +213,7 @@ https.get('https://fhir.saude.go.gov.br', options, (res) => {
 - Para apps em produção, inclua o PEM no bundle ou use um pacote como `ssl-root-cas`.
 
 ## Considerações finais
-- **Atualize:** migre para versões modernas (Java 17+, .NET 8+, Node 20+) 
+- **Atualize:** migre para versões modernas (Java 21+, .NET 8+, Node 20+ — a própria `hubsaude-cliente-java` exige Java 21) 
 para evitar este problema de *handshake* TLS.
 - **Teste em produção:** use ferramentas como SSL Labs (https://www.ssllabs.com/ssltest/) para auditar o servidor.
 - **Segurança:** baixe certificados apenas de fontes oficiais para evitar MITM.
