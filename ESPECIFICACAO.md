@@ -109,10 +109,14 @@ sequenceDiagram
    com cada parte codificada em **Base64URL sem padding** (RFC 7515).
 2. O header DEVE conter os campos `alg` (algoritmo configurado, ver
    [RF-16](#rf-16--algoritmos-de-assinatura)) e `typ` com valor
-   `"JWT"`. O campo `kid` NÃO DEVE ser exigido — o servidor o ignora
-   e resolve a chave pública pelo `client_id` — mas PODE ser incluído
-   quando o parâmetro `keyId` for configurado
-   (ver [§8](#8-parâmetros-de-configuração)).
+   `"JWT"`. O campo `kid` é RECOMENDADO e DEVE ser incluído quando o
+   parâmetro `keyId` for configurado
+   (ver [§8](#8-parâmetros-de-configuração)): o Servidor de
+   Autorização seleciona a chave registrada pelo `kid` e o **exige**
+   quando o cliente possui múltiplas chaves registradas — `kid`
+   ausente nesse caso resulta em `401 invalid_client` (concern
+   `client-assertion-contexto-ig.md` §5.1). Com uma única chave
+   registrada, a omissão é aceita.
 3. O payload DEVE conter as claims:
    - `iss` = `client_id`;
    - `sub` = `client_id`;
@@ -599,7 +603,8 @@ Uma implementação DEVE cobrir, no mínimo:
 
 1. **JWT**: estrutura em 3 partes Base64URL sem padding; claims
    `iss=sub=client_id`, `aud=endpoint`, `exp−iat=TTL`, `jti` único
-   entre duas gerações; header sem `kid`.
+   entre duas gerações; header sem `kid` quando `keyId` não é
+   configurado e com `kid` quando é (RF-01.2).
 2. **Form body**: parâmetros obrigatórios presentes e
    percent-encoded; `scope` omitido quando vazio/nulo.
 3. **Resposta**: sucesso 200; erro sem `access_token`;
