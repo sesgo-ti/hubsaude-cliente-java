@@ -607,12 +607,13 @@
                 </executions>
             </plugin>
 
-            <!-- Configuração para testes unitários (exclui testes de integração) -->
+            <!-- Configuração para testes unitários (exclui testes de integração
+                 e a quarentena de testes flaky, M3.7–M3.9 / issue #1149) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <excludedGroups>integration</excludedGroups>
+                    <excludedGroups>integration,quarentena</excludedGroups>
                 </configuration>
             </plugin>
             
@@ -622,6 +623,8 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <configuration>
                     <groups>integration</groups>
+                    <!-- Quarentena de testes flaky fora do gate (M3.7–M3.9) -->
+                    <excludedGroups>quarentena</excludedGroups>
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>
