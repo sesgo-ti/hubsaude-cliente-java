@@ -1,6 +1,6 @@
 # hubsaude-cliente-java
 
-[![Version](https://img.shields.io/badge/Version-0.3.16-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
+[![Version](https://img.shields.io/badge/Version-0.3.17-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
