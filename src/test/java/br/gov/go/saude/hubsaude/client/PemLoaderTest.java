@@ -416,6 +416,47 @@ class PemLoaderTest {
         PemLoader.validateMinimumKeySize(privateKey, "rsa-2048");
     }
 
+    // ---------- Testes de zeroização do PEM (#728) ----------
+
+    @Test
+    void deveCarregarChavePrivadaDeCharsEZerarBuffer() throws IOException {
+        final char[] pem = Files.readString(keyFile, StandardCharsets.UTF_8).toCharArray();
+
+        final PrivateKey loaded = PemLoader.loadPrivateKeyFromChars(pem, null, "test-chars");
+
+        assertThat(loaded).isNotNull();
+        assertThat(loaded.getAlgorithm()).isEqualTo("RSA");
+        // O buffer PEM é consumido (zerado) após o uso
+        assertThat(pem).containsOnly('\0');
+    }
+
+    @Test
+    void deveZerarBufferPemMesmoEmCasoDeErro() {
+        final char[] pemInvalido = "conteudo invalido que nao eh PEM".toCharArray();
+        final char[] senha = "senha-qualquer".toCharArray();
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKeyFromChars(pemInvalido, senha, "erro-test"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("erro-test");
+
+        // Buffers zerados em finally, mesmo no caminho de erro
+        assertThat(pemInvalido).containsOnly('\0');
+        assertThat(senha).containsOnly('\0');
+    }
+
+    @Test
+    void deveZerarBufferPemQuandoChaveEncriptadaComSenhaErrada() throws Exception {
+        final char[] pem = createEncryptedPkcs8Pem().toCharArray();
+        final char[] senhaErrada = "senha-errada".toCharArray();
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKeyFromChars(pem, senhaErrada, "enc-test"))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("senha incorreta");
+
+        assertThat(pem).containsOnly('\0');
+        assertThat(senhaErrada).containsOnly('\0');
+    }
+
     /**
      * Cria uma chave RSA criptografada no formato OpenSSL tradicional.
      * Este formato usa "BEGIN RSA PRIVATE KEY" com headers Proc-Type e DEK-Info.

@@ -20,8 +20,11 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import java.io.CharArrayReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,6 +77,10 @@ import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
  *
  * @see SigningStrategyFactory factory methods que utilizam este loader
  */
+// PMD.GodClass: utilitário estático coeso de parsing PEM; a métrica dispara
+// pelos múltiplos formatos suportados (PKCS#1/PKCS#8/OpenSSL), não por
+// acúmulo de responsabilidades distintas.
+@SuppressWarnings("PMD.GodClass")
 public final class PemLoader {
 
     /**
@@ -158,8 +165,27 @@ public final class PemLoader {
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     public static PrivateKey loadPrivateKey(final Path path, final char[] password) throws IOException {
         Objects.requireNonNull(path, "path não pode ser null");
-        final String pem = Files.readString(path, StandardCharsets.UTF_8);
-        return loadPrivateKeyFromString(pem, password, path.toString());
+        final byte[] raw = Files.readAllBytes(path);
+        try {
+            // Decodifica para char[] (nunca String) para permitir zeroização
+            return loadPrivateKeyFromChars(decodeUtf8(raw), password, path.toString());
+        } finally {
+            Arrays.fill(raw, (byte) 0);
+        }
+    }
+
+    /**
+     * Decodifica bytes UTF-8 em {@code char[]} sem materializar {@link String},
+     * zerando o buffer intermediário do decodificador.
+     */
+    private static char[] decodeUtf8(final byte[] bytes) {
+        final CharBuffer buffer = StandardCharsets.UTF_8.decode(ByteBuffer.wrap(bytes));
+        final char[] chars = new char[buffer.remaining()];
+        buffer.get(chars);
+        if (buffer.hasArray()) {
+            Arrays.fill(buffer.array(), '\0');
+        }
+        return chars;
     }
 
     /**
@@ -170,6 +196,13 @@ public final class PemLoader {
      * zerado ao final da chamada, em sucesso ou erro, mesmo quando a chave
      * não está criptografada e a senha não é utilizada (RNF de segurança —
      * minimizar exposição de segredos em memória).
+     * </p>
+     *
+     * <p>
+     * <strong>Atenção:</strong> por ser {@link String} (imutável), o conteúdo
+     * PEM fornecido pelo chamador não pode ser zerado e permanecerá no heap
+     * até a coleta de lixo. Quando o material da chave for sensível, prefira
+     * {@link #loadPrivateKeyFromChars(char[], char[], String)}.
      * </p>
      *
      * @param pem      conteúdo PEM
@@ -186,8 +219,36 @@ public final class PemLoader {
             final char[] password,
             final String source) throws IOException {
         Objects.requireNonNull(pem, "pem não pode ser null");
+        return loadPrivateKeyFromChars(pem.toCharArray(), password, source);
+    }
 
-        try (PEMParser parser = new PEMParser(new StringReader(pem))) {
+    /**
+     * Carrega chave privada de conteúdo PEM em {@code char[]}.
+     *
+     * <p>
+     * Tanto o conteúdo PEM quanto a senha são <strong>consumidos</strong>:
+     * ambos os arrays são zerados ao final da chamada, em sucesso ou erro
+     * (RNF de segurança — minimizar exposição de material de chave e
+     * segredos em memória). O chamador não deve reutilizá-los.
+     * </p>
+     *
+     * @param pem      conteúdo PEM; zerado após o uso
+     * @param password senha (null se não criptografada); zerada após o uso
+     * @param source   identificador da fonte para mensagens de erro
+     * @return chave privada
+     * @throws IOException              em caso de erro de parse
+     * @throws IllegalArgumentException se a chave estiver abaixo do tamanho
+     *                                  mínimo aceito (RSA &lt; 2048 bits ou
+     *                                  EC &lt; P-256)
+     */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para material sensível é intencional - segurança
+    public static PrivateKey loadPrivateKeyFromChars(
+            final char[] pem,
+            final char[] password,
+            final String source) throws IOException {
+        Objects.requireNonNull(pem, "pem não pode ser null");
+
+        try (PEMParser parser = new PEMParser(new CharArrayReader(pem))) {
             final Object obj = parser.readObject();
 
             if (obj == null) {
@@ -198,6 +259,7 @@ public final class PemLoader {
             validateMinimumKeySize(key, source);
             return key;
         } finally {
+            Arrays.fill(pem, '\0');
             clearPassword(password);
         }
     }

@@ -8,6 +8,13 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ## [Unreleased]
 
 ### Segurança
+- O PEM da chave privada não é mais materializado como `String` imutável:
+  `PemLoader.loadPrivateKey` lê o arquivo como `byte[]`, decodifica para
+  `char[]` e o novo `loadPrivateKeyFromChars` zera os buffers em `finally`
+  em todos os caminhos (sucesso e erro), permitindo zeroização do material
+  de chave em memória (#728).
+
+### Segurança
 - Chaves privadas fracas passam a ser rejeitadas (fail-fast,
   `IllegalArgumentException`) no carregamento (`PemLoader`) e na
   construção de `PrivateKeySigningStrategy`: RSA exige módulo ≥ 2048
