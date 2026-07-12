@@ -231,4 +231,25 @@ class PrivateKeySigningStrategyTest {
                 verifier.update(dados);
                 assertThat(verifier.verify(assinatura)).isTrue();
         }
+
+        // ---------- Testes de tamanho mínimo de chave (#727) ----------
+
+        @Test
+        void deveRejeitarChaveRsa1024NaConstrucao() throws Exception {
+                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+                gen.initialize(1024);
+                final PrivateKey chaveFraca = gen.generateKeyPair().getPrivate();
+
+                assertThatThrownBy(() -> new PrivateKeySigningStrategy(chaveFraca))
+                                .isInstanceOf(IllegalArgumentException.class)
+                                .hasMessageContaining("1024 bits")
+                                .hasMessageContaining("2048");
+        }
+
+        @Test
+        void deveAceitarChavesRsa2048EEcP256NaConstrucao() {
+                // Happy path: os mínimos NIST SP 800-57 são aceitos
+                assertThat(new PrivateKeySigningStrategy(rsaPrivateKey)).isNotNull();
+                assertThat(new PrivateKeySigningStrategy(ecPrivateKey, "SHA256withECDSA")).isNotNull();
+        }
 }

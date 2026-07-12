@@ -28,6 +28,8 @@ import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.ECKey;
+import java.security.interfaces.RSAKey;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -35,6 +37,7 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMEncryptedKeyPair;
+import org.bouncycastle.openssl.PEMException;
 import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
@@ -62,13 +65,67 @@ import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
  * e deve ser limpa pelo chamador após o uso para minimizar exposição em
  * memória.
  * </p>
+ * <p>
+ * Chaves fracas são rejeitadas no carregamento (fail-fast): RSA exige
+ * módulo de pelo menos {@value #MIN_RSA_KEY_BITS} bits e EC exige curva
+ * com campo de pelo menos {@value #MIN_EC_FIELD_BITS} bits (P-256),
+ * conforme NIST SP 800-57.
+ * </p>
  *
  * @see SigningStrategyFactory factory methods que utilizam este loader
  */
 public final class PemLoader {
 
+    /**
+     * Tamanho mínimo aceito, em bits, para o módulo de chaves RSA
+     * (NIST SP 800-57).
+     */
+    public static final int MIN_RSA_KEY_BITS = 2048;
+
+    /**
+     * Tamanho mínimo aceito, em bits, para o campo da curva de chaves EC
+     * (equivalente a P-256, NIST SP 800-57).
+     */
+    public static final int MIN_EC_FIELD_BITS = 256;
+
     private PemLoader() {
         // Utilitário não instanciável
+    }
+
+    /**
+     * Valida o tamanho mínimo de uma chave privada (fail-fast).
+     *
+     * <p>
+     * Chaves RSA com módulo menor que {@value #MIN_RSA_KEY_BITS} bits e
+     * chaves EC com campo menor que {@value #MIN_EC_FIELD_BITS} bits
+     * (P-256) são consideradas criptograficamente fracas (NIST SP 800-57,
+     * BSI TR-02102-1) e rejeitadas. Chaves de outros algoritmos — ou
+     * <em>handles</em> PKCS#11 opacos que não expõem os parâmetros — não
+     * são validadas.
+     * </p>
+     *
+     * @param key    chave privada a validar
+     * @param source identificador da fonte para mensagens de erro
+     * @throws IllegalArgumentException se a chave estiver abaixo do
+     *                                  tamanho mínimo aceito
+     */
+    public static void validateMinimumKeySize(final PrivateKey key, final String source) {
+        Objects.requireNonNull(key, "key não pode ser null");
+        if (key instanceof RSAKey rsaKey) {
+            final int bits = rsaKey.getModulus().bitLength();
+            if (bits < MIN_RSA_KEY_BITS) {
+                throw new IllegalArgumentException(
+                        "Chave RSA de " + bits + " bits rejeitada: o tamanho mínimo aceito é "
+                                + MIN_RSA_KEY_BITS + " bits (NIST SP 800-57). Fonte: " + source);
+            }
+        } else if (key instanceof ECKey ecKey) {
+            final int bits = ecKey.getParams().getCurve().getField().getFieldSize();
+            if (bits < MIN_EC_FIELD_BITS) {
+                throw new IllegalArgumentException(
+                        "Chave EC com campo de " + bits + " bits rejeitada: a curva mínima aceita é P-256 ("
+                                + MIN_EC_FIELD_BITS + " bits, NIST SP 800-57). Fonte: " + source);
+            }
+        }
     }
 
     /**
@@ -119,7 +176,10 @@ public final class PemLoader {
      * @param password senha (null se não criptografada); zerada após o uso
      * @param source   identificador da fonte para mensagens de erro
      * @return chave privada
-     * @throws IOException em caso de erro de parse
+     * @throws IOException              em caso de erro de parse
+     * @throws IllegalArgumentException se a chave estiver abaixo do tamanho
+     *                                  mínimo aceito (RSA &lt; 2048 bits ou
+     *                                  EC &lt; P-256)
      */
     public static PrivateKey loadPrivateKeyFromString(
             final String pem,
@@ -134,32 +194,54 @@ public final class PemLoader {
                 throw new SmartTokenException("Arquivo PEM vazio ou inválido: " + source);
             }
 
-            // PKCS#8 criptografado (BEGIN ENCRYPTED PRIVATE KEY)
-            if (obj instanceof PKCS8EncryptedPrivateKeyInfo encrypted) {
-                return decryptPkcs8(encrypted, password, source);
-            }
-
-            // OpenSSL tradicional criptografado (BEGIN RSA PRIVATE KEY +
-            // Proc-Type/DEK-Info)
-            if (obj instanceof PEMEncryptedKeyPair encryptedKeyPair) {
-                return decryptOpenSslKey(encryptedKeyPair, password, source);
-            }
-
-            // PKCS#1 RSA não criptografado (BEGIN RSA PRIVATE KEY)
-            if (obj instanceof PEMKeyPair pemKeyPair) {
-                return new JcaPEMKeyConverter().getKeyPair(pemKeyPair).getPrivate();
-            }
-
-            // PKCS#8 não criptografado (BEGIN PRIVATE KEY)
-            if (obj instanceof PrivateKeyInfo pki) {
-                return new JcaPEMKeyConverter().getPrivateKey(pki);
-            }
-
-            throw new SmartTokenException(
-                    "Formato de chave não suportado (" + obj.getClass().getSimpleName() + "): " + source);
+            final PrivateKey key = convertToPrivateKey(obj, password, source);
+            validateMinimumKeySize(key, source);
+            return key;
         } finally {
             clearPassword(password);
         }
+    }
+
+    /**
+     * Converte o objeto lido pelo {@link PEMParser} em {@link PrivateKey},
+     * aplicando decriptação quando necessário.
+     */
+    @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
+    private static PrivateKey convertToPrivateKey(
+            final Object obj,
+            final char[] password,
+            final String source) {
+        // PKCS#8 criptografado (BEGIN ENCRYPTED PRIVATE KEY)
+        if (obj instanceof PKCS8EncryptedPrivateKeyInfo encrypted) {
+            return decryptPkcs8(encrypted, password, source);
+        }
+
+        // OpenSSL tradicional criptografado (BEGIN RSA PRIVATE KEY +
+        // Proc-Type/DEK-Info)
+        if (obj instanceof PEMEncryptedKeyPair encryptedKeyPair) {
+            return decryptOpenSslKey(encryptedKeyPair, password, source);
+        }
+
+        // PKCS#1 RSA não criptografado (BEGIN RSA PRIVATE KEY)
+        if (obj instanceof PEMKeyPair pemKeyPair) {
+            try {
+                return new JcaPEMKeyConverter().getKeyPair(pemKeyPair).getPrivate();
+            } catch (PEMException e) {
+                throw new SmartTokenException("Falha ao converter chave PKCS#1: " + source, e);
+            }
+        }
+
+        // PKCS#8 não criptografado (BEGIN PRIVATE KEY)
+        if (obj instanceof PrivateKeyInfo pki) {
+            try {
+                return new JcaPEMKeyConverter().getPrivateKey(pki);
+            } catch (PEMException e) {
+                throw new SmartTokenException("Falha ao converter chave PKCS#8: " + source, e);
+            }
+        }
+
+        throw new SmartTokenException(
+                "Formato de chave não suportado (" + obj.getClass().getSimpleName() + "): " + source);
     }
 
     /**

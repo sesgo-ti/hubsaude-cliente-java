@@ -56,6 +56,14 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * uma nova instância de {@link Signature}, evitando problemas de concorrência.
  * </p>
  *
+ * <h2>Tamanho mínimo de chave</h2>
+ * <p>
+ * Chaves fracas são rejeitadas na construção (fail-fast): RSA exige módulo
+ * de pelo menos 2048 bits e EC exige curva com campo de pelo menos 256 bits
+ * (P-256), conforme NIST SP 800-57. Handles PKCS#11 opacos que não expõem os
+ * parâmetros da chave não são validados.
+ * </p>
+ *
  * @see SigningStrategyFactory factory methods para criação
  */
 public final class PrivateKeySigningStrategy implements SigningStrategy {
@@ -128,6 +136,9 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
      * @param provider      provider criptográfico (null = padrão da JVM)
      * @param algorithm     algoritmo de assinatura (ex: "RSASSA-PSS")
      * @param parameterSpec parâmetros do algoritmo (null se não requeridos)
+     * @throws IllegalArgumentException se a chave estiver abaixo do tamanho
+     *                                  mínimo aceito (RSA &lt; 2048 bits ou
+     *                                  EC &lt; P-256 — NIST SP 800-57)
      */
     @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
             justification = "Provider e AlgorithmParameterSpec são efetivamente imutáveis")
@@ -137,6 +148,7 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
             final String algorithm,
             final AlgorithmParameterSpec parameterSpec) {
         this.privateKey = Objects.requireNonNull(privateKey, "privateKey não pode ser null");
+        PemLoader.validateMinimumKeySize(privateKey, "privateKey");
         this.provider = provider; // pode ser null (usa padrão)
         this.algorithm = Objects.requireNonNull(algorithm, "algorithm não pode ser null");
         this.parameterSpec = parameterSpec; // pode ser null (sem parâmetros)

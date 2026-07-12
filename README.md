@@ -60,6 +60,20 @@ mais relevante para uma integração de produção:
 | HSM via PKCS#11 | Produção com chave não-exportável | Nunca sai do hardware |
 | OpenBao (cofre) | Chave provisionada por cofre central | Buscada em runtime; nunca em disco |
 
+### Tamanho mínimo de chave
+
+Chaves fracas são rejeitadas no carregamento e na construção da
+estratégia de assinatura (fail-fast, `IllegalArgumentException`),
+conforme NIST SP 800-57:
+
+| Algoritmo | Mínimo aceito |
+|-----------|---------------|
+| RSA | 2048 bits (módulo) |
+| EC | P-256 (campo de 256 bits) |
+
+Handles PKCS#11 opacos que não expõem os parâmetros da chave não são
+validados (a política de tamanho fica a cargo do HSM).
+
 ### PKCS#12 direto
 
 ```java

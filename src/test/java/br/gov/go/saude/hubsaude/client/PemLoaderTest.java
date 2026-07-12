@@ -363,6 +363,59 @@ class PemLoaderTest {
                 .hasMessageContaining("requer senha");
     }
 
+    // ---------- Testes de tamanho mínimo de chave (#727) ----------
+
+    @Test
+    void deveRejeitarChaveRsaMenorQue2048Bits() throws Exception {
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(1024);
+        final KeyPair pair = gen.generateKeyPair();
+        final String pem = toPkcs8Pem(pair.getPrivate().getEncoded());
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKeyFromString(pem, null, "rsa-1024"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1024 bits")
+                .hasMessageContaining("2048")
+                .hasMessageContaining("rsa-1024");
+    }
+
+    @Test
+    void deveAceitarChaveEcP256() throws Exception {
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("EC");
+        gen.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        final KeyPair pair = gen.generateKeyPair();
+        final String pem = toPkcs8Pem(pair.getPrivate().getEncoded());
+
+        final PrivateKey loaded = PemLoader.loadPrivateKeyFromString(pem, null, "ec-p256");
+
+        assertThat(loaded).isNotNull();
+        // O conversor BouncyCastle pode reportar "EC" ou "ECDSA"
+        assertThat(loaded.getAlgorithm()).isIn("EC", "ECDSA");
+    }
+
+    @Test
+    void deveRejeitarChaveEcMenorQueP256() throws Exception {
+        if (java.security.Security.getProvider("BC") == null) {
+            java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        }
+        // JDK 21 não gera curvas < 256 bits; usa BouncyCastle para o material fraco
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("EC", "BC");
+        gen.initialize(new java.security.spec.ECGenParameterSpec("secp192r1"));
+        final KeyPair pair = gen.generateKeyPair();
+        final String pem = toPkcs8Pem(pair.getPrivate().getEncoded());
+
+        assertThatThrownBy(() -> PemLoader.loadPrivateKeyFromString(pem, null, "ec-192"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("192 bits")
+                .hasMessageContaining("P-256");
+    }
+
+    @Test
+    void deveValidarTamanhoMinimoDeChaveDireta() throws Exception {
+        // Happy path: RSA-2048 passa sem exceção
+        PemLoader.validateMinimumKeySize(privateKey, "rsa-2048");
+    }
+
     /**
      * Cria uma chave RSA criptografada no formato OpenSSL tradicional.
      * Este formato usa "BEGIN RSA PRIVATE KEY" com headers Proc-Type e DEK-Info.

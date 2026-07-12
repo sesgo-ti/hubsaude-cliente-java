@@ -7,6 +7,12 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Segurança
+- Chaves privadas fracas passam a ser rejeitadas (fail-fast,
+  `IllegalArgumentException`) no carregamento (`PemLoader`) e na
+  construção de `PrivateKeySigningStrategy`: RSA exige módulo ≥ 2048
+  bits e EC exige curva ≥ P-256 (NIST SP 800-57) (#727).
+
 ## [0.3.13] - 2026-07-07
 
 ### Segurança
