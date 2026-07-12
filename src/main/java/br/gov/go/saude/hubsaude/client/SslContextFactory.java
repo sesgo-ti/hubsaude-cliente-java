@@ -295,7 +295,11 @@ public final class SslContextFactory {
      *
      * @param keyStore   KeyStore já carregado (PKCS#11, PKCS#12, JKS)
      * @param keyAlias   alias da chave privada no KeyStore
-     * @param keyPassword senha da chave (PIN para PKCS#11)
+     * @param keyPassword senha da chave (PIN para PKCS#11); o array não é
+     *                    modificado nem zerado por este método — a
+     *                    zeroização é responsabilidade do chamador (ex.:
+     *                    {@code SmartTokenClientBuilder.build()} consome as
+     *                    senhas ao final)
      * @return array de KeyManagers configurados
      * @throws SmartTokenException se houver erro ao configurar o KeyManager
      */

@@ -506,8 +506,9 @@ public final class SmartTokenClientBuilder {
      * <p>
      * As senhas fornecidas via {@link #privateKeyPassword(char[])} e
      * {@link #clientKeyStore(KeyStore, String, char[])} são consumidas:
-     * os arrays são zerados ao final desta chamada, em sucesso ou erro
-     * (minimiza exposição de segredos em memória). Para construir outro
+     * os arrays são zerados e as referências descartadas ao final desta
+     * chamada, em sucesso ou erro (minimiza exposição de segredos em
+     * memória e evita retenção após a construção). Para construir outro
      * cliente, forneça as senhas novamente.
      * </p>
      *
@@ -523,6 +524,9 @@ public final class SmartTokenClientBuilder {
         } finally {
             PemLoader.clearPassword(privateKeyPassword);
             PemLoader.clearPassword(clientKeyPassword);
+            // Descarta as referências: o builder não retém segredos após build()
+            privateKeyPassword = null;
+            clientKeyPassword = null;
         }
     }
 

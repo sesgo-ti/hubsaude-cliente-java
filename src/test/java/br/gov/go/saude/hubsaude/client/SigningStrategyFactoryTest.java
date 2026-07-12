@@ -259,6 +259,43 @@ class SigningStrategyFactoryTest {
     }
 
     @Test
+    void devePreservarSenhaDoChamadorEmFromKeyStore() throws Exception {
+        final KeyStore ks = KeyStore.getInstance("PKCS12");
+        ks.load(null, null);
+        final java.security.cert.X509Certificate cert = generateSelfSignedCert(privateKey, publicKey);
+        ks.setKeyEntry("test-alias", privateKey, "senha123".toCharArray(),
+                new java.security.cert.Certificate[]{cert});
+
+        final char[] senha = "senha123".toCharArray();
+
+        final SigningStrategy primeira = SigningStrategyFactory.fromKeyStore(ks, "test-alias", senha);
+
+        // O array do chamador permanece intacto (cópia defensiva interna)
+        assertThat(senha).containsExactly("senha123".toCharArray());
+
+        // Reutilização do mesmo PIN em chamada subsequente funciona
+        final SigningStrategy segunda = SigningStrategyFactory.fromKeyStore(ks, "test-alias", senha);
+
+        assertThat(primeira).isNotNull();
+        assertThat(segunda).isNotNull();
+        assertThat(senha).containsExactly("senha123".toCharArray());
+    }
+
+    @Test
+    void devePreservarSenhaDoChamadorMesmoEmErroNoFromKeyStore() throws Exception {
+        final KeyStore ks = KeyStore.getInstance("PKCS12");
+        ks.load(null, null);
+
+        final char[] senha = "senha123".toCharArray();
+
+        assertThatThrownBy(() -> SigningStrategyFactory.fromKeyStore(ks, "alias-inexistente", senha))
+                .isInstanceOf(SmartTokenException.class);
+
+        // Mesmo no caminho de erro, o array do chamador não é modificado
+        assertThat(senha).containsExactly("senha123".toCharArray());
+    }
+
+    @Test
     void deveFalharComAliasInexistenteNoKeyStore() throws Exception {
         final KeyStore ks = KeyStore.getInstance("PKCS12");
         ks.load(null, null);

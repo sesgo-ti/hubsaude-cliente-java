@@ -580,6 +580,46 @@ class SmartTokenClientBuilderTest {
     }
 
     @Test
+    @DisplayName("Deve permitir reutilizar o mesmo PIN entre fromKeyStore e clientKeyStore")
+    void devePermitirReutilizarPinEntreFromKeyStoreEClientKeyStore() throws Exception {
+        final X509Certificate cert = new JcaX509CertificateConverter()
+                .setProvider(new BouncyCastleProvider())
+                .getCertificate(
+                        new JcaX509v3CertificateBuilder(
+                                new X500Name("CN=KeyStore-Test"),
+                                BigInteger.valueOf(System.nanoTime()),
+                                Date.from(Instant.now()),
+                                Date.from(Instant.now().plusSeconds(86400)),
+                                new X500Name("CN=KeyStore-Test"),
+                                keyPair.getPublic())
+                                .build(new JcaContentSignerBuilder("SHA256withRSA")
+                                        .build(keyPair.getPrivate())));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new java.security.cert.Certificate[]{cert});
+
+        final char[] pin = "changeit".toCharArray();
+
+        // fromKeyStore faz cópia defensiva: o array do chamador fica intacto
+        final SigningStrategy strategy = SigningStrategyFactory.fromKeyStore(ks, "client", pin);
+        assertThat(pin).containsExactly("changeit".toCharArray());
+
+        // O mesmo PIN pode ser reutilizado para mTLS via clientKeyStore
+        final SmartTokenClient client = SmartTokenClient.builder()
+                .tokenEndpoint(TOKEN_ENDPOINT)
+                .clientId(CLIENT_ID)
+                .signingStrategy(strategy)
+                .clientKeyStore(ks, "client", pin)
+                .build();
+
+        assertThat(client).isNotNull();
+        // build() consome (zera) o PIN ao final — semântica documentada
+        assertThat(pin).containsOnly('\0');
+    }
+
+    @Test
     @DisplayName("static discoverTokenEndpoint: Deve lançar SmartTokenException quando backend falhar (HTTP != 200)")
     void deveFalharSeDiscoveryRetornarErroHttp() throws Exception {
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);

@@ -183,7 +183,11 @@ public final class SigningStrategyFactory {
      *
      * @param pkcs11Provider provider PKCS#11 configurado
      * @param keyAlias       alias da chave no token
-     * @param pin            PIN de acesso ao token
+     * @param pin            PIN de acesso ao token; o array do chamador
+     *                       <strong>não é modificado</strong> — uma cópia
+     *                       defensiva é criada e zerada internamente. O
+     *                       chamador permanece responsável por zerar o
+     *                       array original após o uso
      * @return estratégia de assinatura que usa o HSM
      * @throws SmartTokenException se a chave não for encontrada ou PIN inválido
      */
@@ -196,11 +200,14 @@ public final class SigningStrategyFactory {
         Objects.requireNonNull(keyAlias, "keyAlias não pode ser null");
         Objects.requireNonNull(pin, "pin não pode ser null");
 
+        // Cópia defensiva: o array do chamador permanece intacto (permite
+        // reutilizar o mesmo PIN, ex.: em clientKeyStore(...) para mTLS)
+        final char[] pinCopy = pin.clone();
         try {
             final KeyStore ks = KeyStore.getInstance("PKCS11", pkcs11Provider);
-            ks.load(null, pin);
+            ks.load(null, pinCopy);
 
-            final PrivateKey handle = (PrivateKey) ks.getKey(keyAlias, pin);
+            final PrivateKey handle = (PrivateKey) ks.getKey(keyAlias, pinCopy);
             if (handle == null) {
                 throw new SmartTokenException("Chave não encontrada no token PKCS#11: " + keyAlias);
             }
@@ -216,16 +223,26 @@ public final class SigningStrategyFactory {
         } catch (Exception e) {
             throw new SmartTokenException("Falha ao acessar chave PKCS#11: " + e.getMessage(), e);
         } finally {
-            PemLoader.clearPassword(pin);
+            PemLoader.clearPassword(pinCopy);
         }
     }
 
     /**
      * Cria estratégia a partir de KeyStore (JKS, PKCS#12).
      *
+     * <p>
+     * O array de senha do chamador <strong>não é modificado</strong>: uma
+     * cópia defensiva é criada e zerada internamente, em sucesso ou erro.
+     * Isso permite reutilizar a mesma senha/PIN em chamadas subsequentes
+     * (ex.: {@code SmartTokenClientBuilder.clientKeyStore(...)} para mTLS
+     * com o mesmo material). O chamador permanece responsável por zerar o
+     * array original após o uso.
+     * </p>
+     *
      * @param keyStore KeyStore carregado
      * @param alias    alias da chave privada
-     * @param password senha da chave
+     * @param password senha da chave (null se o KeyStore não exigir);
+     *                 o array do chamador não é modificado
      * @return estratégia de assinatura configurada
      * @throws SmartTokenException se a chave não for encontrada
      */
@@ -237,8 +254,10 @@ public final class SigningStrategyFactory {
         Objects.requireNonNull(keyStore, "keyStore não pode ser null");
         Objects.requireNonNull(alias, "alias não pode ser null");
 
+        // Cópia defensiva: o array do chamador permanece intacto
+        final char[] passwordCopy = password == null ? null : password.clone();
         try {
-            final PrivateKey key = (PrivateKey) keyStore.getKey(alias, password);
+            final PrivateKey key = (PrivateKey) keyStore.getKey(alias, passwordCopy);
             if (key == null) {
                 throw new SmartTokenException("Chave não encontrada no KeyStore: " + alias);
             }
@@ -248,7 +267,7 @@ public final class SigningStrategyFactory {
         } catch (Exception e) {
             throw new SmartTokenException("Falha ao obter chave do KeyStore: " + e.getMessage(), e);
         } finally {
-            PemLoader.clearPassword(password);
+            PemLoader.clearPassword(passwordCopy);
         }
     }
 

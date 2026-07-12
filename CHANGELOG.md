@@ -8,6 +8,16 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ## [Unreleased]
 
 ### Segurança
+- Zeroização de senhas consistente e sem efeito colateral no chamador
+  (#726): `SigningStrategyFactory.fromPkcs11`/`fromKeyStore` agora fazem
+  cópia defensiva da senha/PIN e zeram apenas a cópia — o array do
+  chamador permanece intacto, permitindo reutilizar o mesmo PIN (ex.: em
+  `clientKeyStore(...)` para mTLS); semântica de ownership documentada em
+  JavaDoc. `SmartTokenClientBuilder.build()` além de zerar as senhas
+  descarta as referências dos campos (`privateKeyPassword` e
+  `clientKeyPassword`) após a construção.
+
+### Segurança
 - O PEM da chave privada não é mais materializado como `String` imutável:
   `PemLoader.loadPrivateKey` lê o arquivo como `byte[]`, decodifica para
   `char[]` e o novo `loadPrivateKeyFromChars` zera os buffers em `finally`
