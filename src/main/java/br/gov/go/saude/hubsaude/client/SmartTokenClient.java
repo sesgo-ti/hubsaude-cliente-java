@@ -1115,7 +1115,13 @@ public final class SmartTokenClient implements AutoCloseable {
                 .build();
 
         LOG.trace("Enviando requisição POST para {}", tokenEndpoint);
-        final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        final HttpResponse<String> response;
+        try {
+            response = httpClient.send(request,
+                    TokenResponseGuard.boundedStringBodyHandler(TokenResponseGuard.MAX_RESPONSE_BODY_BYTES));
+        } catch (IOException ex) {
+            throw TokenResponseGuard.unwrapBodyLimitViolation(ex);
+        }
 
         final int statusCode = response.statusCode();
         if (statusCode != HTTP_OK) {
@@ -1285,10 +1291,12 @@ public final class SmartTokenClient implements AutoCloseable {
     }
 
     /**
-     * Faz o parse completo da resposta do token endpoint.
+     * Faz o parse completo da resposta do token endpoint, aplicando a
+     * política de sanidade de {@code expires_in} descrita em
+     * {@link TokenResponseGuard#sanitizeExpiresIn(JsonNode)}.
      *
      * @param jsonBody corpo JSON da resposta
-     * @return objeto com access_token e expires_in
+     * @return objeto com access_token e expires_in saneado
      * @throws IOException em caso de erro de parse
      */
     static TokenResponse parseTokenResponse(final String jsonBody) throws IOException {
@@ -1297,7 +1305,7 @@ public final class SmartTokenClient implements AutoCloseable {
             throw new SmartTokenException("Resposta não contém 'access_token'");
         }
         final String accessToken = node.get("access_token").asString();
-        final int expiresIn = node.has("expires_in") ? node.get("expires_in").asInt() : 3600;
+        final int expiresIn = TokenResponseGuard.sanitizeExpiresIn(node);
         return new TokenResponse(accessToken, expiresIn, jsonBody);
     }
 

@@ -254,6 +254,123 @@ class SmartTokenClientTest {
                                 .hasMessageContaining("access_token");
         }
 
+        // ==================== Testes de sanidade de expires_in (issue #730) ====================
+
+        @Test
+        void deveRejeitarExpiresInNegativo() {
+                final String json = "{\"access_token\":\"abc123\",\"expires_in\":-300}";
+                assertThatThrownBy(() -> SmartTokenClient.parseTokenResponse(json))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("expires_in")
+                                .hasMessageContaining("-300");
+        }
+
+        @Test
+        void deveRejeitarExpiresInZero() {
+                final String json = "{\"access_token\":\"abc123\",\"expires_in\":0}";
+                assertThatThrownBy(() -> SmartTokenClient.parseTokenResponse(json))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("expires_in");
+        }
+
+        @Test
+        void deveRejeitarExpiresInNaoNumerico() {
+                final String json = "{\"access_token\":\"abc123\",\"expires_in\":\"depois\"}";
+                assertThatThrownBy(() -> SmartTokenClient.parseTokenResponse(json))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("expires_in");
+        }
+
+        @Test
+        void deveNormalizarExpiresInGiganteParaTetoDeSanidade() throws Exception {
+                final String json = "{\"access_token\":\"abc123\",\"expires_in\":999999999}";
+                final var response = SmartTokenClient.parseTokenResponse(json);
+
+                assertThat(response.accessToken()).isEqualTo("abc123");
+                assertThat(response.expiresIn()).isEqualTo(TokenResponseGuard.MAX_EXPIRES_IN_SECONDS);
+        }
+
+        @Test
+        void deveAceitarExpiresInExatamenteNoTeto() throws Exception {
+                final String json = "{\"access_token\":\"abc123\",\"expires_in\":86400}";
+                final var response = SmartTokenClient.parseTokenResponse(json);
+
+                assertThat(response.expiresIn()).isEqualTo(86400);
+        }
+
+        // ==================== Testes de limite do corpo da resposta (issue #730) ====================
+
+        @Test
+        void deveRejeitarRespostaComContentLengthAcimaDoLimite() throws Exception {
+                final var handler = TokenResponseGuard.boundedStringBodyHandler(1024L);
+                final var responseInfo = new java.net.http.HttpResponse.ResponseInfo() {
+                        @Override
+                        public int statusCode() {
+                                return 200;
+                        }
+
+                        @Override
+                        public java.net.http.HttpHeaders headers() {
+                                return java.net.http.HttpHeaders.of(
+                                                java.util.Map.of("Content-Length", java.util.List.of("2048")),
+                                                (k, v) -> true);
+                        }
+
+                        @Override
+                        public java.net.http.HttpClient.Version version() {
+                                return java.net.http.HttpClient.Version.HTTP_1_1;
+                        }
+                };
+
+                assertThatThrownBy(() -> handler.apply(responseInfo))
+                                .isInstanceOf(SmartTokenException.class)
+                                .hasMessageContaining("limite")
+                                .hasMessageContaining("1024");
+        }
+
+        @Test
+        void deveAbortarLeituraDeCorpoQueExcedeLimiteDuranteStreaming() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+
+                // Corpo acima do teto de 1 MiB, enviado em modo chunked (length 0)
+                // para exercitar o subscriber limitado, e não o atalho de
+                // Content-Length.
+                final byte[] chunk = new byte[64 * 1024];
+                java.util.Arrays.fill(chunk, (byte) 'x');
+                server.createContext("/auth/token", exchange -> {
+                        exchange.sendResponseHeaders(200, 0);
+                        try (var os = exchange.getResponseBody()) {
+                                long sent = 0;
+                                while (sent <= TokenResponseGuard.MAX_RESPONSE_BODY_BYTES) {
+                                        os.write(chunk);
+                                        sent += chunk.length;
+                                }
+                        } catch (IOException ignored) {
+                                // Cliente aborta a conexão ao exceder o limite — esperado
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(false)
+                                        .maxRetries(1)
+                                        .build();
+
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("limite");
+                } finally {
+                        server.stop(0);
+                }
+        }
+
         @Test
         void deveInvalidarCacheDoCliente() throws Exception {
                 final SmartTokenClient client = SmartTokenClient.builder()
