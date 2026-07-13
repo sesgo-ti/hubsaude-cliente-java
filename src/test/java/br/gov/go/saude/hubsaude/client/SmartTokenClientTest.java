@@ -2479,7 +2479,230 @@ class SmartTokenClientTest {
                 client.close(); // segunda chamada não deve lançar exceção
         }
 
+        // ==================== Testes de traceparent (W3C Trace Context) ====================
+
+        @Test
+        void deveEnviarTraceparentW3cValidoNaRequisicaoDeToken() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                final java.util.concurrent.atomic.AtomicReference<String> receivedTraceparent =
+                                new java.util.concurrent.atomic.AtomicReference<>();
+
+                server.createContext("/auth/token", exchange -> {
+                        receivedTraceparent.set(exchange.getRequestHeaders().getFirst("traceparent"));
+                        final byte[] resp = "{\"access_token\":\"token123\",\"expires_in\":3600}"
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(false)
+                                        .build();
+
+                        client.obtainToken("system/Patient.rs");
+
+                        assertThat(receivedTraceparent.get())
+                                        .matches("^00-[0-9a-f]{32}-[0-9a-f]{16}-00$")
+                                        .doesNotContain("0".repeat(32));
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveGerarNovoTraceparentPorRequisicaoHttp() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                final java.util.List<String> traceparents = java.util.Collections.synchronizedList(
+                                new java.util.ArrayList<>());
+
+                server.createContext("/auth/token", exchange -> {
+                        traceparents.add(exchange.getRequestHeaders().getFirst("traceparent"));
+                        final byte[] resp = "{\"access_token\":\"token123\",\"expires_in\":3600}"
+                                        .getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(200, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(false)
+                                        .build();
+
+                        client.obtainToken("system/Patient.rs");
+                        client.obtainToken("system/Patient.rs");
+
+                        assertThat(traceparents).hasSize(2).doesNotHaveDuplicates();
+                } finally {
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveExporTraceIdNoLogEMensagemDeFalhaHttp() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                final java.util.concurrent.atomic.AtomicReference<String> receivedTraceparent =
+                                new java.util.concurrent.atomic.AtomicReference<>();
+
+                server.createContext("/auth/token", exchange -> {
+                        receivedTraceparent.set(exchange.getRequestHeaders().getFirst("traceparent"));
+                        final byte[] resp = "{\"error\":\"invalid_client\"}".getBytes(StandardCharsets.UTF_8);
+                        exchange.sendResponseHeaders(401, resp.length);
+                        try (var os = exchange.getResponseBody()) {
+                                os.write(resp);
+                        }
+                });
+                server.start();
+
+                final var appender = attachListAppender();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .enableTokenCache(false)
+                                        .maxRetries(1)
+                                        .build();
+
+                        assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                        .isInstanceOf(SmartTokenException.class)
+                                        .hasMessageContaining("HTTP 401");
+
+                        // Trace-id efetivamente enviado ao servidor (2º campo do header)
+                        final String sentTraceId = receivedTraceparent.get().split("-")[1];
+
+                        // O log de falha do cliente referencia o trace-id enviado,
+                        // permitindo ao suporte correlacionar com o correlation-id
+                        // registrado pela plataforma.
+                        assertThat(appender.list)
+                                        .anySatisfy(event -> {
+                                                assertThat(event.getLevel())
+                                                                .isEqualTo(ch.qos.logback.classic.Level.ERROR);
+                                                assertThat(event.getFormattedMessage())
+                                                                .contains("traceId=" + sentTraceId);
+                                        });
+                } finally {
+                        detachListAppender(appender);
+                        server.stop(0);
+                }
+        }
+
+        @Test
+        void deveExporTraceIdNoLogDeRetryComNovoTraceparentPorTentativa() throws Exception {
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                                new java.util.concurrent.atomic.AtomicInteger();
+                final java.util.List<String> traceparents = java.util.Collections.synchronizedList(
+                                new java.util.ArrayList<>());
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                final var executor = java.util.concurrent.Executors.newCachedThreadPool();
+                server.setExecutor(executor);
+                server.createContext("/auth/token", exchange -> {
+                        traceparents.add(exchange.getRequestHeaders().getFirst("traceparent"));
+                        if (calls.incrementAndGet() == 1) {
+                                // Excede o requestTimeout do cliente: HttpTimeoutException
+                                try {
+                                        Thread.sleep(600);
+                                } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                }
+                                exchange.sendResponseHeaders(503, -1);
+                                exchange.close();
+                        } else {
+                                final byte[] resp = "{\"access_token\":\"tok-apos-timeout\",\"expires_in\":3600}"
+                                                .getBytes(StandardCharsets.UTF_8);
+                                exchange.sendResponseHeaders(200, resp.length);
+                                try (var os = exchange.getResponseBody()) {
+                                        os.write(resp);
+                                }
+                        }
+                });
+                server.start();
+
+                final var appender = attachListAppender();
+                try {
+                        final int port = server.getAddress().getPort();
+                        final SmartTokenClient client = SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + port + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .requestTimeout(Duration.ofMillis(250))
+                                        .maxRetries(2)
+                                        .build();
+                        client.setSleeper(millis -> {
+                        });
+
+                        final String token = client.obtainToken("system/Patient.rs");
+
+                        assertThat(token).isEqualTo("tok-apos-timeout");
+                        // Cada tentativa HTTP (inclusive retry) tem traceparent próprio
+                        assertThat(traceparents).hasSize(2).doesNotHaveDuplicates();
+
+                        final String firstAttemptTraceId = traceparents.get(0).split("-")[1];
+                        assertThat(appender.list)
+                                        .anySatisfy(event -> {
+                                                assertThat(event.getLevel())
+                                                                .isEqualTo(ch.qos.logback.classic.Level.WARN);
+                                                assertThat(event.getFormattedMessage())
+                                                                .contains("Tentativa 1/2")
+                                                                .contains("traceId=" + firstAttemptTraceId);
+                                        });
+                } finally {
+                        detachListAppender(appender);
+                        server.stop(0);
+                        executor.shutdownNow();
+                }
+        }
+
         // ---------- helpers ----------
+
+        /**
+         * Anexa um ListAppender ao logger do {@link SmartTokenClient} para
+         * inspecionar os eventos de log emitidos durante o teste.
+         */
+        private static ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>
+                        attachListAppender() {
+                final ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+                                .getLogger(SmartTokenClient.class);
+                final ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                                new ch.qos.logback.core.read.ListAppender<>();
+                appender.start();
+                logger.addAppender(appender);
+                return appender;
+        }
+
+        /**
+         * Desanexa e para o ListAppender criado por {@link #attachListAppender()}.
+         */
+        private static void detachListAppender(
+                        final ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender) {
+                final ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+                                .getLogger(SmartTokenClient.class);
+                logger.detachAppender(appender);
+                appender.stop();
+        }
 
         private static String toPkcs8Pem(final byte[] encoded) {
                 final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())

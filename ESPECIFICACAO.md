@@ -58,6 +58,7 @@ As palavras-chave **DEVE**, **NÃO DEVE**, **DEVERIA**, **PODE** e
 | [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) | JSON Web Token (JWT) |
 | [RFC 7521](https://datatracker.ietf.org/doc/html/rfc7521) / [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523) | Assertion Framework e JWT profile |
 | [SMART clinical scopes (STU2)](http://hl7.org/fhir/smart-app-launch/STU2/scopes-and-launch-context.html#clinical-scope-syntax) | Sintaxe dos scopes (`system/Recurso.ações`) |
+| [W3C Trace Context](https://www.w3.org/TR/trace-context/) | Header `traceparent` (correlação com a plataforma) |
 | [`hubsaude-simulador/ESPECIFICACAO.md`](../hubsaude-simulador/ESPECIFICACAO.md) | Contrato do servidor (validações do `client_assertion`) |
 
 ## 4. Terminologia
@@ -159,6 +160,21 @@ sequenceDiagram
      quando nulo, vazio ou somente espaços.
 3. A requisição DEVE respeitar os timeouts configurados de conexão e
    de requisição (ver [§8](#8-parâmetros-de-configuração)).
+4. Toda requisição HTTP do SDK (token endpoint e descoberta de
+   [RF-09](#rf-09--descoberta-via-well-knownsmart-configuration))
+   DEVE incluir o header `traceparent`
+   ([W3C Trace Context](https://www.w3.org/TR/trace-context/)) no
+   formato `00-<trace-id>-<parent-id>-00`:
+   - trace-id (16 bytes) e span-id (8 bytes) DEVEM ser gerados por um
+     gerador criptograficamente seguro, **por requisição** (cada
+     retry usa um par novo), nunca todo-zeros, em hexadecimal
+     minúsculo;
+   - as *trace-flags* DEVEM ser `00` (*not sampled*): o SDK não grava
+     spans (W3C Trace Context §3.2.2.5.1);
+   - o trace-id enviado DEVE constar dos logs de erro/retry e das
+     mensagens de erro (`traceId=...`), permitindo correlacionar o
+     log do integrador com o `correlation-id` da plataforma — que
+     deriva a correlação exclusivamente do contexto de trace W3C.
 
 #### RF-03 — Tratamento da resposta
 
@@ -576,7 +592,7 @@ APIs criptográficas divergem no formato de saída ECDSA:
 | Requisito | Java (`br.gov.go.saude.hubsaude.client`) |
 |-----------|------------------------------------------|
 | RF-01 | `SmartTokenClient.buildClientAssertion()` |
-| RF-02 | `SmartTokenClient.buildFormBody()`, `doObtainToken()` |
+| RF-02 | `SmartTokenClient.buildFormBody()`, `doObtainToken()`, `TraceContext` |
 | RF-03 | `SmartTokenClient.doObtainToken()`, `parseTokenResponse()` |
 | RF-04 | `SmartTokenClient.tokenCache`, `CachedToken.isValid()` |
 | RF-05 | `SmartTokenClient.scopeLockFor()` (32 stripes), `obtainTokenResponse()` |

@@ -119,6 +119,9 @@ import tools.jackson.databind.node.ObjectNode;
  * como diagnóstico — a decisão de aguardar e reenviar é do chamador</li>
  * <li><strong>Thread-safe:</strong> Segurança para uso concorrente em
  * aplicações multi-thread</li>
+ * <li><strong>Correlação (traceparent W3C):</strong> cada requisição HTTP
+ * carrega um header {@code traceparent} gerado localmente; o trace-id é
+ * exposto nos logs de erro/retry para correlação com a plataforma</li>
  * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
  * </ul>
  *
@@ -209,44 +212,29 @@ import tools.jackson.databind.node.ObjectNode;
  * }
  * }</pre>
  *
- * <h3>Distributed Tracing (OpenTelemetry)</h3>
+ * <h3>Distributed Tracing e correlação (traceparent W3C)</h3>
  *
  * <p>
- * Para rastreamento de requisições distribuídas, propague o contexto de trace
- * nas chamadas
- * HTTP. O {@link SmartTokenClient} utiliza {@link java.net.http.HttpClient}
- * internamente,
- * que pode ser instrumentado via OpenTelemetry Java Agent ou manualmente:
+ * Por padrão, <strong>toda requisição HTTP desta biblioteca</strong> (token
+ * endpoint e descoberta via {@code .well-known/smart-configuration}) carrega
+ * o header {@code traceparent} do
+ * <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>, com
+ * trace-id (16 bytes) e span-id (8 bytes) gerados criptograficamente por
+ * requisição — sem dependência do SDK OpenTelemetry. A flag {@code sampled}
+ * é {@code 00} (a biblioteca não grava spans). O HubSaúde deriva o
+ * identificador de correlação exclusivamente desse header; o trace-id é
+ * registrado nos logs de erro/retry e nas mensagens de exceção
+ * ({@code traceId=...}) — informe-o ao suporte para correlacionar o log
+ * local do integrador com o {@code correlation-id} da plataforma.
  * </p>
  *
- * <pre>{@code
- * // Com OpenTelemetry Java Agent (recomendado)
- * // Adicione o agent na JVM: -javaagent:opentelemetry-javaagent.jar
- * // O HttpClient será instrumentado automaticamente
- *
- * // Instrumentação manual (se necessário)
- * Tracer tracer = GlobalOpenTelemetry.getTracer("hubsaude-client");
- *
- * public String obtainTokenWithTracing(String scope) throws Exception {
- *     Span span = tracer.spanBuilder("SmartTokenClient.obtainToken")
- *             .setSpanKind(SpanKind.CLIENT)
- *             .setAttribute("smart.client_id", clientId)
- *             .setAttribute("smart.scope", scope)
- *             .startSpan();
- *
- *     try (Scope ignored = span.makeCurrent()) {
- *         String token = tokenClient.obtainToken(scope);
- *         span.setStatus(StatusCode.OK);
- *         return token;
- *     } catch (Exception e) {
- *         span.setStatus(StatusCode.ERROR, e.getMessage());
- *         span.recordException(e);
- *         throw e;
- *     } finally {
- *         span.end();
- *     }
- * }
- * }</pre>
+ * <p>
+ * Aplicações instrumentadas com o OpenTelemetry Java Agent
+ * ({@code -javaagent:opentelemetry-javaagent.jar}) continuam funcionando:
+ * a instrumentação automática do {@link java.net.http.HttpClient} substitui
+ * o header pelo contexto do span ativo, e o trace-id efetivo passa a ser o
+ * do agente.
+ * </p>
  *
  * <h3>Arquitetura Recomendada</h3>
  *
@@ -799,24 +787,30 @@ public final class SmartTokenClient implements AutoCloseable {
 
         final int maxRetries = faultToleranceConfig.maxRetries();
         IOException lastException = null;
+        TraceContext lastTrace = null;
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            // Novo contexto de trace W3C por tentativa: cada requisição HTTP
+            // (inclusive retries) carrega um par trace-id/span-id próprio.
+            final TraceContext trace = TraceContext.generate();
+            lastTrace = trace;
             lock.lock();
             try {
                 final TokenResponse cached = cachedResponseIfValid(normalizedScope);
                 if (cached != null) {
                     return cached;
                 }
-                return doObtainToken(normalizedScope);
+                return doObtainToken(normalizedScope, trace);
             } catch (IOException ex) {
                 // Lança SmartTokenException/IOException se não retriável
-                lastException = retriableOrRethrow(ex);
+                lastException = retriableOrRethrow(ex, trace);
             } finally {
                 lock.unlock();
             }
-            waitBeforeNextAttempt(attempt, maxRetries, lastException);
+            waitBeforeNextAttempt(attempt, maxRetries, lastException, trace);
         }
         throw new SmartTokenException(
-                "Falha após " + maxRetries + " tentativas: "
+                "Falha após " + maxRetries + " tentativas (último traceId="
+                        + (lastTrace != null ? lastTrace.traceId() : "n/d") + "): "
                         + (lastException != null ? lastException.getMessage() : "sem causa capturada"),
                 lastException);
     }
@@ -846,21 +840,24 @@ public final class SmartTokenClient implements AutoCloseable {
      * transitória de rede (timeout de conexão ou de requisição, recusa ou
      * queda de conexão TCP) para que o chamador realize retry; caso
      * contrário, propaga. Respostas HTTP recebidas nunca chegam aqui como
-     * exceção — falham imediatamente em {@link #doObtainToken(String)}.
+     * exceção — falham imediatamente em
+     * {@link #doObtainToken(String, TraceContext)}.
      *
-     * @param ex exceção capturada na tentativa
+     * @param ex    exceção capturada na tentativa
+     * @param trace contexto de trace W3C enviado na tentativa que falhou
      * @return a própria exceção, quando retriável
      * @throws IOException         quando a exceção não é retriável
      * @throws SmartTokenException quando a falha aparenta ser rejeição do
      *                             certificado de cliente no mTLS
      */
-    private IOException retriableOrRethrow(final IOException ex) throws IOException {
+    private IOException retriableOrRethrow(final IOException ex, final TraceContext trace)
+            throws IOException {
         if (isLikelyClientCertificateRejection(ex)) {
-            LOG.error("Falha de TLS após handshake mTLS para clientId={} endpoint={}: {}."
+            LOG.error("Falha de TLS após handshake mTLS para clientId={} endpoint={} traceId={}: {}."
                     + " Causa provável: certificado de cliente rejeitado pelo servidor"
                     + " (revogado, expirado ou não confiável) — o servidor abortou a conexão"
                     + " em vez de retornar uma resposta HTTP de erro.",
-                    clientId, tokenEndpoint, ex.toString());
+                    clientId, tokenEndpoint, trace.traceId(), ex.toString());
             throw new SmartTokenException(
                     "Conexão TLS abortada pelo servidor após o handshake mTLS contra "
                             + tokenEndpoint
@@ -929,18 +926,22 @@ public final class SmartTokenClient implements AutoCloseable {
      * @param attempt       tentativa que acabou de falhar (1-based)
      * @param maxRetries    total de tentativas configurado
      * @param lastException exceção da tentativa
+     * @param trace         contexto de trace W3C enviado na tentativa que falhou
      * @throws InterruptedException se a thread for interrompida no sleep
      */
     private void waitBeforeNextAttempt(
-            final int attempt, final int maxRetries, final IOException lastException)
+            final int attempt, final int maxRetries, final IOException lastException,
+            final TraceContext trace)
             throws InterruptedException {
         if (attempt >= maxRetries) {
-            LOG.error("Todas as {} tentativas falharam para clientId={}", maxRetries, clientId);
+            LOG.error("Todas as {} tentativas falharam para clientId={} traceId={}",
+                    maxRetries, clientId, trace.traceId());
             return;
         }
         final long delayMs = RetryPolicy.computeRetryDelayMs(attempt);
-        LOG.warn("Tentativa {}/{} falhou para clientId={}: {}. Retry em {}ms",
-                attempt, maxRetries, clientId, lastException.getMessage(), delayMs);
+        LOG.warn("Tentativa {}/{} falhou para clientId={} traceId={}: {}. Retry em {}ms",
+                attempt, maxRetries, clientId, trace.traceId(),
+                lastException.getMessage(), delayMs);
         sleeper.sleep(delayMs);
     }
 
@@ -1103,18 +1104,30 @@ public final class SmartTokenClient implements AutoCloseable {
         return false;
     }
 
-    private TokenResponse doObtainToken(final String scope) throws IOException, InterruptedException {
+    /**
+     * Executa a requisição HTTP ao token endpoint com o contexto de trace
+     * W3C informado (header {@code traceparent}) e trata a resposta.
+     *
+     * @param scope scopes normalizados
+     * @param trace contexto de trace W3C desta requisição
+     * @return resposta do token endpoint
+     * @throws IOException          em caso de erro de I/O na comunicação
+     * @throws InterruptedException se a thread for interrompida
+     */
+    private TokenResponse doObtainToken(final String scope, final TraceContext trace)
+            throws IOException, InterruptedException {
         final String assertion = buildClientAssertion();
         final String body = buildFormBody(clientId, assertion, scope);
 
         final HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(tokenEndpoint))
                 .header("Content-Type", "application/x-www-form-urlencoded")
+                .header(TraceContext.TRACEPARENT_HEADER, trace.traceparent())
                 .timeout(faultToleranceConfig.requestTimeout())
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
-        LOG.trace("Enviando requisição POST para {}", tokenEndpoint);
+        LOG.trace("Enviando requisição POST para {} traceId={}", tokenEndpoint, trace.traceId());
         final HttpResponse<String> response;
         try {
             response = httpClient.send(request,
@@ -1126,13 +1139,13 @@ public final class SmartTokenClient implements AutoCloseable {
         final int statusCode = response.statusCode();
         if (statusCode != HTTP_OK) {
             if (statusCode == HTTP_TOO_MANY_REQUESTS) {
-                LOG.warn("Rate limit (HTTP 429) para clientId={} — sem retry automático",
-                        clientId);
+                LOG.warn("Rate limit (HTTP 429) para clientId={} traceId={} — sem retry automático",
+                        clientId, trace.traceId());
             } else {
-                LOG.error("Falha ao obter token: HTTP {} para clientId={}",
-                        statusCode, clientId);
+                LOG.error("Falha ao obter token: HTTP {} para clientId={} traceId={}",
+                        statusCode, clientId, trace.traceId());
             }
-            throw new SmartTokenException(buildHttpErrorMessage(statusCode, response));
+            throw new SmartTokenException(buildHttpErrorMessage(statusCode, response, trace));
         }
 
         final TokenResponse tokenResponse = parseTokenResponse(response.body());
@@ -1150,17 +1163,19 @@ public final class SmartTokenClient implements AutoCloseable {
     }
 
     /**
-     * Monta a mensagem de erro para resposta HTTP ≠ 200: status, valor de
-     * {@code Retry-After} quando presente (apenas diagnóstico — nenhuma
-     * resposta HTTP recebida sofre retry automático; a decisão de aguardar
-     * e reenviar é do chamador) e corpo sanitizado.
+     * Monta a mensagem de erro para resposta HTTP ≠ 200: status, trace-id
+     * enviado na requisição (correlaciona com o {@code correlation-id} da
+     * plataforma), valor de {@code Retry-After} quando presente (apenas
+     * diagnóstico — nenhuma resposta HTTP recebida sofre retry automático;
+     * a decisão de aguardar e reenviar é do chamador) e corpo sanitizado.
      *
      * @param statusCode status HTTP da resposta
      * @param response   resposta recebida do servidor de autorização
+     * @param trace      contexto de trace W3C enviado na requisição
      * @return mensagem de erro pronta para {@link SmartTokenException}
      */
     private static String buildHttpErrorMessage(
-            final int statusCode, final HttpResponse<String> response) {
+            final int statusCode, final HttpResponse<String> response, final TraceContext trace) {
         final String retryAfter = response.headers().firstValue("Retry-After")
                 .map(value -> " (Retry-After: " + value.trim() + ")")
                 .orElse("");
@@ -1168,6 +1183,7 @@ public final class SmartTokenClient implements AutoCloseable {
                 ? " Rate limit atingido; a decisão de aguardar e reenviar é do chamador."
                 : "";
         return "Falha ao obter token: HTTP " + statusCode + retryAfter
+                + " (traceId=" + trace.traceId() + ")"
                 + " — " + sanitizeErrorResponse(response.body()) + hint;
     }
 

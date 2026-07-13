@@ -39,6 +39,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLContext;
 
@@ -482,6 +483,34 @@ class SmartTokenClientBuilderTest {
     }
 
     @Test
+    @DisplayName("Deve enviar traceparent W3C válido na requisição de discovery")
+    void deveEnviarTraceparentValidoNoDiscovery() throws Exception {
+        final String jsonResponse = "{\"token_endpoint\":\"https://hub.saude.go.gov.br/auth/token\"}";
+        final AtomicReference<String> receivedTraceparent = new AtomicReference<>();
+
+        final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/.well-known/smart-configuration", exchange -> {
+            receivedTraceparent.set(exchange.getRequestHeaders().getFirst("traceparent"));
+            exchange.sendResponseHeaders(200, jsonResponse.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+            }
+        });
+        server.start();
+
+        try {
+            final String baseUrl = "http://localhost:" + server.getAddress().getPort();
+
+            SmartTokenClientBuilder.discoverTokenEndpoint(
+                    baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5));
+
+            assertThat(receivedTraceparent.get()).matches("^00-[0-9a-f]{32}-[0-9a-f]{16}-00$");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     @DisplayName("Deve rejeitar token_endpoint descoberto com esquema http não-local")
     void deveRejeitarTokenEndpointDescobertoHttpNaoLocal() throws Exception {
         final String jsonResponse = "{\"token_endpoint\":\"http://exemplo.com/auth/token\"}";
@@ -638,7 +667,8 @@ class SmartTokenClientBuilderTest {
             assertThatThrownBy(() -> SmartTokenClientBuilder.discoverTokenEndpoint(
                     baseUrl, SSLContext.getDefault(), Duration.ofSeconds(5), Duration.ofSeconds(5)))
                     .isInstanceOf(SmartTokenException.class)
-                    .hasMessageContaining("Falha ao obter smart-configuration (404)");
+                    .hasMessageContaining("Falha ao obter smart-configuration (404")
+                    .hasMessageContaining("traceId=");
 
         } finally {
             server.stop(0);

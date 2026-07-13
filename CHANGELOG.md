@@ -7,6 +7,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Adicionado
+- Emissão do header `traceparent` (W3C Trace Context) em todas as
+  requisições HTTP da biblioteca — token endpoint e descoberta via
+  `.well-known/smart-configuration` (#1298). O trace-id (16 bytes) e o
+  span-id (8 bytes) são gerados criptograficamente (`SecureRandom`)
+  por requisição (cada retry usa um par novo), no formato
+  `00-<trace-id>-<parent-id>-00` com flag `sampled=00` (a lib não
+  grava spans), sem dependência do SDK OpenTelemetry. O trace-id
+  enviado é exposto nos logs de erro/retry e nas mensagens de exceção
+  (`traceId=...`), permitindo ao suporte correlacionar o log do
+  integrador com o `correlation-id` da plataforma — que deriva a
+  correlação exclusivamente do contexto de trace W3C.
+
 ### Segurança
 - Zeroização de senhas consistente e sem efeito colateral no chamador
   (#726): `SigningStrategyFactory.fromPkcs11`/`fromKeyStore` agora fazem

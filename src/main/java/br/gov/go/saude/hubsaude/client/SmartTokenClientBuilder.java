@@ -683,6 +683,12 @@ public final class SmartTokenClientBuilder {
      * evitando que um endpoint inseguro seja adotado silenciosamente.
      * </p>
      *
+     * <p>
+     * A requisição carrega um header {@code traceparent} (W3C Trace
+     * Context) gerado localmente; em caso de falha, o trace-id integra a
+     * mensagem de erro para correlação com a plataforma.
+     * </p>
+     *
      * @param fhirBaseUrl    URL base do servidor FHIR
      * @param sslContext     contexto SSL a ser utilizado
      * @param connectTimeout timeout de conexão HTTP
@@ -701,6 +707,10 @@ public final class SmartTokenClientBuilder {
                 ? fhirBaseUrl + ".well-known/smart-configuration"
                 : fhirBaseUrl + "/.well-known/smart-configuration";
 
+        // Contexto de trace W3C próprio desta requisição (correlação com a
+        // plataforma; ver TraceContext).
+        final TraceContext trace = TraceContext.generate();
+
         try (HttpClient client = HttpClient.newBuilder()
                 .sslContext(sslContext)
                 .connectTimeout(connectTimeout)
@@ -708,6 +718,7 @@ public final class SmartTokenClientBuilder {
 
             final HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(wellKnownUrl))
+                    .header(TraceContext.TRACEPARENT_HEADER, trace.traceparent())
                     .timeout(requestTimeout)
                     .GET()
                     .build();
@@ -715,7 +726,8 @@ public final class SmartTokenClientBuilder {
             final HttpResponse<String> response = sendRequest(client, request);
             if (response.statusCode() != HTTP_OK) {
                 throw new SmartTokenException(
-                        "Falha ao obter smart-configuration (" + response.statusCode() + "): "
+                        "Falha ao obter smart-configuration (" + response.statusCode()
+                                + ", traceId=" + trace.traceId() + "): "
                                 + SmartTokenClient.sanitizeErrorResponse(response.body()));
             }
 

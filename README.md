@@ -216,6 +216,33 @@ CircuitBreaker cb = CircuitBreaker.of("hubsaude", CircuitBreakerConfig.custom()
 String token = cb.executeSupplier(() -> client.obtainToken(scope));
 ```
 
+## Correlação e observabilidade (`traceparent`)
+
+O HubSaúde ignora headers como `X-Correlation-Id` enviados pelo
+cliente: a correlação é derivada **exclusivamente** do contexto de
+trace W3C ([W3C Trace Context](https://www.w3.org/TR/trace-context/)).
+Por isso, toda requisição HTTP desta biblioteca (token endpoint e
+descoberta via `.well-known/smart-configuration`) envia o header
+`traceparent` no formato `00-<trace-id>-<parent-id>-00`, com trace-id
+(16 bytes) e span-id (8 bytes) gerados criptograficamente
+(`SecureRandom`) **por requisição** — cada retry carrega um par novo.
+Não há dependência do SDK OpenTelemetry.
+
+A flag `sampled` é `00` (*not sampled*), coerente com a semântica do
+W3C Trace Context §3.2.2.5.1: a biblioteca não grava spans.
+
+**Como usar com o suporte**: em falhas, o trace-id enviado aparece nos
+logs de erro/retry da biblioteca e nas mensagens de exceção
+(`traceId=...`). Informe esse valor ao suporte do HubSaúde — ele
+permite localizar, na plataforma, o `correlation-id` e os registros da
+requisição correspondente, ligando o log do integrador ao da
+plataforma.
+
+Aplicações já instrumentadas com o OpenTelemetry Java Agent continuam
+funcionando: a instrumentação automática do `HttpClient` sobrepõe o
+header com o contexto do span ativo, e o trace-id efetivo passa a ser
+o do agente.
+
 ## Troubleshooting
 
 | Erro | Causa provável | Solução |
