@@ -99,7 +99,7 @@
         <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
-        <spotbugs-maven-plugin.version>4.10.2.0</spotbugs-maven-plugin.version>
+        <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
         <!-- FindSecBugs: SAST de seguranca no SpotBugs (perfil `quality`).
              Mesma versao usada no hubsaude-parent (issue #736): este projeto
              e standalone (sem <parent>) e nao herda aquela configuracao. -->
