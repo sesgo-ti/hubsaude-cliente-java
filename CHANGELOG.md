@@ -7,6 +7,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Corrigido
+- `SslContextFactory.buildKeyManagers(KeyStore, String, char[])` não
+  ignora mais o parâmetro `keyAlias` (alerta CodeQL #48): quando não
+  nulo, o alias é validado de forma fail-fast (deve existir e ser
+  entrada de chave, senão `SmartTokenException` com mensagem
+  acionável) e sua seleção é forçada no handshake mTLS por um wrapper
+  `X509ExtendedKeyManager` que delega as demais operações ao
+  KeyManager original — em KeyStores com múltiplos aliases (PKCS#12
+  institucional, tokens PKCS#11) o cliente apresentava certificado
+  escolhido arbitrariamente pela JVM; chaves em dispositivo continuam
+  sem sair do hardware. Alias nulo preserva o comportamento padrão
+  (#1411).
+
 ### Adicionado
 - Emissão do header `traceparent` (W3C Trace Context) em todas as
   requisições HTTP da biblioteca — token endpoint e descoberta via

@@ -22,22 +22,29 @@ package br.gov.go.saude.hubsaude.client;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
+import java.util.Collections;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509KeyManager;
 
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -293,15 +300,28 @@ public final class SslContextFactory {
      * delegar operações ao dispositivo de forma transparente.
      * </p>
      *
+     * <p>
+     * Quando {@code keyAlias} não é nulo, o alias é validado de forma
+     * fail-fast (deve existir e ser uma entrada de chave) e a sua seleção é
+     * <strong>forçada</strong> durante o handshake TLS — essencial em
+     * KeyStores com múltiplos aliases, nos quais o KeyManager padrão da JVM
+     * escolheria a chave por conta própria, podendo apresentar o certificado
+     * errado. Quando nulo, a escolha permanece a cargo do KeyManager padrão.
+     * </p>
+     *
      * @param keyStore   KeyStore já carregado (PKCS#11, PKCS#12, JKS)
-     * @param keyAlias   alias da chave privada no KeyStore
+     * @param keyAlias   alias da chave privada no KeyStore; se não nulo, sua
+     *                   seleção é forçada no handshake; se nulo, vale a
+     *                   escolha padrão do KeyManager
      * @param keyPassword senha da chave (PIN para PKCS#11); o array não é
      *                    modificado nem zerado por este método — a
      *                    zeroização é responsabilidade do chamador (ex.:
      *                    {@code SmartTokenClientBuilder.build()} consome as
      *                    senhas ao final)
      * @return array de KeyManagers configurados
-     * @throws SmartTokenException se houver erro ao configurar o KeyManager
+     * @throws SmartTokenException se o alias não existir no KeyStore, não for
+     *                             entrada de chave ou houver erro ao
+     *                             configurar o KeyManager
      */
     @SuppressWarnings({"PMD.UseVarargs", "PMD.ReturnEmptyCollectionRatherThanNull"})
     // null é semanticamente necessário para SSLContext.init()
@@ -313,14 +333,63 @@ public final class SslContextFactory {
             return null;
         }
         try {
+            requireKeyEntry(keyStore, keyAlias);
             final KeyManagerFactory kmf = KeyManagerFactory
                     .getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(keyStore, keyPassword);
-            return kmf.getKeyManagers();
+            final KeyManager[] keyManagers = kmf.getKeyManagers();
+            return keyAlias == null ? keyManagers : forceKeyAlias(keyManagers, keyAlias);
+        } catch (SmartTokenException ex) {
+            throw ex;
         } catch (Exception ex) {
             throw new SmartTokenException(
                     "Falha ao configurar KeyManager a partir de KeyStore: " + ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * Valida, de forma fail-fast, que o alias corresponde a uma entrada de
+     * chave privada existente no KeyStore.
+     *
+     * @param keyStore KeyStore já carregado
+     * @param keyAlias alias a validar; nulo dispensa a validação
+     * @throws KeyStoreException   se o KeyStore não estiver inicializado
+     * @throws SmartTokenException se o alias não existir ou não for entrada
+     *                             de chave privada
+     */
+    private static void requireKeyEntry(final KeyStore keyStore, final String keyAlias)
+            throws KeyStoreException {
+        if (keyAlias == null) {
+            return;
+        }
+        if (!keyStore.containsAlias(keyAlias)) {
+            throw new SmartTokenException(
+                    "Alias '" + keyAlias + "' não existe no KeyStore; aliases disponíveis: "
+                            + Collections.list(keyStore.aliases()));
+        }
+        if (!keyStore.isKeyEntry(keyAlias)) {
+            throw new SmartTokenException(
+                    "Alias '" + keyAlias + "' não é uma entrada de chave privada no KeyStore"
+                            + " — informe o alias associado à chave do cliente");
+        }
+    }
+
+    /**
+     * Envolve cada {@link X509KeyManager} do array em um wrapper que força a
+     * seleção do alias informado durante o handshake TLS.
+     *
+     * @param keyManagers KeyManagers originais
+     * @param keyAlias    alias a ser apresentado no handshake
+     * @return novo array com os wrappers aplicados
+     */
+    private static KeyManager[] forceKeyAlias(final KeyManager[] keyManagers, final String keyAlias) {
+        final KeyManager[] wrapped = new KeyManager[keyManagers.length];
+        for (int i = 0; i < keyManagers.length; i++) {
+            wrapped[i] = keyManagers[i] instanceof X509KeyManager x509
+                    ? new FixedAliasKeyManager(x509, keyAlias)
+                    : keyManagers[i];
+        }
+        return wrapped;
     }
 
     /**
@@ -337,10 +406,13 @@ public final class SslContextFactory {
      *                          padrão da JVM
      * @param tlsProtocol       protocolo TLS
      * @param clientKeyStore    KeyStore com a chave privada do cliente
-     * @param keyAlias          alias da chave no KeyStore
+     * @param keyAlias          alias da chave no KeyStore; se não nulo, sua
+     *                          seleção é forçada no handshake (ver
+     *                          {@link #buildKeyManagers(KeyStore, String, char[])})
      * @param keyPassword       senha/PIN da chave
      * @return contexto SSL configurado com mTLS
-     * @throws SmartTokenException se houver erro de configuração
+     * @throws SmartTokenException se o alias for inválido ou houver erro de
+     *                             configuração
      */
     @SuppressWarnings("PMD.UseVarargs")
     public static SSLContext buildSslContext(
@@ -466,5 +538,84 @@ public final class SslContextFactory {
      */
     private static String subjectOf(final X509Certificate cert) {
         return cert.getSubjectX500Principal().getName();
+    }
+
+    /**
+     * {@link X509ExtendedKeyManager} que delega ao KeyManager original e força
+     * o alias configurado em {@code chooseClientAlias} e
+     * {@code chooseEngineClientAlias}.
+     *
+     * <p>
+     * Garante que, em KeyStores com múltiplos aliases (PKCS#12 institucional,
+     * tokens PKCS#11), o cliente mTLS apresente exatamente o certificado da
+     * chave indicada. As demais operações — inclusive o acesso à chave privada
+     * — permanecem delegadas ao KeyManager original, de modo que chaves em
+     * dispositivo (PKCS#11) nunca saem do hardware.
+     * </p>
+     */
+    private static final class FixedAliasKeyManager extends X509ExtendedKeyManager {
+
+        /** KeyManager original ao qual as demais operações são delegadas. */
+        private final X509KeyManager delegate;
+
+        /** Alias forçado na seleção da chave do cliente. */
+        private final String alias;
+
+        /**
+         * Cria o wrapper que força o alias na seleção de chave do cliente.
+         *
+         * @param delegate KeyManager original
+         * @param alias    alias a ser apresentado no handshake
+         */
+        FixedAliasKeyManager(final X509KeyManager delegate, final String alias) {
+            this.delegate = delegate;
+            this.alias = alias;
+        }
+
+        @Override
+        public String chooseClientAlias(final String[] keyTypes, final Principal[] issuers,
+                final Socket socket) {
+            return alias;
+        }
+
+        @Override
+        public String chooseEngineClientAlias(final String[] keyTypes, final Principal[] issuers,
+                final SSLEngine engine) {
+            return alias;
+        }
+
+        @Override
+        public String[] getClientAliases(final String keyType, final Principal[] issuers) {
+            return delegate.getClientAliases(keyType, issuers);
+        }
+
+        @Override
+        public String[] getServerAliases(final String keyType, final Principal[] issuers) {
+            return delegate.getServerAliases(keyType, issuers);
+        }
+
+        @Override
+        public String chooseServerAlias(final String keyType, final Principal[] issuers,
+                final Socket socket) {
+            return delegate.chooseServerAlias(keyType, issuers, socket);
+        }
+
+        @Override
+        public String chooseEngineServerAlias(final String keyType, final Principal[] issuers,
+                final SSLEngine engine) {
+            return delegate instanceof X509ExtendedKeyManager extended
+                    ? extended.chooseEngineServerAlias(keyType, issuers, engine)
+                    : super.chooseEngineServerAlias(keyType, issuers, engine);
+        }
+
+        @Override
+        public X509Certificate[] getCertificateChain(final String requestedAlias) {
+            return delegate.getCertificateChain(requestedAlias);
+        }
+
+        @Override
+        public PrivateKey getPrivateKey(final String requestedAlias) {
+            return delegate.getPrivateKey(requestedAlias);
+        }
     }
 }

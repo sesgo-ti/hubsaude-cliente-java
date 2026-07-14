@@ -41,6 +41,7 @@ import java.util.Date;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.X509ExtendedKeyManager;
 
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -636,6 +637,89 @@ class SslContextFactoryTest {
         assertThat(result).isNotNull().isNotEmpty();
     }
 
+    @Test
+    @DisplayName("buildKeyManagers(KeyStore): Deve forçar o alias informado em KeyStore com múltiplos aliases")
+    void deveForcarAliasEmKeyStoreComMultiplosAliases() throws Exception {
+        final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048);
+        final KeyPair outroKeyPair = gen.generateKeyPair();
+
+        final X509Certificate certPrimeiro = generateCertFor("primeiro", keyPair);
+        final X509Certificate certSegundo = generateCertFor("segundo", outroKeyPair);
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("primeiro", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{certPrimeiro});
+        ks.setKeyEntry("segundo", outroKeyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{certSegundo});
+
+        final KeyManager[] result = SslContextFactory.buildKeyManagers(ks, "segundo", "changeit".toCharArray());
+
+        assertThat(result).isNotNull().isNotEmpty();
+        assertThat(result[0]).isInstanceOf(X509ExtendedKeyManager.class);
+        final X509ExtendedKeyManager km = (X509ExtendedKeyManager) result[0];
+        assertThat(km.chooseClientAlias(new String[]{"RSA"}, null, null)).isEqualTo("segundo");
+        assertThat(km.chooseEngineClientAlias(new String[]{"RSA"}, null, null)).isEqualTo("segundo");
+        assertThat(km.getCertificateChain("segundo")[0].getSubjectX500Principal().getName())
+                .contains("segundo");
+        assertThat(km.getPrivateKey("segundo")).isEqualTo(outroKeyPair.getPrivate());
+    }
+
+    @Test
+    @DisplayName("buildKeyManagers(KeyStore): Deve lançar exceção para alias inexistente")
+    void deveLancarExcecaoParaAliasInexistente() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{cert});
+
+        assertThatThrownBy(() -> SslContextFactory.buildKeyManagers(ks, "naoexiste", "changeit".toCharArray()))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("Alias 'naoexiste' não existe no KeyStore")
+                .hasMessageContaining("client");
+    }
+
+    @Test
+    @DisplayName("buildKeyManagers(KeyStore): Deve lançar exceção para alias que não é entrada de chave")
+    void deveLancarExcecaoParaAliasQueNaoEEntradaDeChave() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setCertificateEntry("somente-cert", cert);
+
+        assertThatThrownBy(() -> SslContextFactory.buildKeyManagers(ks, "somente-cert", new char[0]))
+                .isInstanceOf(SmartTokenException.class)
+                .hasMessageContaining("não é uma entrada de chave privada");
+    }
+
+    @Test
+    @DisplayName("buildKeyManagers(KeyStore): Deve manter comportamento padrão quando alias é null")
+    void deveManterComportamentoPadraoQuandoAliasNull() throws Exception {
+        final X509Certificate cert = generateCert(
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(365, ChronoUnit.DAYS));
+
+        final KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
+                new X509Certificate[]{cert});
+
+        final KeyManager[] result = SslContextFactory.buildKeyManagers(ks, null, "changeit".toCharArray());
+
+        assertThat(result).isNotNull().isNotEmpty();
+        final X509ExtendedKeyManager km = (X509ExtendedKeyManager) result[0];
+        assertThat(km.getPrivateKey("client")).isEqualTo(keyPair.getPrivate());
+        assertThat(km.getClass().getSimpleName()).isNotEqualTo("FixedAliasKeyManager");
+    }
+
     // ==================== buildSslContext (KeyStore mTLS) ====================
 
     @Test
@@ -730,6 +814,22 @@ class SslContextFactoryTest {
         return new JcaX509CertificateConverter()
                 .setProvider(new BouncyCastleProvider())
                 .getCertificate(holder);
+    }
+
+    private X509Certificate generateCertFor(String cn, KeyPair certKeyPair) throws Exception {
+        final X500Name dn = new X500Name("CN=" + cn);
+        final ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
+                .build(certKeyPair.getPrivate());
+        final X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
+                dn,
+                BigInteger.valueOf(System.nanoTime()),
+                Date.from(Instant.now().minus(1, ChronoUnit.DAYS)),
+                Date.from(Instant.now().plus(365, ChronoUnit.DAYS)),
+                dn,
+                certKeyPair.getPublic());
+        return new JcaX509CertificateConverter()
+                .setProvider(new BouncyCastleProvider())
+                .getCertificate(builder.build(signer));
     }
 
     private X509CertificateHolder generateCertHolder(Instant notBefore, Instant notAfter) throws Exception {
