@@ -7,14 +7,24 @@
     <description>
         Ruleset PMD enterprise-grade para projetos HubSaúde (SES-GO / UFG).
 
-        Versão        : 2026.05
+        Versão        : 2026.07
         Owner         : time-arquitetura@saude.go.gov.br
         Política      : docs/QUALITY-GATE.md
-        Última revisão: 2026-05-01
+        Última revisão: 2026-07-21
 
         Cobertura: BestPractices, CodeStyle, Naming, Design, Multithreading,
-        Security, Documentation, Performance, ErrorProne. Categorias críticas
-        para sistema de saúde tratadas como bloqueantes no perfil 'quality'.
+        Security, Documentation, Performance, ErrorProne.
+
+        SEMÂNTICA DE BLOQUEIO (issue #1592): o gate Maven usa
+        failurePriority=2 (hubsaude-parent), logo somente violações P1/P2
+        quebram o build. Como quase todas as regras do PMD 7.x têm default
+        P3, as regras críticas para sistema de saúde — SECURITY completa,
+        corretude em errorprone (vazamento de recurso, engolir exceção,
+        null-check quebrado etc.) e multithreading — recebem override
+        explícito priority=2 abaixo, tornando-as de fato bloqueantes.
+        Regras de estilo, métricas de design, documentação e performance
+        permanecem no default (P3+), analisadas e reportadas sem quebrar
+        o build.
     </description>
 
     <!-- Excluir código gerado e artefatos de build da análise. -->
@@ -34,7 +44,11 @@
     <!-- Renomeado de DefaultLabelNotLastInSwitchStmt no PMD 7.x -->
     <rule ref="category/java/bestpractices.xml/DefaultLabelNotLastInSwitch"/>
     <rule ref="category/java/bestpractices.xml/LooseCoupling"/>
-    <rule ref="category/java/bestpractices.xml/PreserveStackTrace"/>
+    <!-- P2 (#1592): perder a causa raiz de exceção compromete diagnóstico
+         de incidentes em produção (observabilidade, ADR-40). -->
+    <rule ref="category/java/bestpractices.xml/PreserveStackTrace">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/bestpractices.xml/UseVarargs"/>
     <rule ref="category/java/bestpractices.xml/AvoidStringBufferField"/>
     <rule ref="category/java/bestpractices.xml/MissingOverride"/>
@@ -171,50 +185,108 @@
 
     <!-- =========================================================================
          ERROR PRONE - Prevenção de bugs e comportamento inesperado
+         ......................................................................
+         Regras de corretude recebem priority=2 (bloqueantes, #1592); as
+         demais permanecem no default P3+ (report-only).
          ========================================================================= -->
     <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <priority>2</priority>
         <properties>
             <property name="allowCommentedBlocks" value="true"/>
         </properties>
     </rule>
     <!-- EmptyFinallyBlock, EmptyIfStmt, EmptyWhileStmt removidos no PMD 7.x -->
     <rule ref="category/java/errorprone.xml/AvoidBranchingStatementAsLastInLoop"/>
-    <rule ref="category/java/errorprone.xml/CloseResource"/>
-    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals"/>
+    <!-- P2: vazamento de recurso (CWE-404) em serviço 24x7. -->
+    <rule ref="category/java/errorprone.xml/CloseResource">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals">
+        <priority>2</priority>
+        <properties>
+            <!-- Throwable não redefine equals(): igualdade é identidade.
+                 Comparações por referência são o idioma correto na detecção
+                 de ciclo em cadeias de causa (getCause() == this). -->
+            <property name="typesThatCompareByReference"
+                      value="java.lang.Enum,java.lang.Class,java.lang.Throwable"/>
+        </properties>
+    </rule>
     <rule ref="category/java/errorprone.xml/EqualsNull"/>
     <!-- MissingBreakInSwitch renomeado para ImplicitSwitchFallThrough no PMD 7.x -->
-    <rule ref="category/java/errorprone.xml/ImplicitSwitchFallThrough"/>
+    <rule ref="category/java/errorprone.xml/ImplicitSwitchFallThrough">
+        <priority>2</priority>
+    </rule>
     <!-- Regras críticas para sistema de saúde -->
-    <rule ref="category/java/errorprone.xml/AvoidCatchingThrowable"/>
+    <rule ref="category/java/errorprone.xml/AvoidCatchingThrowable">
+        <priority>2</priority>
+    </rule>
     <!-- AvoidCatchingGenericException removido no PMD 7.x -->
-    <rule ref="category/java/errorprone.xml/DoNotThrowExceptionInFinally"/>
+    <rule ref="category/java/errorprone.xml/DoNotThrowExceptionInFinally">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/errorprone.xml/ReturnEmptyCollectionRatherThanNull"/>
-    <rule ref="category/java/errorprone.xml/AvoidDecimalLiteralsInBigDecimalConstructor"/>
+    <rule ref="category/java/errorprone.xml/AvoidDecimalLiteralsInBigDecimalConstructor">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/errorprone.xml/AvoidMultipleUnaryOperators"/>
     <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
-    <rule ref="category/java/errorprone.xml/CheckSkipResult"/>
-    <rule ref="category/java/errorprone.xml/ClassCastExceptionWithToArray"/>
-    <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices"/>
-    <rule ref="category/java/errorprone.xml/JumbledIncrementer"/>
-    <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
-    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode"/>
-    <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock"/>
-    <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
+    <rule ref="category/java/errorprone.xml/CheckSkipResult">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/ClassCastExceptionWithToArray">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/JumbledIncrementer">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/MisplacedNullCheck">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/UnconditionalIfStatement">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary"/>
-    <rule ref="category/java/errorprone.xml/UnusedNullCheckInEquals"/>
-    <rule ref="category/java/errorprone.xml/UselessPureMethodCall"/>
+    <rule ref="category/java/errorprone.xml/UnusedNullCheckInEquals">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/UselessPureMethodCall">
+        <priority>2</priority>
+    </rule>
 
     <!-- =========================================================================
          MULTITHREADING - Segurança em ambiente concorrente
+         ......................................................................
+         Bugs de concorrência recebem priority=2 (bloqueantes, #1592);
+         sugestões de design (synchronized em método, ConcurrentHashMap)
+         permanecem no default P3 (report-only).
          ========================================================================= -->
     <rule ref="category/java/multithreading.xml/AvoidSynchronizedAtMethodLevel"/>
-    <rule ref="category/java/multithreading.xml/AvoidThreadGroup"/>
-    <rule ref="category/java/multithreading.xml/DontCallThreadRun"/>
+    <rule ref="category/java/multithreading.xml/AvoidThreadGroup">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/multithreading.xml/DontCallThreadRun">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/multithreading.xml/DoubleCheckedLocking"/>
-    <rule ref="category/java/multithreading.xml/NonThreadSafeSingleton"/>
+    <rule ref="category/java/multithreading.xml/NonThreadSafeSingleton">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/multithreading.xml/UseConcurrentHashMap"/>
-    <rule ref="category/java/multithreading.xml/UseNotifyAllInsteadOfNotify"/>
-    <rule ref="category/java/multithreading.xml/UnsynchronizedStaticFormatter"/>
+    <rule ref="category/java/multithreading.xml/UseNotifyAllInsteadOfNotify">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/multithreading.xml/UnsynchronizedStaticFormatter">
+        <priority>2</priority>
+    </rule>
     <!-- DoNotUseThreads removida: gera falsos-positivos em ThreadFactory de
          Executors (padrão idiomático) e em Thread.sleep/currentThread. -->
 
@@ -225,13 +297,25 @@
          traversal, criptografia fraca) é responsabilidade do SpotBugs com o
          plugin FindSecBugs, configurado no hubsaude-parent. As regras abaixo
          cobrem práticas defensivas detectáveis estaticamente pelo PMD.
+         Toda a seção é bloqueante: priority=2 (#1592).
          ========================================================================= -->
-    <rule ref="category/java/security.xml/HardCodedCryptoKey"/>
-    <rule ref="category/java/security.xml/InsecureCryptoIv"/>
-    <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP"/>
-    <rule ref="category/java/errorprone.xml/AvoidCatchingNPE"/>
-    <rule ref="category/java/errorprone.xml/DoNotTerminateVM"/>
+    <rule ref="category/java/security.xml/HardCodedCryptoKey">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/security.xml/InsecureCryptoIv">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/AvoidCatchingNPE">
+        <priority>2</priority>
+    </rule>
+    <rule ref="category/java/errorprone.xml/DoNotTerminateVM">
+        <priority>2</priority>
+    </rule>
     <rule ref="category/java/errorprone.xml/AssignmentInOperand">
+        <priority>2</priority>
         <properties>
             <!-- Permite o idioma 'while ((line = reader.readLine()) != null)',
                  amplamente usado para leitura de streams. Mantém a detecção
@@ -241,7 +325,9 @@
     </rule>
     <rule ref="category/java/errorprone.xml/ProperCloneImplementation"/>
     <rule ref="category/java/errorprone.xml/SuspiciousEqualsMethodName"/>
-    <rule ref="category/java/errorprone.xml/AvoidAccessibilityAlteration"/>
+    <rule ref="category/java/errorprone.xml/AvoidAccessibilityAlteration">
+        <priority>2</priority>
+    </rule>
 
     <!-- =========================================================================
          DOCUMENTATION - Documentação Javadoc (política do projeto: pt-BR)
