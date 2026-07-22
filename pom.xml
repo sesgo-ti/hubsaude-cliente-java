@@ -113,7 +113,7 @@
              PMD sao resolvidos do classpath do hubsaude-build-tools em vez
              de copias locais, eliminando drift silencioso. Mesma versao
              pinada pelo hubsaude-parent; bumps automaticos via Renovate. -->
-        <hubsaude-build-tools.version>0.3.16</hubsaude-build-tools.version>
+        <hubsaude-build-tools.version>0.3.17</hubsaude-build-tools.version>
 
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
@@ -471,6 +471,15 @@
                         <rulesets>
                             <ruleset>pmd/pmd-rules.xml</ruleset>
                         </rulesets>
+                        <!--
+                            Paridade com o hubsaude-parent (issue #332):
+                            bloqueia apenas P1/P2; as regras P3-P5 do
+                            ruleset central (ex.: CognitiveComplexity,
+                            P5) são report-only. Sem isto, o default do
+                            plugin (5) tornaria bloqueante o que o gate
+                            central trata como informativo.
+                        -->
+                        <failurePriority>2</failurePriority>
                         <printFailingErrors>true</printFailingErrors>
                         <linkXRef>false</linkXRef>
                     </configuration>
