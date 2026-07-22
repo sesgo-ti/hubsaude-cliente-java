@@ -109,6 +109,11 @@
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <checkstyle.version>13.8.0</checkstyle.version>
+        <!-- Configuracoes centrais de qualidade (issue #1603): Checkstyle e
+             PMD sao resolvidos do classpath do hubsaude-build-tools em vez
+             de copias locais, eliminando drift silencioso. Mesma versao
+             pinada pelo hubsaude-parent; bumps automaticos via Renovate. -->
+        <hubsaude-build-tools.version>0.3.16</hubsaude-build-tools.version>
 
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
@@ -418,8 +423,12 @@
                     <artifactId>spotbugs-maven-plugin</artifactId>
                     <version>${spotbugs-maven-plugin.version}</version>
                 </plugin>
-                <!-- Checkstyle: configuracao local (POM auto-suficiente,
-                     sem dependencia de hubsaude-build-tools). -->
+                <!-- Checkstyle: configuracao central resolvida do classpath
+                     do hubsaude-build-tools (issue #1603), como nos demais
+                     modulos. A verificacao de formatacao (nao coberta pelo
+                     central desde a REC-28, pois este projeto nao usa
+                     Spotless) fica na execucao `checkstyle-formatacao` do
+                     perfil `quality`, com config local. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
@@ -430,9 +439,14 @@
                             <artifactId>checkstyle</artifactId>
                             <version>${checkstyle.version}</version>
                         </dependency>
+                        <dependency>
+                            <groupId>br.gov.go.saude.hubsaude</groupId>
+                            <artifactId>hubsaude-build-tools</artifactId>
+                            <version>${hubsaude-build-tools.version}</version>
+                        </dependency>
                     </dependencies>
                     <configuration>
-                        <configLocation>checkstyle.xml</configLocation>
+                        <configLocation>checkstyle/checkstyle.xml</configLocation>
                         <consoleOutput>true</consoleOutput>
                         <failsOnError>true</failsOnError>
                         <failOnViolation>true</failOnViolation>
@@ -440,14 +454,22 @@
                         <linkXRef>false</linkXRef>
                     </configuration>
                 </plugin>
-                <!-- PMD: ruleset local (POM auto-suficiente). -->
+                <!-- PMD: ruleset central resolvido do classpath do
+                     hubsaude-build-tools (issue #1603). -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-pmd-plugin</artifactId>
                     <version>${maven-pmd-plugin.version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>br.gov.go.saude.hubsaude</groupId>
+                            <artifactId>hubsaude-build-tools</artifactId>
+                            <version>${hubsaude-build-tools.version}</version>
+                        </dependency>
+                    </dependencies>
                     <configuration>
                         <rulesets>
-                            <ruleset>pmd-rules.xml</ruleset>
+                            <ruleset>pmd/pmd-rules.xml</ruleset>
                         </rulesets>
                         <printFailingErrors>true</printFailingErrors>
                         <linkXRef>false</linkXRef>
@@ -737,10 +759,12 @@
         </profile>
 
         <!-- Perfil `quality`: verificacoes estaticas de qualidade (CI/CD).
-             Replica o perfil homonimo do hubsaude-parent, porem
-             auto-suficiente: usa as configuracoes locais checkstyle.xml,
-             pmd-rules.xml e spotbugs-exclude.xml (este projeto e publicado
-             publicamente e nao herda do parent).
+             Replica o perfil homonimo do hubsaude-parent. Checkstyle e PMD
+             consomem as configuracoes centrais do hubsaude-build-tools
+             (issue #1603); permanecem locais apenas checkstyle-formatacao.xml
+             (formatacao, ausente do central desde a REC-28 pois este projeto
+             nao usa Spotless) e spotbugs-exclude.xml (curadoria propria,
+             mais estrita que o filtro central).
              Uso: `mvn -P quality verify`. -->
         <profile>
             <id>quality</id>
@@ -767,10 +791,25 @@
                                     <goal>check</goal>
                                 </goals>
                                 <configuration>
-                                    <configLocation>checkstyle-tests.xml</configLocation>
+                                    <configLocation>checkstyle/checkstyle-tests.xml</configLocation>
                                     <sourceDirectories>
                                         <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
                                     </sourceDirectories>
+                                </configuration>
+                            </execution>
+                            <!-- Formatação (FileTabCharacter,
+                                 NewlineAtEndOfFile, trailing whitespace):
+                                 config local, pois o central removeu esses
+                                 módulos (REC-28) por redundância com o
+                                 Spotless, que este projeto não usa. -->
+                            <execution>
+                                <id>checkstyle-formatacao</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <configLocation>checkstyle-formatacao.xml</configLocation>
                                 </configuration>
                             </execution>
                         </executions>

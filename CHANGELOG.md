@@ -7,6 +7,18 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Alterado
+- Checkstyle e PMD do perfil `quality` passam a consumir as
+  configurações centrais do `hubsaude-build-tools` (versão pinada,
+  resolvida do classpath), eliminando as cópias locais
+  `checkstyle.xml`, `checkstyle-tests.xml` e `pmd-rules.xml` e o risco
+  de drift silencioso (#1603). Permanecem locais, por decisão
+  deliberada documentada no README: `checkstyle-formatacao.xml` (novo;
+  módulos de formatação que a REC-28 removeu do central por redundância
+  com o Spotless, não usado aqui) e `spotbugs-exclude.xml` (filtro
+  curado mais estrito que o central). Sem impacto para consumidores da
+  biblioteca.
+
 ### Corrigido
 - `SslContextFactory.buildKeyManagers(KeyStore, String, char[])` não
   ignora mais o parâmetro `keyAlias` (alerta CodeQL #48): quando não

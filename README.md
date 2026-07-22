@@ -268,6 +268,38 @@ mvn test       # unitários
 mvn verify     # unitários + integração (sobe o hubsaude-simulador)
 ```
 
+### Configurações de qualidade (perfil `quality`)
+
+O perfil `quality` (`mvn -P quality verify`) executa Checkstyle, PMD e
+SpotBugs (com FindSecBugs). Desde a issue #1603, as configurações de
+Checkstyle (`checkstyle/checkstyle.xml`, `checkstyle/checkstyle-tests.xml`)
+e o ruleset do PMD (`pmd/pmd-rules.xml`) são as **centrais** do
+[`hubsaude-build-tools`](../hubsaude-build-tools/), resolvidas do
+classpath da versão pinada em `hubsaude-build-tools.version` no
+`pom.xml` — não há mais cópias locais sujeitas a drift silencioso. O
+projeto já resolvia artefatos internos do GitHub Packages
+(`hubsaude-simulador`, escopo de teste), portanto essa dependência não
+altera os pré-requisitos de build. Bumps da versão pinada chegam
+automaticamente via Renovate.
+
+Permanecem locais, **por decisão deliberada** (não são cópias e não
+estão sujeitos a paridade com o central):
+
+- [`checkstyle-formatacao.xml`](checkstyle-formatacao.xml) — módulos de
+  formatação (tabs, newline final, trailing whitespace) removidos da
+  configuração central pela REC-28 por redundância com o Spotless, que
+  este projeto não usa;
+- [`spotbugs-exclude.xml`](spotbugs-exclude.xml) — filtro de exclusão
+  curado para esta biblioteca. Filtros SpotBugs têm semântica aditiva
+  (cada exclusão reduz a cobertura); o filtro central importaria
+  exclusões inaplicáveis aqui (ex.: `CRLF_INJECTION_LOGS`,
+  `SPRING_ENDPOINT`) e enfraqueceria o gate de segurança.
+
+Divergência deliberada futura em relação às configurações centrais deve
+ser implementada em arquivo local próprio (não em cópia editada do
+central), com racional registrado no próprio arquivo, nesta seção e no
+`CHANGELOG.md`.
+
 ## Publicação de nova versão (release)
 
 Publicação no GitHub Packages é disparada **exclusivamente por tag**

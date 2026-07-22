@@ -5,13 +5,16 @@
     xsi:schemaLocation="https://github.com/spotbugs/spotbugs/blob/master/spotbugs/etc/findbugsfilter.xsd">
 
     <!--
-      Réplica local do filtro central spotbugs/exclude-filter.xml do
-      hubsaude-build-tools (este projeto é auto-suficiente e publicado
-      publicamente; não consome hubsaude-build-tools).
+      Filtro SpotBugs LOCAL, deliberadamente curado para esta biblioteca —
+      NÃO é cópia do filtro central spotbugs/exclude-filter.xml do
+      hubsaude-build-tools e não está sujeito a paridade com ele
+      (issue #1603). Filtros de exclusão têm semântica aditiva (cada entrada
+      REDUZ a cobertura); consumir o filtro central importaria exclusões
+      inaplicáveis aqui e ENFRAQUECERIA o gate de segurança.
 
-      Foram copiadas apenas as exclusões TRANSVERSAIS aplicáveis a esta
-      biblioteca. Omissões deliberadas em relação ao filtro central,
-      para NÃO reduzir cobertura neste projeto:
+      Contém apenas as exclusões TRANSVERSAIS aplicáveis a esta biblioteca.
+      Omissões deliberadas em relação ao filtro central, para NÃO reduzir
+      cobertura neste projeto:
         - Exclusões específicas de classes de outros módulos do monorepo
           (gateway, infra etc.): não existem aqui.
         - CRLF_INJECTION_LOGS: o racional central depende da arquitetura
