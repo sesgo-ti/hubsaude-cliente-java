@@ -38,7 +38,6 @@ import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLContext;
@@ -547,8 +546,8 @@ class SmartTokenClientBuilderTest {
                         new JcaX509v3CertificateBuilder(
                                 new X500Name("CN=KeyStore-Test"),
                                 BigInteger.valueOf(System.nanoTime()),
-                                Date.from(Instant.now()),
-                                Date.from(Instant.now().plusSeconds(86400)),
+                                java.util.Date.from(Instant.now()),
+                                java.util.Date.from(Instant.now().plusSeconds(86400)),
                                 new X500Name("CN=KeyStore-Test"),
                                 keyPair.getPublic())
                                 .build(new JcaContentSignerBuilder("SHA256withRSA")
@@ -579,8 +578,8 @@ class SmartTokenClientBuilderTest {
                         new JcaX509v3CertificateBuilder(
                                 new X500Name("CN=KeyStore-Test"),
                                 BigInteger.valueOf(System.nanoTime()),
-                                Date.from(Instant.now()),
-                                Date.from(Instant.now().plusSeconds(86400)),
+                                java.util.Date.from(Instant.now()),
+                                java.util.Date.from(Instant.now().plusSeconds(86400)),
                                 new X500Name("CN=KeyStore-Test"),
                                 keyPair.getPublic())
                                 .build(new JcaContentSignerBuilder("SHA256withRSA")
@@ -617,8 +616,8 @@ class SmartTokenClientBuilderTest {
                         new JcaX509v3CertificateBuilder(
                                 new X500Name("CN=KeyStore-Test"),
                                 BigInteger.valueOf(System.nanoTime()),
-                                Date.from(Instant.now()),
-                                Date.from(Instant.now().plusSeconds(86400)),
+                                java.util.Date.from(Instant.now()),
+                                java.util.Date.from(Instant.now().plusSeconds(86400)),
                                 new X500Name("CN=KeyStore-Test"),
                                 keyPair.getPublic())
                                 .build(new JcaContentSignerBuilder("SHA256withRSA")
@@ -779,8 +778,8 @@ class SmartTokenClientBuilderTest {
         final X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
                 dn,
                 BigInteger.valueOf(now.toEpochMilli()),
-                Date.from(now),
-                Date.from(now.plusSeconds(86400)),
+                java.util.Date.from(now),
+                java.util.Date.from(now.plusSeconds(86400)),
                 dn,
                 pair.getPublic());
 

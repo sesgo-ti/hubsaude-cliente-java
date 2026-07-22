@@ -38,7 +38,6 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Date;
 import java.util.UUID;
 
 import javax.net.ssl.SSLContext;
@@ -466,8 +465,8 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .issuer(CLIENT_ID)
                                 .subject(CLIENT_ID)
                                 .audience().add(getTokenEndpoint()).and()
-                                .issuedAt(Date.from(now))
-                                .expiration(Date.from(now.plusSeconds(60)))
+                                .issuedAt(java.util.Date.from(now))
+                                .expiration(java.util.Date.from(now.plusSeconds(60)))
                                 .id(UUID.randomUUID().toString());
                 if (kid != null) {
                         builder.header().add("kid", kid).and();
@@ -570,8 +569,8 @@ abstract class SmartTokenClientIntegrationTestBase {
                 final org.bouncycastle.asn1.x500.X500Name subject = new org.bouncycastle.asn1.x500.X500Name(
                                 "CN=" + cn + ",O=Test,C=BR");
                 final BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
-                final Date notBefore = new Date();
-                final Date notAfter = new Date(System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
+                final java.util.Date notBefore = new java.util.Date();
+                final java.util.Date notAfter = new java.util.Date(System.currentTimeMillis() + 365L * 24 * 3600 * 1000);
 
                 final org.bouncycastle.cert.X509v3CertificateBuilder builder = new org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder(
                                 subject, serial, notBefore, notAfter, subject, pair.getPublic());

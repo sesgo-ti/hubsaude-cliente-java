@@ -37,7 +37,6 @@ import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Date;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -823,8 +822,8 @@ class SslContextFactoryTest {
         final X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
                 dn,
                 BigInteger.valueOf(System.nanoTime()),
-                Date.from(Instant.now().minus(1, ChronoUnit.DAYS)),
-                Date.from(Instant.now().plus(365, ChronoUnit.DAYS)),
+                java.util.Date.from(Instant.now().minus(1, ChronoUnit.DAYS)),
+                java.util.Date.from(Instant.now().plus(365, ChronoUnit.DAYS)),
                 dn,
                 certKeyPair.getPublic());
         return new JcaX509CertificateConverter()
@@ -839,8 +838,8 @@ class SslContextFactoryTest {
         final X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
                 dn,
                 BigInteger.valueOf(System.nanoTime()),
-                Date.from(notBefore),
-                Date.from(notAfter),
+                java.util.Date.from(notBefore),
+                java.util.Date.from(notAfter),
                 dn,
                 keyPair.getPublic());
         return builder.build(signer);
