@@ -21,6 +21,7 @@
 package br.gov.go.saude.hubsaude.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
@@ -297,7 +298,7 @@ class SslContextFactoryTest {
         final Path dummyPath = tempDir.resolve("cert-valid.pem");
 
         // Não deve lançar exceção
-        SslContextFactory.validateCertificate(dummyPath, cert);
+        assertThatNoException().isThrownBy(() -> SslContextFactory.validateCertificate(dummyPath, cert));
     }
 
     @Test

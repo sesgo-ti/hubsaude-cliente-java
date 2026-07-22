@@ -21,6 +21,7 @@
 package br.gov.go.saude.hubsaude.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
@@ -40,7 +41,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import br.gov.go.saude.hubsaude.client.FaultToleranceConfig;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 
@@ -382,8 +382,10 @@ class SmartTokenClientTest {
                                 .build();
 
                 // Não deve lançar exceção
-                client.invalidateCache();
-                client.invalidateCache("system/Patient.rs");
+                assertThatNoException().isThrownBy(() -> {
+                        client.invalidateCache();
+                        client.invalidateCache("system/Patient.rs");
+                });
         }
 
         @Test
@@ -2476,7 +2478,8 @@ class SmartTokenClientTest {
                                 .build();
 
                 client.close();
-                client.close(); // segunda chamada não deve lançar exceção
+                // segunda chamada não deve lançar exceção
+                assertThatNoException().isThrownBy(client::close);
         }
 
         // ==================== Testes de traceparent (W3C Trace Context) ====================

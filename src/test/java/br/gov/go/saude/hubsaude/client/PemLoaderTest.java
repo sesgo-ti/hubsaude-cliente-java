@@ -21,6 +21,7 @@
 package br.gov.go.saude.hubsaude.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
@@ -226,15 +227,13 @@ class PemLoaderTest {
 
     @Test
     void deveTratarSenhaNullSemFalha() {
-        // Não deve lançar exceção
-        PemLoader.clearPassword(null);
+        assertThatNoException().isThrownBy(() -> PemLoader.clearPassword(null));
     }
 
     @Test
     void deveTratarSenhaVaziaSemFalha() {
         final char[] senhaVazia = new char[0];
-        // Não deve lançar exceção
-        PemLoader.clearPassword(senhaVazia);
+        assertThatNoException().isThrownBy(() -> PemLoader.clearPassword(senhaVazia));
     }
 
     @Test
@@ -413,7 +412,7 @@ class PemLoaderTest {
     @Test
     void deveValidarTamanhoMinimoDeChaveDireta() throws Exception {
         // Happy path: RSA-2048 passa sem exceção
-        PemLoader.validateMinimumKeySize(privateKey, "rsa-2048");
+        assertThatNoException().isThrownBy(() -> PemLoader.validateMinimumKeySize(privateKey, "rsa-2048"));
     }
 
     // ---------- Testes de zeroização do PEM (#728) ----------

@@ -75,6 +75,7 @@ import org.slf4j.LoggerFactory;
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("Testes de Integração - SmartTokenClient (JAR)")
+@SuppressWarnings("PMD.TestClassWithoutTestCases") // casos @Test herdados de SmartTokenClientIntegrationTestBase
 class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(SmartTokenClientJarIT.class);
