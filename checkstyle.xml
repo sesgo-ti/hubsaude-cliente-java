@@ -30,7 +30,13 @@
 
     <!-- =========================================================================
          FORMATAÇÃO DE ARQUIVO
-         ========================================================================= -->
+         =========================================================================
+         Divergência deliberada em relação ao checkstyle.xml central
+         (hubsaude-build-tools): lá, FileTabCharacter, NewlineAtEndOfFile e
+         RegexpSingleline (trailing whitespace) foram removidos (REC-28,
+         issue #644) por redundância com o Spotless (palantir-java-format).
+         Este projeto é auto-suficiente e NÃO usa Spotless; os módulos são
+         mantidos aqui para preservar a verificação de formatação. -->
     <module name="FileTabCharacter">
         <property name="eachLine" value="true"/>
     </module>

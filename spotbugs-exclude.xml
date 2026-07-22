@@ -1,9 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<FindBugsFilter>
-    <!-- 
-        CT_CONSTRUCTOR_THROW: Classe final sem finalize() - Finalizer attack não é aplicável.
-        SmartTokenClient é uma classe final que não define finalize(), portanto
-        o ataque de Finalizer que esta regra tenta prevenir não é possível.
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/spotbugs/blob/master/spotbugs/etc/findbugsfilter.xsd"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/spotbugs/blob/master/spotbugs/etc/findbugsfilter.xsd">
+
+    <!--
+      Réplica local do filtro central spotbugs/exclude-filter.xml do
+      hubsaude-build-tools (este projeto é auto-suficiente e publicado
+      publicamente; não consome hubsaude-build-tools).
+
+      Foram copiadas apenas as exclusões TRANSVERSAIS aplicáveis a esta
+      biblioteca. Omissões deliberadas em relação ao filtro central,
+      para NÃO reduzir cobertura neste projeto:
+        - Exclusões específicas de classes de outros módulos do monorepo
+          (gateway, infra etc.): não existem aqui.
+        - CRLF_INJECTION_LOGS: o racional central depende da arquitetura
+          de logging JSON garantida do HubSaúde (LogbackJsonEnforcer),
+          que não se aplica a uma biblioteca cliente standalone.
+        - SPRING_ENDPOINT/SERVLET_*: esta biblioteca não expõe endpoints
+          Spring nem superfície servlet.
+        - fb-contrib-exclude.xml: o plugin fb-contrib não é usado aqui.
+    -->
+
+    <!-- Ignorar classes de teste (cobre *Test, *Tests, *IT, *ITCase, *Spec) -->
+    <Match>
+        <Source name="~.*(Test|Tests|IT|ITCase|Spec)\.java"/>
+    </Match>
+
+    <!-- Ignorar records (falsos positivos comuns) -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+        <Class name="~.*Record"/>
+    </Match>
+
+    <!--
+      IMPROPER_UNICODE (FindSecBugs, rank 15): dispara em toda operacao de
+      case-folding (toLowerCase/toUpperCase/equalsIgnoreCase), inclusive quando
+      ja se usa Locale.ROOT corretamente. E detector de baixissima severidade e
+      altissimo ruido, sem ganho de seguranca real neste codigo (comparacoes
+      ASCII/protocolares com Locale.ROOT explicito). Exclusao transversal e
+      deliberada (mesma decisao do filtro central); mantem-se ativos os
+      detectores FindSecBugs de alto valor (SQLi, XSS, XXE, desserializacao,
+      path traversal, cripto fraca, segredos hardcoded).
+    -->
+    <Match>
+        <Bug pattern="IMPROPER_UNICODE"/>
+    </Match>
+
+    <!--
+      Exclusão LOCAL (específica deste projeto, não presente no filtro
+      central):
+      CT_CONSTRUCTOR_THROW: Classe final sem finalize() - Finalizer attack não
+      é aplicável. SmartTokenClient é uma classe final que não define
+      finalize(), portanto o ataque de Finalizer que esta regra tenta prevenir
+      não é possível.
     -->
     <Match>
         <Class name="br.gov.go.saude.hubsaude.client.SmartTokenClient"/>
