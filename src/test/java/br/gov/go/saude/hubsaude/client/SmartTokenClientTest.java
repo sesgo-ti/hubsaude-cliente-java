@@ -752,42 +752,42 @@ class SmartTokenClientTest {
 
         @Test
         void deveClassificarFalhasDeRedeComoTransitorias() {
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new java.net.http.HttpTimeoutException("timeout")))
                                 .isTrue();
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new java.net.SocketException("Connection reset")))
                                 .isTrue();
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new java.net.ConnectException("Connection refused")))
                                 .isTrue();
                 // HttpClient envolve a causa original em IOException genérica
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new IOException("HTTP/1.1 header parser received no bytes",
                                                 new java.io.EOFException("EOF reached while reading"))))
                                 .isTrue();
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new IOException("connection closed locally",
                                                 new java.net.SocketException("Connection reset"))))
                                 .isTrue();
                 // O JDK por vezes lança esta IOException sem causa anexada
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new IOException("HTTP/1.1 header parser received no bytes")))
                                 .isTrue();
         }
 
         @Test
         void naoDeveClassificarFalhasTlsOuGenericasComoTransitorias() {
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new IOException("erro generico de I/O")))
                                 .isFalse();
-                assertThat(SmartTokenClient.isTransientNetworkFailure(
+                assertThat(ErrorClassifier.isTransientNetworkFailure(
                                 new javax.net.ssl.SSLHandshakeException("handshake falhou")))
                                 .isFalse();
                 // SSLException prevalece mesmo com causa de rede na cadeia
                 final javax.net.ssl.SSLException ssl = new javax.net.ssl.SSLException(
                                 "TLS abortado", new java.net.SocketException("Connection reset"));
-                assertThat(SmartTokenClient.isTransientNetworkFailure(new IOException(ssl)))
+                assertThat(ErrorClassifier.isTransientNetworkFailure(new IOException(ssl)))
                                 .isFalse();
         }
 
@@ -795,14 +795,14 @@ class SmartTokenClientTest {
 
         @Test
         void deveSanitizarRespostaDeErroNula() {
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(null);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(null);
                 assertThat(sanitized).isEqualTo("<empty>");
         }
 
         @Test
         void deveTruncarRespostaDeErroGrande() {
                 final String longResponse = "x".repeat(600);
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(longResponse);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(longResponse);
 
                 assertThat(sanitized).hasSize(503); // 500 + "..."
                 assertThat(sanitized).endsWith("...");
@@ -811,7 +811,7 @@ class SmartTokenClientTest {
         @Test
         void deveSanitizarRespostaComAccessToken() {
                 final String response = "{\"access_token\":\"eyJsecretvalue\",\"error\":\"invalid\"}";
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(response);
 
                 assertThat(sanitized).doesNotContain("eyJsecretvalue");
                 assertThat(sanitized).contains("\"access_token\":\"[REDACTED]\"");
@@ -820,7 +820,7 @@ class SmartTokenClientTest {
         @Test
         void deveSanitizarRespostaComTokenGenerico() {
                 final String response = "token=eyJhbGciOi&other=value";
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(response);
 
                 assertThat(sanitized).doesNotContain("eyJhbGciOi");
                 assertThat(sanitized).contains("token=[REDACTED]");
@@ -829,7 +829,7 @@ class SmartTokenClientTest {
         @Test
         void deveSanitizarTokenContendoLetrasEContrabarra() {
                 final String response = "token=abcdef\\ghi&other=value";
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(response);
 
                 assertThat(sanitized).contains("token=[REDACTED]&other=value");
                 assertThat(sanitized).doesNotContain("def");
@@ -838,7 +838,7 @@ class SmartTokenClientTest {
         @Test
         void deveManterRespostaSemTokenIntacta() {
                 final String response = "{\"error\":\"invalid_grant\",\"error_description\":\"Client not found\"}";
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(response);
 
                 assertThat(sanitized).contains("invalid_grant");
                 assertThat(sanitized).contains("Client not found");
@@ -848,7 +848,7 @@ class SmartTokenClientTest {
 
         @Test
         void cachedTokenDeveSerValidoQuandoExpiraNoFuturo() {
-                final var token = new SmartTokenClient.CachedToken(
+                final var token = new TokenCacheStrategy.CachedToken(
                                 "access-token-123",
                                 java.time.Instant.now().plusSeconds(120));
 
@@ -857,7 +857,7 @@ class SmartTokenClientTest {
 
         @Test
         void cachedTokenDeveSerInvalidoQuandoJaExpirou() {
-                final var token = new SmartTokenClient.CachedToken(
+                final var token = new TokenCacheStrategy.CachedToken(
                                 "access-token-123",
                                 java.time.Instant.now().minusSeconds(10));
 
@@ -867,7 +867,7 @@ class SmartTokenClientTest {
         @Test
         void cachedTokenDeveSerInvalidoQuandoExpiraDentroDaMargem() {
                 // Token expira em 20s, margem é 30s -> deve ser inválido
-                final var token = new SmartTokenClient.CachedToken(
+                final var token = new TokenCacheStrategy.CachedToken(
                                 "access-token-123",
                                 java.time.Instant.now().plusSeconds(20));
 
@@ -877,7 +877,7 @@ class SmartTokenClientTest {
         @Test
         void cachedTokenDeveSerValidoQuandoExpiraForaDaMargem() {
                 // Token expira em 60s, margem é 30s -> deve ser válido
-                final var token = new SmartTokenClient.CachedToken(
+                final var token = new TokenCacheStrategy.CachedToken(
                                 "access-token-123",
                                 java.time.Instant.now().plusSeconds(60));
 
@@ -886,7 +886,7 @@ class SmartTokenClientTest {
 
         @Test
         void cachedTokenDeveRetornarAccessTokenCorretamente() {
-                final var token = new SmartTokenClient.CachedToken(
+                final var token = new TokenCacheStrategy.CachedToken(
                                 "my-access-token",
                                 java.time.Instant.now().plusSeconds(60));
 
@@ -896,7 +896,7 @@ class SmartTokenClientTest {
         @Test
         void cachedTokenDeveRetornarExpiresAtCorretamente() {
                 final java.time.Instant expiresAt = java.time.Instant.now().plusSeconds(120);
-                final var token = new SmartTokenClient.CachedToken("token", expiresAt);
+                final var token = new TokenCacheStrategy.CachedToken("token", expiresAt);
 
                 assertThat(token.expiresAt()).isEqualTo(expiresAt);
         }
@@ -2153,7 +2153,7 @@ class SmartTokenClientTest {
                 final String response = "{\"error\":\"invalid\",\"padding\":\""
                                 + "x".repeat(600)
                                 + "\",\"access_token\":\"" + token + "\"}";
-                final String sanitized = SmartTokenClient.sanitizeErrorResponse(response);
+                final String sanitized = ErrorClassifier.sanitizeErrorResponse(response);
 
                 assertThat(sanitized).doesNotContain(token);
                 assertThat(sanitized).endsWith("...");
@@ -2163,7 +2163,7 @@ class SmartTokenClientTest {
                 // a redação deve ocorrer antes do truncamento
                 final String response2 = "{\"access_token\":\"" + token + "\",\"padding\":\""
                                 + "y".repeat(600) + "\"}";
-                final String sanitized2 = SmartTokenClient.sanitizeErrorResponse(response2);
+                final String sanitized2 = ErrorClassifier.sanitizeErrorResponse(response2);
 
                 assertThat(sanitized2).doesNotContain(token);
                 assertThat(sanitized2).contains("[REDACTED]");
@@ -2424,7 +2424,7 @@ class SmartTokenClientTest {
 
         @Test
         void toStringDeCachedTokenNaoDeveExporToken() {
-                final var cached = new SmartTokenClient.CachedToken(
+                final var cached = new TokenCacheStrategy.CachedToken(
                                 "token-super-secreto", java.time.Instant.now().plusSeconds(60));
 
                 assertThat(cached.toString()).doesNotContain("token-super-secreto");

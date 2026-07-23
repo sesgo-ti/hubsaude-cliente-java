@@ -48,6 +48,7 @@ import org.bouncycastle.openssl.jcajce.JceOpenSSLPKCS8DecryptorProviderBuilder;
 import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
 import org.bouncycastle.operator.InputDecryptorProvider;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Utilitário para carregamento de material criptográfico de arquivo PEM.
@@ -163,7 +164,7 @@ public final class PemLoader {
      *                             se a senha for incorreta, ou formato inválido
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
-    public static PrivateKey loadPrivateKey(final Path path, final char[] password) throws IOException {
+    public static PrivateKey loadPrivateKey(final Path path, final char @Nullable [] password) throws IOException {
         Objects.requireNonNull(path, "path não pode ser null");
         final byte[] raw = Files.readAllBytes(path);
         try {
@@ -216,7 +217,7 @@ public final class PemLoader {
      */
     public static PrivateKey loadPrivateKeyFromString(
             final String pem,
-            final char[] password,
+            final char @Nullable [] password,
             final String source) throws IOException {
         Objects.requireNonNull(pem, "pem não pode ser null");
         return loadPrivateKeyFromChars(pem.toCharArray(), password, source);
@@ -244,7 +245,7 @@ public final class PemLoader {
     @SuppressWarnings("PMD.UseVarargs") // char[] para material sensível é intencional - segurança
     public static PrivateKey loadPrivateKeyFromChars(
             final char[] pem,
-            final char[] password,
+            final char @Nullable [] password,
             final String source) throws IOException {
         Objects.requireNonNull(pem, "pem não pode ser null");
 
@@ -271,7 +272,7 @@ public final class PemLoader {
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
     private static PrivateKey convertToPrivateKey(
             final Object obj,
-            final char[] password,
+            final char @Nullable [] password,
             final String source) {
         // PKCS#8 criptografado (BEGIN ENCRYPTED PRIVATE KEY)
         if (obj instanceof PKCS8EncryptedPrivateKeyInfo encrypted) {
@@ -315,7 +316,7 @@ public final class PemLoader {
      */
     private static PrivateKey decryptPkcs8(
             final PKCS8EncryptedPrivateKeyInfo encrypted,
-            final char[] password,
+            final char @Nullable [] password,
             final String source) {
         if (password == null || password.length == 0) {
             throw new SmartTokenException("Chave PKCS#8 criptografada requer senha: " + source);
@@ -341,7 +342,7 @@ public final class PemLoader {
      */
     private static PrivateKey decryptOpenSslKey(
             final PEMEncryptedKeyPair encryptedKeyPair,
-            final char[] password,
+            final char @Nullable [] password,
             final String source) {
         if (password == null || password.length == 0) {
             throw new SmartTokenException("Chave criptografada (OpenSSL) requer senha: " + source);
@@ -363,7 +364,7 @@ public final class PemLoader {
      * @param password array de senha a ser limpo (pode ser null)
      */
     @SuppressWarnings("PMD.UseVarargs")
-    static void clearPassword(final char[] password) {
+    static void clearPassword(final char @Nullable [] password) {
         if (password != null) {
             Arrays.fill(password, '\0');
         }

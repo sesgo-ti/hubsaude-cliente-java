@@ -76,6 +76,10 @@
         <bouncycastle.version>1.85</bouncycastle.version>
         <jackson3.version>3.1.5</jackson3.version>
         <slf4j.version>2.0.17</slf4j.version>
+        <!-- JSpecify: mesma versao governada pelo BOM hubsaude-dependencies
+             (jspecify 1.0.0); declarada localmente porque este projeto e
+             standalone (sem <parent>) e nao importa o BOM. -->
+        <jspecify.version>1.0.0</jspecify.version>
         <spotbugs-annotations.version>4.10.3</spotbugs-annotations.version>
         <junit-jupiter.version>6.0.3</junit-jupiter.version>
         <assertj.version>3.27.7</assertj.version>
@@ -190,6 +194,13 @@
                 <version>${slf4j.version}</version>
             </dependency>
 
+            <!-- JSpecify (anotações de null-safety) -->
+            <dependency>
+                <groupId>org.jspecify</groupId>
+                <artifactId>jspecify</artifactId>
+                <version>${jspecify.version}</version>
+            </dependency>
+
             <!-- SpotBugs annotations (provided) -->
             <dependency>
                 <groupId>com.github.spotbugs</groupId>
@@ -289,6 +300,18 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!--
+            JSpecify: anotações de null-safety (@NullMarked/@Nullable)
+            do pacote null-safe (REC-09/ADR-67). Annotation-only, sem
+            transitivas. Escopo compile: retenção RUNTIME e parte da
+            API pública, permitindo que consumidores e verificadores
+            (NullAway) enxerguem o contrato de nulidade da biblioteca.
+        -->
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
         </dependency>
 
         <!-- SpotBugs annotations -->

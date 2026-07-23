@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Testes da heurística {@link SmartTokenClient#isLikelyClientCertificateRejection(Throwable)},
+ * Testes da heurística {@link ErrorClassifier#isLikelyClientCertificateRejection(Throwable)},
  * usada para reconhecer falhas de TLS/mTLS que tipicamente ocorrem quando o
  * servidor de autorização rejeita o certificado do cliente (revogado,
  * expirado ou não confiável) sem produzir uma resposta HTTP de erro
@@ -55,7 +55,7 @@ class SmartTokenClientCertRejectionTest {
         void aeadDirect() {
             final Throwable ex = new AEADBadTagException("Tag mismatch");
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isTrue();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isTrue();
         }
 
         @Test
@@ -65,7 +65,7 @@ class SmartTokenClientCertRejectionTest {
             final Throwable wrapper = new SSLException("Tag mismatch!", cause);
             final Throwable ex = new IOException("Falha de leitura TLS", wrapper);
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isTrue();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isTrue();
         }
 
         @Test
@@ -73,7 +73,7 @@ class SmartTokenClientCertRejectionTest {
         void sslHandshake() {
             final Throwable ex = new SSLHandshakeException("Received fatal alert: certificate_revoked");
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isTrue();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isTrue();
         }
 
         @Test
@@ -81,7 +81,7 @@ class SmartTokenClientCertRejectionTest {
         void badRecordMac() {
             final Throwable ex = new SSLException("Received fatal alert: bad_record_mac");
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isTrue();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isTrue();
         }
 
         @Test
@@ -89,7 +89,7 @@ class SmartTokenClientCertRejectionTest {
         void badRecordMacCaseInsensitive() {
             final Throwable ex = new SSLException("RECEIVED FATAL ALERT: BAD_RECORD_MAC");
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isTrue();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isTrue();
         }
     }
 
@@ -102,7 +102,7 @@ class SmartTokenClientCertRejectionTest {
         void ioGenerica() {
             final Throwable ex = new IOException("Connection reset");
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isFalse();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isFalse();
         }
 
         @Test
@@ -110,7 +110,7 @@ class SmartTokenClientCertRejectionTest {
         void sslGenerica() {
             final Throwable ex = new SSLException("Generic TLS failure");
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isFalse();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isFalse();
         }
 
         @Test
@@ -118,13 +118,13 @@ class SmartTokenClientCertRejectionTest {
         void sslMessageNull() {
             final Throwable ex = new SSLException((String) null);
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isFalse();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isFalse();
         }
 
         @Test
         @DisplayName("Causa null não causa NPE")
         void causaNull() {
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(null)).isFalse();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(null)).isFalse();
         }
 
         @Test
@@ -139,7 +139,7 @@ class SmartTokenClientCertRejectionTest {
             handshake.initCause(validator);
             final Throwable ex = new IOException("TLS failure", handshake);
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(ex)).isFalse();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(ex)).isFalse();
         }
 
         @Test
@@ -150,7 +150,7 @@ class SmartTokenClientCertRejectionTest {
             final Throwable handshake = new SSLHandshakeException("PKIX path validation failed");
             handshake.initCause(root);
 
-            assertThat(SmartTokenClient.isLikelyClientCertificateRejection(handshake)).isFalse();
+            assertThat(ErrorClassifier.isLikelyClientCertificateRejection(handshake)).isFalse();
         }
     }
 }

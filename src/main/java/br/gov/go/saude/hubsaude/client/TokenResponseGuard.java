@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -182,7 +183,7 @@ final class TokenResponseGuard {
         private final long maxBytes;
         private long received;
         private boolean failed;
-        private Flow.Subscription subscription;
+        private Flow.@Nullable Subscription subscription;
 
         BoundedStringBodySubscriber(final long maxBytes) {
             this.maxBytes = maxBytes;

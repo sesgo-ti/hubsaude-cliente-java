@@ -21,24 +21,15 @@
 package br.gov.go.saude.hubsaude.client;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.security.KeyStore;
-import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Objects;
 
 import javax.net.ssl.SSLContext;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builder para construção de instâncias de {@link SmartTokenClient}.
@@ -74,33 +65,22 @@ import tools.jackson.databind.json.JsonMapper;
  * @see SigningStrategy
  * @see SslContextFactory
  */
-// Padrão Builder usa nomes iguais e tem muitos campos/métodos fluentes.
-// TODO débito técnico — agrupar parâmetros correlatos para reduzir campos
-// e métodos fluentes. Rastreado na issue #1032.
+// Exceção inerente ao padrão Builder fluente com API pública congelada
+// (biblioteca publicada): os métodos fluentes espelham os nomes dos campos
+// (HiddenField) e a superfície de configuração documentada excede os limites
+// de contagem de métodos (MethodCount/TooManyMethods). Justificativa
+// registrada no concern docs/design/concerns/cliente.md (issue #1032).
 @SuppressWarnings({ "checkstyle:HiddenField", "checkstyle:MethodCount",
-    "PMD.TooManyFields", "PMD.TooManyMethods" })
+    "PMD.TooManyMethods" })
 public final class SmartTokenClientBuilder {
 
-    private static final int HTTP_OK = 200;
-
-    private String tokenEndpoint;
-    private String discoveryBaseUrl;
-    private String clientId;
-    private Path privateKeyPem;
-    private char[] privateKeyPassword;
-    private SigningStrategy signingStrategy;
-    private Path certificatePem;
-    private Path serverTrustAnchor;
-    private X509Certificate serverTrustAnchorCert;
-    private SSLContext customSslContext;
-    private KeyStore clientKeyStore;
-    private String clientKeyAlias;
-    private char[] clientKeyPassword;
-    private String tlsProtocol = SslContextFactory.DEFAULT_TLS_PROTOCOL;
-    private String jwtAlgorithm = SmartTokenClient.DEFAULT_JWT_ALGORITHM;
-    private String keyId;
-    private String hubCtxIg;
-    private String hubCtxVersao;
+    private @Nullable String tokenEndpoint;
+    private @Nullable String discoveryBaseUrl;
+    private @Nullable String clientId;
+    private @Nullable String hubCtxIg;
+    private @Nullable String hubCtxVersao;
+    private final SigningSettings signing = new SigningSettings();
+    private final TlsSettings tls = new TlsSettings();
     private FaultToleranceConfig faultToleranceConfig = new FaultToleranceConfig(
         SmartTokenClient.DEFAULT_CONNECT_TIMEOUT,
         SmartTokenClient.DEFAULT_REQUEST_TIMEOUT,
@@ -173,7 +153,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder privateKeyPem(final Path privateKeyPem) {
-        this.privateKeyPem = privateKeyPem;
+        signing.setPrivateKeyPem(privateKeyPem);
         return this;
     }
 
@@ -196,10 +176,8 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-            justification = "Não copiar char[] minimiza exposição de senha em memória")
     public SmartTokenClientBuilder privateKeyPassword(final char[] password) {
-        this.privateKeyPassword = password;
+        signing.setPrivateKeyPassword(password);
         return this;
     }
 
@@ -219,7 +197,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder signingStrategy(final SigningStrategy signingStrategy) {
-        this.signingStrategy = signingStrategy;
+        signing.setSigningStrategy(signingStrategy);
         return this;
     }
 
@@ -230,7 +208,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder certificatePem(final Path certificatePem) {
-        this.certificatePem = certificatePem;
+        tls.setCertificatePem(certificatePem);
         return this;
     }
 
@@ -257,15 +235,11 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     @SuppressWarnings("PMD.UseVarargs")
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-            justification = "KeyStore não é clonável; char[] de senha não copiado para minimizar exposição")
     public SmartTokenClientBuilder clientKeyStore(
             final KeyStore keyStore,
             final String keyAlias,
             final char[] keyPassword) {
-        this.clientKeyStore = keyStore;
-        this.clientKeyAlias = keyAlias;
-        this.clientKeyPassword = keyPassword;
+        tls.setClientKeyStore(keyStore, keyAlias, keyPassword);
         return this;
     }
 
@@ -275,8 +249,8 @@ public final class SmartTokenClientBuilder {
      * @param serverTrustAnchor caminho absoluto; null usa trust store da JVM
      * @return este builder
      */
-    public SmartTokenClientBuilder serverTrustAnchor(final Path serverTrustAnchor) {
-        this.serverTrustAnchor = serverTrustAnchor;
+    public SmartTokenClientBuilder serverTrustAnchor(final @Nullable Path serverTrustAnchor) {
+        tls.setServerTrustAnchor(serverTrustAnchor);
         return this;
     }
 
@@ -291,10 +265,8 @@ public final class SmartTokenClientBuilder {
      * @param serverTrustAnchorCert certificado X.509; null usa trust store da JVM
      * @return este builder
      */
-    @SuppressFBWarnings(value = "EI_EXPOSE_REP2",
-            justification = "X509Certificate é efetivamente imutável")
-    public SmartTokenClientBuilder serverTrustAnchor(final X509Certificate serverTrustAnchorCert) {
-        this.serverTrustAnchorCert = serverTrustAnchorCert;
+    public SmartTokenClientBuilder serverTrustAnchor(final @Nullable X509Certificate serverTrustAnchorCert) {
+        tls.setServerTrustAnchorCert(serverTrustAnchorCert);
         return this;
     }
 
@@ -310,7 +282,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder tlsProtocol(final String tlsProtocol) {
-        this.tlsProtocol = tlsProtocol;
+        tls.setTlsProtocol(tlsProtocol);
         return this;
     }
 
@@ -344,7 +316,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder jwtAlgorithm(final String jwtAlgorithm) {
-        this.jwtAlgorithm = jwtAlgorithm;
+        signing.setJwtAlgorithm(jwtAlgorithm);
         return this;
     }
 
@@ -388,7 +360,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     public SmartTokenClientBuilder keyId(final String keyId) {
-        this.keyId = keyId;
+        signing.setKeyId(keyId);
         return this;
     }
 
@@ -405,7 +377,7 @@ public final class SmartTokenClientBuilder {
      * @return este builder
      */
     SmartTokenClientBuilder sslContext(final SSLContext sslContext) {
-        this.customSslContext = sslContext;
+        tls.setCustomSslContext(sslContext);
         return this;
     }
 
@@ -517,16 +489,13 @@ public final class SmartTokenClientBuilder {
      * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem
      *                               definidos
      */
-    @SuppressWarnings({ "PMD.CyclomaticComplexity", "PMD.NPathComplexity" })
     public SmartTokenClient build() throws IOException {
         try {
             return doBuild();
         } finally {
-            PemLoader.clearPassword(privateKeyPassword);
-            PemLoader.clearPassword(clientKeyPassword);
-            // Descarta as referências: o builder não retém segredos após build()
-            privateKeyPassword = null;
-            clientKeyPassword = null;
+            // Zera e descarta os segredos: o builder não os retém após build()
+            signing.clearSecrets();
+            tls.clearSecrets();
         }
     }
 
@@ -536,8 +505,48 @@ public final class SmartTokenClientBuilder {
      * @return cliente configurado
      * @throws IOException se os arquivos PEM não puderem ser lidos
      */
-    @SuppressWarnings({ "PMD.CyclomaticComplexity", "PMD.NPathComplexity" })
     private SmartTokenClient doBuild() throws IOException {
+        validateRequiredConfiguration();
+
+        // === Carrega credenciais do cliente primeiro (necessário para mTLS) ===
+        final SigningSettings.Resolved credentials = signing.resolve();
+
+        // Certificado é opcional quando usando SigningStrategy diretamente
+        final X509Certificate cert = tls.loadCertificate();
+
+        // === Constrói SSLContext (com mTLS quando material está disponível) ===
+        final SSLContext effectiveSslContext =
+                tls.resolveSslContext(credentials.clientKey(), cert);
+
+        // === Descobre token endpoint (usando SSLContext com mTLS) ===
+        final String effectiveTokenEndpoint = resolveTokenEndpoint(effectiveSslContext);
+
+        return new SmartTokenClient(
+                effectiveTokenEndpoint,
+                clientId,
+                credentials.strategy(),
+                cert,
+                effectiveSslContext,
+                faultToleranceConfig,
+                enableTokenCache,
+                tokenCacheMarginSeconds,
+                signing.getJwtAlgorithm(),
+                signing.getKeyId(),
+                hubCtxIg,
+                hubCtxVersao);
+    }
+
+    /**
+     * Valida a configuração obrigatória do builder: exclusividade mútua
+     * entre {@code tokenEndpoint} e {@code fhirBase}, presença do
+     * {@code clientId} e uso de https nas URLs informadas.
+     *
+     * @throws IllegalStateException    se a configuração de endpoints for
+     *                                  inválida
+     * @throws NullPointerException     se {@code clientId} não foi definido
+     * @throws IllegalArgumentException se alguma URL não usar https
+     */
+    private void validateRequiredConfiguration() {
         if (tokenEndpoint != null && discoveryBaseUrl != null) {
             throw new IllegalStateException("Defina tokenEndpoint OU fhirBase, não ambos");
         }
@@ -546,131 +555,32 @@ public final class SmartTokenClientBuilder {
         }
         Objects.requireNonNull(clientId, "clientId é obrigatório");
         if (tokenEndpoint != null) {
-            requireHttps(tokenEndpoint, "tokenEndpoint");
+            SmartConfigurationDiscovery.requireHttps(tokenEndpoint, "tokenEndpoint");
         }
         if (discoveryBaseUrl != null) {
-            requireHttps(discoveryBaseUrl, "fhirBase");
+            SmartConfigurationDiscovery.requireHttps(discoveryBaseUrl, "fhirBase");
         }
-
-        // === Carrega credenciais do cliente primeiro (necessário para mTLS) ===
-        final SigningStrategy effectiveStrategy;
-        final PrivateKey clientKey;
-        if (signingStrategy != null) {
-            if (privateKeyPem != null) {
-                throw new IllegalStateException(
-                        "Defina signingStrategy OU privateKeyPem, não ambos");
-            }
-            effectiveStrategy = signingStrategy;
-            clientKey = null;
-        } else if (privateKeyPem != null) {
-            clientKey = PemLoader.loadPrivateKey(privateKeyPem, privateKeyPassword);
-            // Cria a estratégia a partir do algoritmo JWT, incluindo os
-            // parâmetros PSS quando aplicável (PS256/PS384/PS512)
-            effectiveStrategy = SigningStrategyFactory.fromPrivateKeyForJwt(clientKey, jwtAlgorithm);
-        } else {
-            throw new IllegalStateException(
-                    "É obrigatório definir signingStrategy ou privateKeyPem");
-        }
-
-        // Certificado é opcional quando usando SigningStrategy diretamente
-        final X509Certificate cert = certificatePem != null
-                ? SslContextFactory.validateCertificate(certificatePem)
-                : null;
-
-        // === Constrói SSLContext (com mTLS quando material está disponível) ===
-        final SSLContext effectiveSslContext;
-        if (customSslContext != null) {
-            effectiveSslContext = customSslContext;
-        } else if (serverTrustAnchorCert != null) {
-            // Trust anchor em memória (extraído dinamicamente, ex: testes de integração)
-            if (clientKey != null && cert != null) {
-                // mTLS via chave em memória
-                effectiveSslContext = SslContextFactory.buildSslContext(
-                        serverTrustAnchorCert, tlsProtocol, clientKey, cert);
-            } else {
-                // TLS unidirecional
-                effectiveSslContext = SslContextFactory.buildSslContext(
-                        serverTrustAnchorCert, tlsProtocol);
-            }
-        } else if (clientKeyStore != null) {
-            // mTLS via KeyStore (PKCS#11/smartcard/USB token, PKCS#12, JKS)
-            effectiveSslContext = SslContextFactory.buildSslContext(
-                    serverTrustAnchor, tlsProtocol,
-                    clientKeyStore, clientKeyAlias, clientKeyPassword);
-        } else if (clientKey != null && cert != null) {
-            // mTLS via chave em memória (PEM)
-            effectiveSslContext = SslContextFactory.buildSslContext(
-                    serverTrustAnchor, tlsProtocol, clientKey, cert);
-        } else {
-            // TLS unidirecional (sem mTLS)
-            effectiveSslContext = SslContextFactory.buildSslContext(
-                    serverTrustAnchor, tlsProtocol);
-        }
-
-        // === Descobre token endpoint (usando SSLContext com mTLS) ===
-        String effectiveTokenEndpoint = this.tokenEndpoint;
-        if (effectiveTokenEndpoint == null) {
-            effectiveTokenEndpoint = discoverTokenEndpoint(
-                discoveryBaseUrl,
-                effectiveSslContext,
-                faultToleranceConfig.connectTimeout(),
-                faultToleranceConfig.requestTimeout()
-            );
-        }
-
-        return new SmartTokenClient(
-                effectiveTokenEndpoint,
-                clientId,
-                effectiveStrategy,
-                cert,
-                effectiveSslContext,
-                faultToleranceConfig,
-                enableTokenCache,
-                tokenCacheMarginSeconds,
-                jwtAlgorithm,
-                keyId,
-                hubCtxIg,
-                hubCtxVersao);
     }
 
     /**
-     * Exige que a URL use o esquema {@code https}, com exceção explícita
-     * para {@code localhost}/{@code 127.0.0.1} (útil em desenvolvimento e
-     * testes com servidor local).
+     * Resolve o token endpoint efetivo: o valor configurado diretamente ou,
+     * na sua ausência, o descoberto via /.well-known/smart-configuration a
+     * partir da URL base FHIR.
      *
-     * @param url   URL a validar
-     * @param campo nome do campo, usado na mensagem de erro
-     * @throws IllegalArgumentException se o esquema não for https e o host
-     *                                  não for local
+     * @param sslContext contexto SSL a utilizar na descoberta
+     * @return URL do token endpoint efetivo
+     * @throws IOException em caso de erro de rede na descoberta
      */
-    // Endereços de loopback fazem parte da allowlist intencional para
-    // desenvolvimento/testes locais — não são IPs de serviços hardcoded.
-    @SuppressWarnings("PMD.AvoidUsingHardCodedIP")
-    static void requireHttps(final String url, final String campo) {
-        final URI uri;
-        try {
-            uri = URI.create(url);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(
-                    campo + " inválido: '" + url + "' não é uma URL válida", e);
+    private String resolveTokenEndpoint(final SSLContext sslContext) throws IOException {
+        if (tokenEndpoint != null) {
+            return tokenEndpoint;
         }
-        final String scheme = uri.getScheme();
-        if ("https".equalsIgnoreCase(scheme)) {
-            return;
-        }
-        final String host = uri.getHost();
-        final boolean hostLocal = host != null
-                && ("localhost".equalsIgnoreCase(host)
-                        || "127.0.0.1".equals(host)
-                        || "[::1]".equals(host)
-                        || "::1".equals(host));
-        if ("http".equalsIgnoreCase(scheme) && hostLocal) {
-            return;
-        }
-        throw new IllegalArgumentException(
-                campo + " deve usar o esquema https (recebido: '" + url + "')."
-                        + " O esquema http é permitido apenas para localhost/127.0.0.1,"
-                        + " em desenvolvimento e testes locais.");
+        // discoveryBaseUrl garantidamente não nulo após a validação
+        return SmartConfigurationDiscovery.discoverTokenEndpoint(
+                discoveryBaseUrl,
+                sslContext,
+                faultToleranceConfig.connectTimeout(),
+                faultToleranceConfig.requestTimeout());
     }
 
     /**
@@ -703,56 +613,7 @@ public final class SmartTokenClientBuilder {
             final SSLContext sslContext,
             final Duration connectTimeout,
             final Duration requestTimeout) throws IOException {
-        final String wellKnownUrl = fhirBaseUrl.endsWith("/")
-                ? fhirBaseUrl + ".well-known/smart-configuration"
-                : fhirBaseUrl + "/.well-known/smart-configuration";
-
-        // Contexto de trace W3C próprio desta requisição (correlação com a
-        // plataforma; ver TraceContext).
-        final TraceContext trace = TraceContext.generate();
-
-        try (HttpClient client = HttpClient.newBuilder()
-                .sslContext(sslContext)
-                .connectTimeout(connectTimeout)
-                .build()) {
-
-            final HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(wellKnownUrl))
-                    .header(TraceContext.TRACEPARENT_HEADER, trace.traceparent())
-                    .timeout(requestTimeout)
-                    .GET()
-                    .build();
-
-            final HttpResponse<String> response = sendRequest(client, request);
-            if (response.statusCode() != HTTP_OK) {
-                throw new SmartTokenException(
-                        "Falha ao obter smart-configuration (" + response.statusCode()
-                                + ", traceId=" + trace.traceId() + "): "
-                                + SmartTokenClient.sanitizeErrorResponse(response.body()));
-            }
-
-            final ObjectMapper mapper = JsonMapper.builder()
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                    .build();
-            final JsonNode node = mapper.readTree(response.body());
-
-            if (!node.has("token_endpoint")) {
-                throw new SmartTokenException("A resposta de smart-configuration não contém 'token_endpoint'");
-            }
-            final String discovered = node.get("token_endpoint").asString();
-            requireHttps(discovered, "token_endpoint descoberto");
-            return discovered;
-        }
-    }
-
-    private static HttpResponse<String> sendRequest(
-            final HttpClient client,
-            final HttpRequest request) throws IOException {
-        try {
-            return client.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Requisição para smart-configuration interrompida", e);
-        }
+        return SmartConfigurationDiscovery.discoverTokenEndpoint(
+                fhirBaseUrl, sslContext, connectTimeout, requestTimeout);
     }
 }

@@ -25,5 +25,20 @@
  * monorepo; seu contrato público segue compatibilidade
  * <em>forward</em> e as exceções de domínio ({@code SmartTokenException},
  * {@code SigningException}) não vazam detalhes de credenciais.</p>
+ *
+ * <h2>Null-safety (REC-09/ADR-67)</h2>
+ *
+ * <p>Pacote anotado com {@link org.jspecify.annotations.NullMarked}:
+ * todo tipo é <strong>não-nulo por padrão</strong>; exceções são
+ * marcadas explicitamente com
+ * {@link org.jspecify.annotations.Nullable} (ex.: o {@code scope}
+ * tolerante a {@code null} em {@code SmartTokenClient#obtainToken},
+ * o trust anchor opcional do servidor e o corpo JSON cru ausente em
+ * respostas servidas do cache). O contrato declarado é consumível
+ * por verificadores como o NullAway (ADR-67, ADR-80) tanto nos
+ * integradores quanto no gate de qualidade do HubSaúde.</p>
  */
+@NullMarked
 package br.gov.go.saude.hubsaude.client;
+
+import org.jspecify.annotations.NullMarked;

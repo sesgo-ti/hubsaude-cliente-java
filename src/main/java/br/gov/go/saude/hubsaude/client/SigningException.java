@@ -20,6 +20,8 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Exceção lançada quando ocorre falha durante operação de assinatura digital.
  *
@@ -48,9 +50,10 @@ public class SigningException extends RuntimeException {
      * Cria exceção com mensagem e causa original.
      *
      * @param message descrição do erro
-     * @param cause   exceção original que causou a falha
+     * @param cause   exceção original que causou a falha; {@code null}
+     *                quando não há causa a preservar
      */
-    public SigningException(final String message, final Throwable cause) {
+    public SigningException(final String message, final @Nullable Throwable cause) {
         super(message, cause);
     }
 }

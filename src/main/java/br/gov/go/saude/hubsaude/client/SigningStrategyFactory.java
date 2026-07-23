@@ -30,6 +30,8 @@ import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PSSParameterSpec;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Factory para criação de estratégias de assinatura ({@link SigningStrategy}).
  *
@@ -138,7 +140,8 @@ public final class SigningStrategyFactory {
      * @throws SmartTokenException se a senha for incorreta ou formato inválido
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
-    public static SigningStrategy fromPemFile(final Path keyPath, final char[] password) throws IOException {
+    public static SigningStrategy fromPemFile(
+            final Path keyPath, final char @Nullable [] password) throws IOException {
         Objects.requireNonNull(keyPath, "keyPath não pode ser null");
         final PrivateKey key = PemLoader.loadPrivateKey(keyPath, password);
         return new PrivateKeySigningStrategy(key);
@@ -157,7 +160,8 @@ public final class SigningStrategyFactory {
      * @throws IOException se o PEM não puder ser decodificado
      */
     @SuppressWarnings("PMD.UseVarargs") // char[] para senha é intencional - segurança
-    public static SigningStrategy fromPemString(final String pemContent, final char[] password) throws IOException {
+    public static SigningStrategy fromPemString(
+            final String pemContent, final char @Nullable [] password) throws IOException {
         Objects.requireNonNull(pemContent, "pemContent não pode ser null");
         final PrivateKey key = PemLoader.loadPrivateKeyFromString(pemContent, password, "<string>");
         return new PrivateKeySigningStrategy(key);
@@ -250,7 +254,7 @@ public final class SigningStrategyFactory {
     public static SigningStrategy fromKeyStore(
             final KeyStore keyStore,
             final String alias,
-            final char[] password) {
+            final char @Nullable [] password) {
         Objects.requireNonNull(keyStore, "keyStore não pode ser null");
         Objects.requireNonNull(alias, "alias não pode ser null");
 
@@ -370,7 +374,7 @@ public final class SigningStrategyFactory {
      * @param jwtAlgorithm algoritmo JWT (ex: PS256)
      * @return parâmetros PSS para PS256/PS384/PS512; {@code null} para os demais
      */
-    public static PSSParameterSpec pssParameterSpecFor(final String jwtAlgorithm) {
+    public static @Nullable PSSParameterSpec pssParameterSpecFor(final String jwtAlgorithm) {
         Objects.requireNonNull(jwtAlgorithm, "jwtAlgorithm não pode ser null");
         return switch (jwtAlgorithm.toUpperCase(java.util.Locale.ROOT)) {
             case "PS256" -> new PSSParameterSpec(

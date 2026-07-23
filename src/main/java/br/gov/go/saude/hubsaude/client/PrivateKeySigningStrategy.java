@@ -27,6 +27,8 @@ import java.security.Signature;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
@@ -75,9 +77,9 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
     public static final String DEFAULT_ALGORITHM = "SHA384withRSA";
 
     private final PrivateKey privateKey;
-    private final Provider provider;
+    private final @Nullable Provider provider;
     private final String algorithm;
-    private final AlgorithmParameterSpec parameterSpec;
+    private final @Nullable AlgorithmParameterSpec parameterSpec;
 
     /**
      * Cria estratégia com chave e algoritmo padrão
@@ -117,7 +119,7 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
      */
     public PrivateKeySigningStrategy(
             final PrivateKey privateKey,
-            final Provider provider,
+            final @Nullable Provider provider,
             final String algorithm) {
         this(privateKey, provider, algorithm, null);
     }
@@ -144,9 +146,9 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
             justification = "Provider e AlgorithmParameterSpec são efetivamente imutáveis")
     public PrivateKeySigningStrategy(
             final PrivateKey privateKey,
-            final Provider provider,
+            final @Nullable Provider provider,
             final String algorithm,
-            final AlgorithmParameterSpec parameterSpec) {
+            final @Nullable AlgorithmParameterSpec parameterSpec) {
         this.privateKey = Objects.requireNonNull(privateKey, "privateKey não pode ser null");
         PemLoader.validateMinimumKeySize(privateKey, "privateKey");
         this.provider = provider; // pode ser null (usa padrão)
@@ -197,7 +199,7 @@ public final class PrivateKeySigningStrategy implements SigningStrategy {
      *
      * @return parâmetros do algoritmo ou {@code null}
      */
-    AlgorithmParameterSpec getParameterSpec() {
+    @Nullable AlgorithmParameterSpec getParameterSpec() {
         return parameterSpec;
     }
 }

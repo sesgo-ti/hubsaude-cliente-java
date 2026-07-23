@@ -20,6 +20,8 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Exceção de domínio para operações utilitárias do {@link SmartTokenClient}.
  *
@@ -45,9 +47,10 @@ public class SmartTokenException extends RuntimeException {
      * Cria a exceção preservando a causa original.
      *
      * @param message descrição da falha
-     * @param cause   exceção original que motivou esta
+     * @param cause   exceção original que motivou esta; {@code null} quando
+     *                não há causa a preservar
      */
-    public SmartTokenException(final String message, final Throwable cause) {
+    public SmartTokenException(final String message, final @Nullable Throwable cause) {
         super(message, cause);
     }
 }

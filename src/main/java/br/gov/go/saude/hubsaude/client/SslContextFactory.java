@@ -49,6 +49,7 @@ import javax.net.ssl.X509KeyManager;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.openssl.PEMParser;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Fábrica de {@link SSLContext} para o cliente HubSaúde.
@@ -101,7 +102,7 @@ public final class SslContextFactory {
      * @throws SmartTokenException se o protocolo for inválido ou houver erro de
      *                             configuração
      */
-    public static SSLContext buildSslContext(final Path serverTrustAnchor, final String tlsProtocol) {
+    public static SSLContext buildSslContext(final @Nullable Path serverTrustAnchor, final String tlsProtocol) {
         if (serverTrustAnchor == null) {
             // Sem trust anchor customizado: usa trust store da JVM mas respeita o protocolo
             try {
@@ -183,10 +184,10 @@ public final class SslContextFactory {
      * @throws SmartTokenException se houver erro de configuração
      */
     public static SSLContext buildSslContext(
-            final Path serverTrustAnchor,
+            final @Nullable Path serverTrustAnchor,
             final String tlsProtocol,
-            final PrivateKey clientKey,
-            final X509Certificate clientCert) {
+            final @Nullable PrivateKey clientKey,
+            final @Nullable X509Certificate clientCert) {
         final KeyManager[] keyManagers = buildKeyManagers(clientKey, clientCert);
         if (serverTrustAnchor == null) {
             try {
@@ -227,8 +228,8 @@ public final class SslContextFactory {
     public static SSLContext buildSslContext(
             final X509Certificate trustedCert,
             final String tlsProtocol,
-            final PrivateKey clientKey,
-            final X509Certificate clientCert) {
+            final @Nullable PrivateKey clientKey,
+            final @Nullable X509Certificate clientCert) {
         checkCertificateValidity(trustedCert, subjectOf(trustedCert));
         try {
             final KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
@@ -266,9 +267,9 @@ public final class SslContextFactory {
      */
     @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
     // null é semanticamente necessário para SSLContext.init()
-    static KeyManager[] buildKeyManagers(
-            final PrivateKey clientKey,
-            final X509Certificate clientCert) {
+    static KeyManager @Nullable [] buildKeyManagers(
+            final @Nullable PrivateKey clientKey,
+            final @Nullable X509Certificate clientCert) {
         if (clientKey == null || clientCert == null) {
             return null;
         }
@@ -325,10 +326,10 @@ public final class SslContextFactory {
      */
     @SuppressWarnings({"PMD.UseVarargs", "PMD.ReturnEmptyCollectionRatherThanNull"})
     // null é semanticamente necessário para SSLContext.init()
-    static KeyManager[] buildKeyManagers(
-            final KeyStore keyStore,
-            final String keyAlias,
-            final char[] keyPassword) {
+    static KeyManager @Nullable [] buildKeyManagers(
+            final @Nullable KeyStore keyStore,
+            final @Nullable String keyAlias,
+            final char @Nullable [] keyPassword) {
         if (keyStore == null) {
             return null;
         }
@@ -357,7 +358,7 @@ public final class SslContextFactory {
      * @throws SmartTokenException se o alias não existir ou não for entrada
      *                             de chave privada
      */
-    private static void requireKeyEntry(final KeyStore keyStore, final String keyAlias)
+    private static void requireKeyEntry(final KeyStore keyStore, final @Nullable String keyAlias)
             throws KeyStoreException {
         if (keyAlias == null) {
             return;
@@ -416,11 +417,11 @@ public final class SslContextFactory {
      */
     @SuppressWarnings("PMD.UseVarargs")
     public static SSLContext buildSslContext(
-            final Path serverTrustAnchor,
+            final @Nullable Path serverTrustAnchor,
             final String tlsProtocol,
             final KeyStore clientKeyStore,
-            final String keyAlias,
-            final char[] keyPassword) {
+            final @Nullable String keyAlias,
+            final char @Nullable [] keyPassword) {
         final KeyManager[] keyManagers = buildKeyManagers(
                 clientKeyStore, keyAlias, keyPassword);
         if (serverTrustAnchor == null) {
