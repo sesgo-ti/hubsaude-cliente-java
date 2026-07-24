@@ -125,7 +125,7 @@
              PMD sao resolvidos do classpath do hubsaude-build-tools em vez
              de copias locais, eliminando drift silencioso. Mesma versao
              pinada pelo hubsaude-parent; bumps automaticos via Renovate. -->
-        <hubsaude-build-tools.version>0.3.17</hubsaude-build-tools.version>
+        <hubsaude-build-tools.version>0.3.18</hubsaude-build-tools.version>
 
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
