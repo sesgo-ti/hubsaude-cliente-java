@@ -967,7 +967,9 @@ public final class SmartTokenClient implements AutoCloseable {
      *
      * @return JWT compacto pronto para uso no campo client_assertion
      */
-    @SuppressWarnings("PMD.UseConcurrentHashMap")
+    @SuppressWarnings({"PMD.UseConcurrentHashMap", "checkstyle:MethodLength"})
+    // Construção do JWS (RFC 7523) ponta a ponta: claims, header e
+    // assinatura em sequência auditável — dividir dificultaria a revisão.
     String buildClientAssertion() {
         final Instant now = Instant.now();
         final long iat = now.getEpochSecond();
