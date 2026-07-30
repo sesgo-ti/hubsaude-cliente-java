@@ -120,12 +120,14 @@
         <!-- Plugins do perfil `quality` (verificacoes estaticas) -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
-        <checkstyle.version>13.8.0</checkstyle.version>
+        <!-- 13.9.0 remove o modulo JavadocStyle (checkstyle#20610);
+             exige o ruleset do hubsaude-build-tools >= 0.3.20. -->
+        <checkstyle.version>13.9.0</checkstyle.version>
         <!-- Configuracoes centrais de qualidade (issue #1603): Checkstyle e
              PMD sao resolvidos do classpath do hubsaude-build-tools em vez
              de copias locais, eliminando drift silencioso. Mesma versao
              pinada pelo hubsaude-parent; bumps automaticos via Renovate. -->
-        <hubsaude-build-tools.version>0.3.18</hubsaude-build-tools.version>
+        <hubsaude-build-tools.version>0.3.20</hubsaude-build-tools.version>
 
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
