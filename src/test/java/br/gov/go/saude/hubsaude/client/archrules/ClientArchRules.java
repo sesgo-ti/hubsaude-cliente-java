@@ -15,7 +15,13 @@ package br.gov.go.saude.hubsaude.client.archrules;
 
 import java.util.List;
 
+import com.tngtech.archunit.base.ArchUnitException.ReflectionException;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 import com.tngtech.archunit.library.GeneralCodingRules;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
@@ -24,9 +30,9 @@ import com.tngtech.archunit.library.freeze.FreezingArchRule;
 /**
  * Conjunto de <i>fitness functions</i> ArchUnit aplicadas a este
  * cliente Java. As regras encapsulam decisões arquiteturais (ADR-15
- * — modularização hexagonal) e convenções operacionais (logging via
- * SLF4J, ausência de ciclos entre subpacotes, Loggers como
- * {@code private static final}).
+ * — modularização hexagonal; ADR-70 — domínio fechado por padrão) e
+ * convenções operacionais (logging via SLF4J, ausência de ciclos
+ * entre subpacotes, Loggers como {@code private static final}).
  *
  * <p>Replicado localmente para que o artefato publicado em Maven
  * Central não tenha dependência (nem mesmo transitória de teste) do
@@ -120,5 +126,90 @@ public final class ClientArchRules {
                 .as("Campos do tipo org.slf4j.Logger devem ser "
                         + "private static final.")
                 .allowEmptyShould(true);
+    }
+
+    /**
+     * Regra (e): classes públicas de {@code **.domain..} são
+     * <strong>fechadas por padrão</strong> — {@code final},
+     * {@code sealed}, {@code abstract}, {@code record} ou
+     * {@code enum} (ADR-70, REC-26); interfaces e anotações são
+     * contratos permitidos. Extensibilidade é opt-in.
+     *
+     * <p>Entregue via {@link FreezingArchRule}: violações existentes
+     * ao primeiro run viram baseline em
+     * {@code src/test/resources/archunit_store/}; novas violações
+     * falham o build.
+     */
+    public static ArchRule domainClassesAreClosedByDefault(
+            String basePackage) {
+        return FreezingArchRule.freeze(ArchRuleDefinition
+                .classes()
+                .that().resideInAPackage(basePackage + "..domain..")
+                .and().arePublic()
+                .should(serFechadaPorPadrao())
+                .as("Classes públicas em '" + basePackage
+                        + "..domain..' devem ser fechadas por padrão — "
+                        + "final, sealed, abstract, record ou enum; "
+                        + "interfaces e anotações são contratos "
+                        + "permitidos. Extensibilidade é opt-in "
+                        + "(ADR-70, REC-26).")
+                .allowEmptyShould(true));
+    }
+
+    /**
+     * Condição: a classe é fechada por padrão — interface/anotação
+     * (contrato), {@code enum}, {@code record}, {@code abstract},
+     * {@code final} ou {@code sealed}.
+     */
+    private static ArchCondition<JavaClass> serFechadaPorPadrao() {
+        return new ArchCondition<>("ser fechada por padrão (final, "
+                + "sealed, abstract, record, enum ou interface)") {
+            @Override
+            public void check(JavaClass classe, ConditionEvents events) {
+                if (!ehFechadaPorPadrao(classe)) {
+                    events.add(SimpleConditionEvent.violated(
+                            classe,
+                            String.format(
+                                    "%s é pública, concreta e aberta "
+                                            + "(nem final nem sealed) "
+                                            + "em %s",
+                                    classe.getDescription(),
+                                    classe.getSourceCodeLocation())));
+                }
+            }
+        };
+    }
+
+    /**
+     * Indica se a classe é fechada por padrão (ADR-70): contrato
+     * (interface — inclui anotações, que têm {@code ACC_INTERFACE}
+     * no bytecode), {@code enum}, {@code record}, {@code abstract},
+     * {@code final} ou {@code sealed}.
+     */
+    private static boolean ehFechadaPorPadrao(JavaClass classe) {
+        return classe.isInterface()
+                || classe.isEnum()
+                || classe.isRecord()
+                || classe.getModifiers().contains(JavaModifier.FINAL)
+                || classe.getModifiers().contains(JavaModifier.ABSTRACT)
+                || ehSealed(classe);
+    }
+
+    /**
+     * Detecta {@code sealed} via reflexão: o ArchUnit não expõe o
+     * modificador em {@link JavaModifier} e {@code sealed} não gera
+     * flag no bytecode (apenas o atributo
+     * {@code PermittedSubclasses}). As classes analisadas estão no
+     * classpath de teste do próprio cliente, logo {@code reflect()}
+     * resolve. Se a classe não for resolvível, assume-se
+     * <em>não-sealed</em> (conservador: a violação vai para a
+     * linha-base congelada em vez de passar em silêncio).
+     */
+    private static boolean ehSealed(JavaClass classe) {
+        try {
+            return classe.reflect().isSealed();
+        } catch (ReflectionException e) {
+            return false;
+        }
     }
 }

@@ -67,4 +67,10 @@ class HubSaudeArchitectureTest {
     void loggersSaoPrivateStaticFinal() {
         ClientArchRules.loggersArePrivateStaticFinal().check(classes);
     }
+
+    @Test
+    void dominioFechadoPorPadrao() {
+        ClientArchRules.domainClassesAreClosedByDefault(BASE_PACKAGE)
+                .check(classes);
+    }
 }
