@@ -74,8 +74,11 @@ import org.jspecify.annotations.Nullable;
  */
 // PMD.GodClass: TODO débito técnico — separar parsing PEM, KeyStore e
 // construção do SSLContext em utilitários dedicados.
+// CBO (#1664): fábrica de SSLContext da biblioteca cliente — parsing PEM,
+// KeyStore e TLS concentram os tipos de segurança JCA num único ponto.
 @SuppressWarnings({"checkstyle:OverloadMethodsDeclarationOrder",
-    "PMD.GodClass"}) // grouped by PEM vs KeyStore use case
+    "PMD.GodClass", // grouped by PEM vs KeyStore use case
+    "PMD.CouplingBetweenObjects"})
 public final class SslContextFactory {
 
     /** Protocolo TLS padrão utilizado quando nenhum é especificado. */
