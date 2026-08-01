@@ -2708,7 +2708,7 @@ class SmartTokenClientTest {
         }
 
         private static String toPkcs8Pem(final byte[] encoded) {
-                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                                 .encodeToString(encoded);
                 return "-----BEGIN PRIVATE KEY-----\n" + b64 + "\n-----END PRIVATE KEY-----\n";
         }
@@ -2732,7 +2732,7 @@ class SmartTokenClientTest {
                                 .build(pair.getPrivate());
 
                 final byte[] certDer = builder.build(signer).getEncoded();
-                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                                 .encodeToString(certDer);
                 return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
         }
@@ -2758,7 +2758,7 @@ class SmartTokenClientTest {
                                 .build(pair.getPrivate());
 
                 final byte[] certDer = builder.build(signer).getEncoded();
-                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                                 .encodeToString(certDer);
                 return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
         }
@@ -2784,7 +2784,7 @@ class SmartTokenClientTest {
                                 .build(pair.getPrivate());
 
                 final byte[] certDer = builder.build(signer).getEncoded();
-                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+                final String b64 = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                                 .encodeToString(certDer);
                 return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
         }

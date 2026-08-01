@@ -451,7 +451,7 @@ class SigningStrategyFactoryTest {
     private static String toPkcs8Pem(final byte[] privateKeyBytes) {
         final StringBuilder sb = new StringBuilder();
         sb.append("-----BEGIN PRIVATE KEY-----\n");
-        final String encoded = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+        final String encoded = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                 .encodeToString(privateKeyBytes);
         sb.append(encoded);
         sb.append("\n-----END PRIVATE KEY-----\n");

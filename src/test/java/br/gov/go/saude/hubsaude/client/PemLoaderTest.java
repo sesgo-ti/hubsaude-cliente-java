@@ -495,7 +495,7 @@ class PemLoaderTest {
 
         final StringBuilder sb = new StringBuilder();
         sb.append("-----BEGIN RSA PRIVATE KEY-----\n");
-        final String encoded = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+        final String encoded = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                 .encodeToString(rsaKey.getEncoded());
         sb.append(encoded);
         sb.append("\n-----END RSA PRIVATE KEY-----\n");
@@ -534,7 +534,7 @@ class PemLoaderTest {
     private static String toPkcs8Pem(final byte[] privateKeyBytes) {
         final StringBuilder sb = new StringBuilder();
         sb.append("-----BEGIN PRIVATE KEY-----\n");
-        final String encoded = java.util.Base64.getMimeEncoder(64, "\n".getBytes())
+        final String encoded = java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
                 .encodeToString(privateKeyBytes);
         sb.append(encoded);
         sb.append("\n-----END PRIVATE KEY-----\n");
@@ -568,7 +568,8 @@ class PemLoaderTest {
 
         final StringBuilder sb = new StringBuilder();
         sb.append("-----BEGIN CERTIFICATE-----\n");
-        sb.append(java.util.Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded()));
+        sb.append(java.util.Base64.getMimeEncoder(64, "\n".getBytes(StandardCharsets.UTF_8))
+                .encodeToString(cert.getEncoded()));
         sb.append("\n-----END CERTIFICATE-----\n");
         return sb.toString();
     }

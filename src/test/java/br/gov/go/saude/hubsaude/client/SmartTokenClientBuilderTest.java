@@ -459,9 +459,10 @@ class SmartTokenClientBuilderTest {
 
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/.well-known/smart-configuration", exchange -> {
-            exchange.sendResponseHeaders(200, jsonResponse.length());
+            final byte[] resp = jsonResponse.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+                os.write(resp);
             }
         });
         server.start();
@@ -490,9 +491,10 @@ class SmartTokenClientBuilderTest {
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/.well-known/smart-configuration", exchange -> {
             receivedTraceparent.set(exchange.getRequestHeaders().getFirst("traceparent"));
-            exchange.sendResponseHeaders(200, jsonResponse.length());
+            final byte[] resp = jsonResponse.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+                os.write(resp);
             }
         });
         server.start();
@@ -516,9 +518,10 @@ class SmartTokenClientBuilderTest {
 
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/.well-known/smart-configuration", exchange -> {
-            exchange.sendResponseHeaders(200, jsonResponse.length());
+            final byte[] resp = jsonResponse.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+                os.write(resp);
             }
         });
         server.start();
@@ -652,10 +655,10 @@ class SmartTokenClientBuilderTest {
     void deveFalharSeDiscoveryRetornarErroHttp() throws Exception {
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/.well-known/smart-configuration", exchange -> {
-            final String error = "Not Found";
-            exchange.sendResponseHeaders(404, error.length());
+            final byte[] error = "Not Found".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(404, error.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(error.getBytes(StandardCharsets.UTF_8));
+                os.write(error);
             }
         });
         server.start();
@@ -680,9 +683,10 @@ class SmartTokenClientBuilderTest {
         final HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/.well-known/smart-configuration", exchange -> {
             final String json = "{\"authorization_endpoint\":\"https://example.com/auth\"}";
-            exchange.sendResponseHeaders(200, json.length());
+            final byte[] resp = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
+                os.write(resp);
             }
         });
         server.start();
@@ -715,9 +719,10 @@ class SmartTokenClientBuilderTest {
         final String expectedTokenEndpoint = "https://auth.example.com/token";
         server.createContext("/.well-known/smart-configuration", exchange -> {
             final String json = "{\"token_endpoint\":\"" + expectedTokenEndpoint + "\"}";
-            exchange.sendResponseHeaders(200, json.length());
+            final byte[] resp = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
+                os.write(resp);
             }
         });
         server.start();
@@ -742,9 +747,10 @@ class SmartTokenClientBuilderTest {
         final String expectedTokenEndpoint = "https://auth.example.com/token";
         server.createContext("/.well-known/smart-configuration", exchange -> {
             final String json = "{\"token_endpoint\":\"" + expectedTokenEndpoint + "\"}";
-            exchange.sendResponseHeaders(200, json.length());
+            final byte[] resp = json.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, resp.length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(json.getBytes(StandardCharsets.UTF_8));
+                os.write(resp);
             }
         });
         server.start();
