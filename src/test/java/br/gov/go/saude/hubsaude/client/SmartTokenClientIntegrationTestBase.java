@@ -37,7 +37,9 @@ import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 import javax.net.ssl.SSLContext;
@@ -46,6 +48,7 @@ import io.jsonwebtoken.Jwts;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -98,6 +101,27 @@ abstract class SmartTokenClientIntegrationTestBase {
         protected Path keyFile;
         protected Path certFile;
         protected String certificatePem;
+
+        /** Clientes criados pelo teste corrente, fechados no {@code @AfterEach} (#1810). */
+        private final List<SmartTokenClient> clientesAbertos = new ArrayList<>();
+
+        /**
+         * Registra o cliente para fechamento automático ao fim do teste,
+         * liberando o {@code HttpClient} interno (threads e conexões).
+         *
+         * @param client cliente recém-criado
+         * @return o próprio cliente, para uso fluente
+         */
+        protected final SmartTokenClient registrar(final SmartTokenClient client) {
+                clientesAbertos.add(client);
+                return client;
+        }
+
+        @AfterEach
+        void fecharClientes() {
+                clientesAbertos.forEach(SmartTokenClient::close);
+                clientesAbertos.clear();
+        }
 
         // ==================== Métodos Abstratos ====================
 
@@ -164,8 +188,12 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .POST(HttpRequest.BodyPublishers.ofString(json))
                                 .build();
 
-                final HttpResponse<String> response = client.send(
-                                request, HttpResponse.BodyHandlers.ofString());
+                final HttpResponse<String> response;
+                // try-with-resources: libera o HttpClient criado por método (#1810).
+                try (client) {
+                        response = client.send(
+                                        request, HttpResponse.BodyHandlers.ofString());
+                }
                 final int status = response.statusCode();
                 log.debug("Registro de cliente: status={}, body={}",
                                 status, response.body());
@@ -181,13 +209,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve obter token de acesso com sucesso")
         void deveObterTokenComSucesso() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs");
 
@@ -199,13 +227,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve falhar com scope não permitido")
         void deveFalharComScopeNaoPermitido() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 assertThatThrownBy(() -> tokenClient.obtainToken("system/Encounter.rs"))
                                 .isInstanceOf(SmartTokenException.class)
@@ -215,7 +243,7 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve reutilizar token do cache quando válido")
         void deveReutilizarTokenDoCache() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
@@ -223,7 +251,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .enableTokenCache(true)
                                 .tokenCacheMarginSeconds(30)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String token1 = tokenClient.obtainToken("system/Patient.rs");
                 final String token2 = tokenClient.obtainToken("system/Patient.rs");
@@ -235,14 +263,14 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve obter tokens diferentes para scopes diferentes")
         void deveObterTokensDiferentesParaScopesDiferentes() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String tokenPatient = tokenClient.obtainToken("system/Patient.rs");
                 final String tokenObservation = tokenClient.obtainToken("system/Observation.rs");
@@ -254,14 +282,14 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve invalidar cache e obter novo token")
         void deveInvalidarCacheEObterNovoToken() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String scope = "system/Patient.rs";
                 final String token1 = tokenClient.obtainToken(scope);
@@ -280,13 +308,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve falhar com client_id não registrado")
         void deveFalharComClientIdNaoRegistrado() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId("cliente-inexistente-xyz")
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 assertThatThrownBy(() -> tokenClient.obtainToken("system/Patient.rs"))
                                 .isInstanceOf(SmartTokenException.class)
@@ -296,13 +324,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve funcionar com múltiplos scopes")
         void deveFuncionarComMultiplosScopes() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs system/Observation.rs");
 
@@ -312,7 +340,7 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("Deve respeitar timeout configurado")
         void deveRespeitarTimeoutConfigurado() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
@@ -320,7 +348,7 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .connectTimeout(Duration.ofSeconds(5))
                                 .requestTimeout(Duration.ofSeconds(30))
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 // Deve completar dentro do timeout
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs");
@@ -331,13 +359,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @DisplayName("Deve descobrir endpoint dinamicamente e obter token (Discovery)")
         void deveObterTokenUsandoDiscovery() throws Exception {
                 // Utiliza fhirBase em vez do tokenEndpoint explícito
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .fhirBase(getSimulatorBaseUrl())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 // O tokenClient deve ter extraído ".well-known/smart-configuration" no build
                 // e conseguido resolver a URL apontando para a própria instância do simulador.
@@ -366,13 +394,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("SA emite access token com kid no header JOSE")
         void saEmiteAccessTokenComKidNoHeader() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs");
                 final String kid = extrairKidDoHeaderJwt(accessToken);
@@ -385,13 +413,13 @@ abstract class SmartTokenClientIntegrationTestBase {
         @Test
         @DisplayName("kid do access token corresponde ao kid publicado no JWKS do SA")
         void kidDoAccessTokenCorrespondeAoJwks() throws Exception {
-                final SmartTokenClient tokenClient = SmartTokenClient.builder()
+                final SmartTokenClient tokenClient = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(getTokenEndpoint())
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(simulatorCert)
-                                .build();
+                                .build());
 
                 final String accessToken = tokenClient.obtainToken("system/Patient.rs");
                 final String kidDoToken = extrairKidDoHeaderJwt(accessToken);
@@ -508,8 +536,12 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .POST(HttpRequest.BodyPublishers.ofString(body))
                                 .build();
 
-                final HttpResponse<String> response = client.send(
-                                request, HttpResponse.BodyHandlers.ofString());
+                final HttpResponse<String> response;
+                // try-with-resources: libera o HttpClient criado por método (#1810).
+                try (client) {
+                        response = client.send(
+                                        request, HttpResponse.BodyHandlers.ofString());
+                }
                 log.debug("Token endpoint (direto): status={} body={}",
                                 response.statusCode(), response.body());
                 return response;
@@ -537,8 +569,12 @@ abstract class SmartTokenClientIntegrationTestBase {
                                 .GET()
                                 .build();
 
-                final HttpResponse<String> response = client.send(
-                                request, HttpResponse.BodyHandlers.ofString());
+                final HttpResponse<String> response;
+                // try-with-resources: libera o HttpClient criado por método (#1810).
+                try (client) {
+                        response = client.send(
+                                        request, HttpResponse.BodyHandlers.ofString());
+                }
                 assertThat(response.statusCode())
                                 .as("JWKS deve estar disponível em " + getCertsEndpoint())
                                 .isEqualTo(200);

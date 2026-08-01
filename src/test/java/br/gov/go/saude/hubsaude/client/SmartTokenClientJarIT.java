@@ -177,11 +177,16 @@ class SmartTokenClientJarIT extends SmartTokenClientIntegrationTestBase {
     }
 
     private void waitForSimulator() throws Exception {
-        final HttpClient client = HttpClient.newBuilder()
+        // try-with-resources: libera o HttpClient usado no polling (#1810).
+        try (HttpClient client = HttpClient.newBuilder()
                 .sslContext(TestSslContextFactory.buildTrustAllSslContext(SslContextFactory.DEFAULT_TLS_PROTOCOL))
                 .connectTimeout(Duration.ofSeconds(5))
-                .build();
+                .build()) {
+            waitForSimulator(client);
+        }
+    }
 
+    private void waitForSimulator(final HttpClient client) throws Exception {
         final String healthUrl = baseUrl + "/.well-known/smart-configuration";
         final int maxAttempts = 60;
         final int delayMs = 1000;

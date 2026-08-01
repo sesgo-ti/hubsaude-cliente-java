@@ -38,8 +38,9 @@ import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-
 import javax.net.ssl.SSLContext;
 
 import org.bouncycastle.asn1.x500.X500Name;
@@ -50,11 +51,11 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import com.sun.net.httpserver.HttpServer;
 
 /**
@@ -78,6 +79,9 @@ class SmartTokenClientBuilderTest {
     private static Path certFile;
     private static KeyPair keyPair;
 
+    /** Clientes criados pelo teste corrente, fechados no {@code @AfterEach} (#1810). */
+    private final List<SmartTokenClient> clientesAbertos = new ArrayList<>();
+
     @BeforeAll
     static void setUp() throws Exception {
         Security.addProvider(new BouncyCastleProvider());
@@ -95,6 +99,24 @@ class SmartTokenClientBuilderTest {
         certFile = tempDir.resolve("test-cert.pem");
         final String certPem = generateSelfSignedCertPem(keyPair);
         Files.writeString(certFile, certPem, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Registra o cliente para fechamento automático ao fim do teste,
+     * liberando o {@code HttpClient} interno (threads e conexões).
+     *
+     * @param client cliente recém-criado
+     * @return o próprio cliente, para uso fluente
+     */
+    private SmartTokenClient registrar(final SmartTokenClient client) {
+        clientesAbertos.add(client);
+        return client;
+    }
+
+    @AfterEach
+    void fecharClientes() {
+        clientesAbertos.forEach(SmartTokenClient::close);
+        clientesAbertos.clear();
     }
 
     // ==================== Validações obrigatórias ====================
@@ -165,12 +187,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve construir cliente com privateKeyPem e certificado")
     void deveConstruirComPrivateKeyPem() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
         assertThat(client.buildClientAssertion()).isNotBlank();
@@ -179,11 +201,11 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve construir cliente com privateKeyPem sem certificado")
     void deveConstruirComPrivateKeyPemSemCertificado() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
         assertThat(client.buildClientAssertion()).isNotBlank();
@@ -196,11 +218,11 @@ class SmartTokenClientBuilderTest {
     void deveConstruirComSigningStrategy() throws Exception {
         final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(keyPair.getPrivate());
 
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .signingStrategy(strategy)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
         assertThat(client.buildClientAssertion()).isNotBlank();
@@ -211,12 +233,12 @@ class SmartTokenClientBuilderTest {
     void deveConstruirComSigningStrategyECertificado() throws Exception {
         final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(keyPair.getPrivate());
 
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .signingStrategy(strategy)
                 .certificatePem(certFile)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -226,12 +248,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar timeout de conexão customizado")
     void deveAplicarConnectTimeout() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .connectTimeout(Duration.ofSeconds(15))
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -239,12 +261,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar timeout de requisição customizado")
     void deveAplicarRequestTimeout() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .requestTimeout(Duration.ofSeconds(60))
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -252,12 +274,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar TTL do assertion customizado")
     void deveAplicarAssertionTtl() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .assertionTtlSeconds(180)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -265,12 +287,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar maxRetries customizado")
     void deveAplicarMaxRetries() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .maxRetries(5)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -280,12 +302,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve desabilitar cache de tokens")
     void deveDesabilitarCache() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .enableTokenCache(false)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -293,13 +315,13 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar margem de cache customizada")
     void deveAplicarMargemDeCache() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .enableTokenCache(true)
                 .tokenCacheMarginSeconds(60)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -309,13 +331,13 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar protocolo TLS customizado")
     void deveAplicarTlsProtocol() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
                 .tlsProtocol("TLSv1.2")
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -326,12 +348,12 @@ class SmartTokenClientBuilderTest {
         final SSLContext trustAll = TestSslContextFactory.buildTrustAllSslContext(
                 SslContextFactory.DEFAULT_TLS_PROTOCOL);
 
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .sslContext(trustAll)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -339,12 +361,12 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve aplicar serverTrustAnchor")
     void deveAplicarServerTrustAnchor() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .serverTrustAnchor(certFile)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -354,7 +376,7 @@ class SmartTokenClientBuilderTest {
     @Test
     @DisplayName("Deve construir cliente com todos os parâmetros")
     void deveConstruirComTodosOsParametros() throws Exception {
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
@@ -366,7 +388,7 @@ class SmartTokenClientBuilderTest {
                 .enableTokenCache(true)
                 .tokenCacheMarginSeconds(45)
                 .maxRetries(4)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
         assertThat(client.buildClientAssertion()).isNotBlank().contains(".");
@@ -470,11 +492,11 @@ class SmartTokenClientBuilderTest {
         try {
             final String baseUrl = "http://localhost:" + server.getAddress().getPort();
 
-            final SmartTokenClient client = SmartTokenClient.builder()
+            final SmartTokenClient client = registrar(SmartTokenClient.builder()
                     .fhirBase(baseUrl)
                     .clientId(CLIENT_ID)
                     .privateKeyPem(keyFile)
-                    .build();
+                    .build());
 
             assertThat(client).isNotNull();
         } finally {
@@ -561,13 +583,13 @@ class SmartTokenClientBuilderTest {
         ks.setKeyEntry("client", keyPair.getPrivate(), "changeit".toCharArray(),
                 new java.security.cert.Certificate[]{cert});
 
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .certificatePem(certFile)
                 .clientKeyStore(ks, "client", "changeit".toCharArray())
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
     }
@@ -596,14 +618,14 @@ class SmartTokenClientBuilderTest {
         final char[] senhaChave = "senha-nao-usada".toCharArray();
         final char[] senhaKeyStore = "changeit".toCharArray();
 
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .privateKeyPem(keyFile)
                 .privateKeyPassword(senhaChave)
                 .certificatePem(certFile)
                 .clientKeyStore(ks, "client", senhaKeyStore)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
         assertThat(senhaChave).containsOnly('\0');
@@ -638,12 +660,12 @@ class SmartTokenClientBuilderTest {
         assertThat(pin).containsExactly("changeit".toCharArray());
 
         // O mesmo PIN pode ser reutilizado para mTLS via clientKeyStore
-        final SmartTokenClient client = SmartTokenClient.builder()
+        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                 .tokenEndpoint(TOKEN_ENDPOINT)
                 .clientId(CLIENT_ID)
                 .signingStrategy(strategy)
                 .clientKeyStore(ks, "client", pin)
-                .build();
+                .build());
 
         assertThat(client).isNotNull();
         // build() consome (zera) o PIN ao final — semântica documentada

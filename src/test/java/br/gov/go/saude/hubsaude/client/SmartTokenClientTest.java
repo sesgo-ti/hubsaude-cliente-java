@@ -34,13 +34,13 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
-
+import java.util.ArrayList;
+import java.util.List;
 import javax.net.ssl.SSLContext;
-
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 
@@ -62,6 +62,9 @@ class SmartTokenClientTest {
         private static RSAPublicKey publicKey;
         private static PrivateKey privateKey;
         private static X509Certificate clientCertificate;
+
+        /** Clientes criados pelo teste corrente, fechados no {@code @AfterEach} (#1810). */
+        private final List<SmartTokenClient> clientesAbertos = new ArrayList<>();
 
         @BeforeAll
         static void gerarParChaves(@TempDir final Path tempDir) throws Exception {
@@ -85,9 +88,28 @@ class SmartTokenClientTest {
                 clientCertificate = SslContextFactory.validateCertificate(certFile);
         }
 
+        /**
+         * Registra o cliente para fechamento automático ao fim do teste,
+         * liberando o {@code HttpClient} interno (threads e conexões).
+         *
+         * @param client cliente recém-criado
+         * @return o próprio cliente, para uso fluente
+         */
+        private SmartTokenClient registrar(final SmartTokenClient client) {
+                clientesAbertos.add(client);
+                return client;
+        }
+
+        @AfterEach
+        void fecharClientes() {
+                clientesAbertos.forEach(SmartTokenClient::close);
+                clientesAbertos.clear();
+        }
+
         @Test
         void deveConstruirClientAssertionComCamposCorretos() throws Exception {
-                final SmartTokenClient client = new SmartTokenClient(TOKEN_ENDPOINT, CLIENT_ID, keyFile, certFile);
+                final SmartTokenClient client = registrar(
+                                new SmartTokenClient(TOKEN_ENDPOINT, CLIENT_ID, keyFile, certFile));
 
                 final String assertion = client.buildClientAssertion();
 
@@ -113,12 +135,12 @@ class SmartTokenClientTest {
 
         @Test
         void deveConstruirClienteComCertificadoServidorCustomizado() throws Exception {
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT,
                                 CLIENT_ID,
                                 keyFile,
                                 certFile,
-                                certFile);
+                                certFile));
 
                 final String assertion = client.buildClientAssertion();
                 assertThat(assertion).isNotBlank();
@@ -138,19 +160,19 @@ class SmartTokenClientTest {
 
         @Test
         void devePermitirConstrutorComObjetos() throws Exception {
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT,
                                 CLIENT_ID,
                                 privateKey,
                                 clientCertificate,
-                                SSLContext.getDefault());
+                                SSLContext.getDefault()));
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
 
         @Test
         void deveConstruirClienteViaBuilder() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
@@ -158,7 +180,7 @@ class SmartTokenClientTest {
                                 .connectTimeout(Duration.ofSeconds(5))
                                 .requestTimeout(Duration.ofSeconds(15))
                                 .assertionTtlSeconds(120)
-                                .build();
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 assertThat(assertion).isNotBlank();
@@ -211,7 +233,7 @@ class SmartTokenClientTest {
 
         @Test
         void deveConstruirClienteViaBuilderComParametrosEnterprise() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
@@ -222,7 +244,7 @@ class SmartTokenClientTest {
                                 .enableTokenCache(true)
                                 .tokenCacheMarginSeconds(60)
                                 .maxRetries(5)
-                                .build();
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 assertThat(assertion).isNotBlank();
@@ -354,14 +376,14 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false)
                                         .maxRetries(1)
-                                        .build();
+                                        .build());
 
                         assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
                                         .isInstanceOf(SmartTokenException.class)
@@ -373,13 +395,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveInvalidarCacheDoCliente() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
-                                .build();
+                                .build());
 
                 // Não deve lançar exceção
                 assertThatNoException().isThrownBy(() -> {
@@ -390,13 +412,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveDesabilitarCacheDeTokens() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(false)
-                                .build();
+                                .build());
 
                 // Cliente criado sem exceção
                 assertThat(client.buildClientAssertion()).isNotBlank();
@@ -404,13 +426,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveConstruirBuilderComServerCertificatePem() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .serverTrustAnchor(certFile) // usa o mesmo cert como trust anchor
-                                .build();
+                                .build());
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
@@ -444,13 +466,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveConstruirBuilderComTlsProtocolCustomizado() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .tlsProtocol("TLSv1.2") // protocolo válido alternativo
-                                .build();
+                                .build());
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
@@ -469,14 +491,14 @@ class SmartTokenClientTest {
 
         @Test
         void deveFalharObtainTokenComUrlInvalidaAposRetry() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint("https://host-inexistente.local:9999/auth/token")
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .connectTimeout(Duration.ofMillis(500))
                                 .maxRetries(1)
-                                .build();
+                                .build());
 
                 assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
                                 .isInstanceOf(SmartTokenException.class)
@@ -503,13 +525,13 @@ class SmartTokenClientTest {
                 acceptor.start();
                 try {
                         final int port = server.getLocalPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .maxRetries(3)
-                                        .build();
+                                        .build());
 
                         // Captura os delays em vez de dormir de fato (teste determinístico)
                         final java.util.List<Long> delays = java.util.Collections.synchronizedList(
@@ -560,14 +582,14 @@ class SmartTokenClientTest {
                 server.start();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .requestTimeout(Duration.ofMillis(250))
                                         .maxRetries(2)
-                                        .build();
+                                        .build());
 
                         final java.util.List<Long> delays = java.util.Collections.synchronizedList(
                                         new java.util.ArrayList<>());
@@ -602,12 +624,12 @@ class SmartTokenClientTest {
                 server.start();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .build();
+                                        .build());
 
                         final java.util.List<Long> delays = java.util.Collections.synchronizedList(
                                         new java.util.ArrayList<>());
@@ -644,12 +666,12 @@ class SmartTokenClientTest {
                 server.start();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .build();
+                                        .build());
 
                         final java.util.List<Long> delays = java.util.Collections.synchronizedList(
                                         new java.util.ArrayList<>());
@@ -685,12 +707,12 @@ class SmartTokenClientTest {
                 server.start();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .build();
+                                        .build());
 
                         final java.util.List<Long> delays = java.util.Collections.synchronizedList(
                                         new java.util.ArrayList<>());
@@ -724,13 +746,13 @@ class SmartTokenClientTest {
                 server.start();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .maxRetries(3)
-                                        .build();
+                                        .build());
 
                         final java.util.List<Long> delays = java.util.Collections.synchronizedList(
                                         new java.util.ArrayList<>());
@@ -905,12 +927,12 @@ class SmartTokenClientTest {
 
         @Test
         void deveConstruirClientAssertionConcorrentemente() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 final int numThreads = 10;
                 final java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors
@@ -945,13 +967,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveInvalidarCacheConcorrentemente() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .enableTokenCache(true)
-                                .build();
+                                .build());
 
                 final int numThreads = 20;
                 final java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors
@@ -985,12 +1007,12 @@ class SmartTokenClientTest {
 
         @Test
         void scopeLocksDevemSerLimitadosEDeterministicos() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 // Simula scopes dinâmicos (ex.: por paciente): a quantidade de
                 // locks distintos deve permanecer limitada (issue #731).
@@ -1010,12 +1032,12 @@ class SmartTokenClientTest {
 
         @Test
         void scopeLockDeveGarantirSingleFlightPorScope() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 final String scope = "system/Patient.rs";
                 final int numThreads = 8;
@@ -1161,10 +1183,10 @@ class SmartTokenClientTest {
         void deveUsarAssertionTtlSecondsQuandoValorPositivo() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 120, 3),
-                                true, 30);
+                                true, 30));
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -1181,10 +1203,10 @@ class SmartTokenClientTest {
         void deveUsarAssertionTtlPadraoQuandoValorZero() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 0, 3),
-                                true, 30);
+                                true, 30));
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -1201,10 +1223,10 @@ class SmartTokenClientTest {
         void deveUsarAssertionTtlPadraoQuandoValorNegativo() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), -10, 3),
-                                true, 30);
+                                true, 30));
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -1221,10 +1243,10 @@ class SmartTokenClientTest {
         void deveUsarTokenCacheMarginSecondsQuandoValorPositivo() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 45);
+                                true, 45));
 
                 assertThat(client).isNotNull();
         }
@@ -1233,10 +1255,10 @@ class SmartTokenClientTest {
         void deveUsarTokenCacheMarginPadraoQuandoValorZero() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 0);
+                                true, 0));
 
                 assertThat(client).isNotNull();
         }
@@ -1245,10 +1267,10 @@ class SmartTokenClientTest {
         void deveUsarTokenCacheMarginPadraoQuandoValorNegativo() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, -15);
+                                true, -15));
 
                 assertThat(client).isNotNull();
         }
@@ -1257,10 +1279,10 @@ class SmartTokenClientTest {
         void deveUsarMaxRetriesQuandoValorPositivo() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 5),
-                                true, 30);
+                                true, 30));
 
                 assertThat(client).isNotNull();
         }
@@ -1269,10 +1291,10 @@ class SmartTokenClientTest {
         void deveUsarMaxRetriesPadraoQuandoValorZero() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 0),
-                                true, 30);
+                                true, 30));
 
                 assertThat(client).isNotNull();
         }
@@ -1281,10 +1303,10 @@ class SmartTokenClientTest {
         void deveUsarMaxRetriesPadraoQuandoValorNegativo() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, -2),
-                                true, 30);
+                                true, 30));
 
                 assertThat(client).isNotNull();
         }
@@ -1293,10 +1315,10 @@ class SmartTokenClientTest {
         void deveAceitarEnableTokenCacheTrue() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30);
+                                true, 30));
 
                 assertThat(client).isNotNull();
         }
@@ -1305,10 +1327,10 @@ class SmartTokenClientTest {
         void deveAceitarEnableTokenCacheFalse() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                false, 30);
+                                false, 30));
 
                 assertThat(client).isNotNull();
         }
@@ -1342,13 +1364,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false)
-                                        .build();
+                                        .build());
 
                         final String token = client.obtainToken(null);
 
@@ -1386,13 +1408,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false)
-                                        .build();
+                                        .build());
 
                         // Scope com espaços antes e depois
                         final String token = client.obtainToken("  system/Patient.rs  ");
@@ -1425,14 +1447,14 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
                                         .tokenCacheMarginSeconds(30)
-                                        .build();
+                                        .build());
 
                         // Primeira chamada - deve fazer request
                         final String token1 = client.obtainToken("system/Patient.rs");
@@ -1469,14 +1491,14 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
                                         .tokenCacheMarginSeconds(2) // Margem maior que expires_in
-                                        .build();
+                                        .build());
 
                         // Primeira chamada
                         final String token1 = client.obtainToken("system/Patient.rs");
@@ -1512,13 +1534,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false) // Cache desabilitado
-                                        .build();
+                                        .build());
 
                         // Primeira chamada
                         final String token1 = client.obtainToken("system/Patient.rs");
@@ -1558,13 +1580,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         // Scope A - primeira chamada
                         final String tokenA1 = client.obtainToken("system/Patient.rs");
@@ -1608,13 +1630,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         // Scope null
                         final String token1 = client.obtainToken(null);
@@ -1662,13 +1684,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         final int numThreads = 8;
                         final var executor = java.util.concurrent.Executors.newFixedThreadPool(numThreads);
@@ -1720,12 +1742,12 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .build();
+                                        .build());
 
                         final SmartTokenClient.TokenResponse response =
                                         client.obtainTokenResponse("system/Patient.rs");
@@ -1765,12 +1787,12 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .build();
+                                        .build());
 
                         client.obtainToken("system/Patient.rs");
 
@@ -1789,12 +1811,12 @@ class SmartTokenClientTest {
 
         @Test
         void deveGerarJtiUnicoPorClientAssertion() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 final Claims claims1 = Jwts.parser().verifyWith(publicKey).build()
                                 .parseSignedClaims(client.buildClientAssertion()).getPayload();
@@ -1826,13 +1848,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         client.obtainToken("system/Patient.rs");
                         client.obtainToken("system/Observation.rs");
@@ -1870,14 +1892,14 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
                                         .tokenCacheMarginSeconds(-5)
-                                        .build();
+                                        .build());
 
                         client.obtainToken("system/Patient.rs");
                         client.obtainToken("system/Patient.rs");
@@ -1893,21 +1915,21 @@ class SmartTokenClientTest {
 
         @Test
         void deveExporJwtAlgorithmConfigurado() throws Exception {
-                final SmartTokenClient padrao = SmartTokenClient.builder()
+                final SmartTokenClient padrao = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
                 assertThat(padrao.getJwtAlgorithm()).isEqualTo("RS384");
 
-                final SmartTokenClient ps256 = SmartTokenClient.builder()
+                final SmartTokenClient ps256 = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .jwtAlgorithm("PS256")
-                                .build();
+                                .build());
                 assertThat(ps256.getJwtAlgorithm()).isEqualTo("PS256");
         }
 
@@ -1928,12 +1950,12 @@ class SmartTokenClientTest {
                 });
 
                 try {
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .fhirBase("http://localhost:" + port)
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
-                                        .build();
+                                        .build());
 
                         // RF-09.5: getter expõe o endpoint resolvido via discovery
                         assertThat(client.getTokenEndpoint()).isEqualTo(tokenEndpoint);
@@ -1945,12 +1967,12 @@ class SmartTokenClientTest {
         @Test
         void deveEscaparCaracteresEspeciaisDoClientIdNoAssertion() throws Exception {
                 final String clientIdEspecial = "cli\"ent\\com aspas";
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(clientIdEspecial)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 // Se o escaping JSON estiver incorreto, o parse da assertion falha
                 final Claims claims = Jwts.parser().verifyWith(publicKey).build()
@@ -1982,13 +2004,13 @@ class SmartTokenClientTest {
                 try {
                         final int port = server.getAddress().getPort();
                         final java.util.List<Long> delays = new java.util.ArrayList<>();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("https://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .maxRetries(3)
-                                        .build();
+                                        .build());
                         client.setSleeper(delays::add);
 
                         // RF-08: falha de confiança TLS não é transitória -> sem retry
@@ -2021,13 +2043,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         // Obtém token com scope vazio (normalizado de null)
                         client.obtainToken(null);
@@ -2067,13 +2089,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         // Obtém token com scope normal
                         client.obtainToken("system/Patient.rs");
@@ -2114,13 +2136,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(true)
-                                        .build();
+                                        .build());
 
                         // Obtém tokens para dois scopes diferentes
                         final String tokenA = client.obtainToken("system/Patient.rs");
@@ -2178,10 +2200,10 @@ class SmartTokenClientTest {
 
                 final SigningStrategy strategy = SigningStrategyFactory
                                 .fromPrivateKeyForJwt(ecPair.getPrivate(), "ES256");
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, null, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "ES256");
+                                true, 30, "ES256"));
 
                 final String assertion = client.buildClientAssertion();
 
@@ -2200,10 +2222,10 @@ class SmartTokenClientTest {
         void deveAssinarClientAssertionComPs256ValidadoPorJjwt() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory
                                 .fromPrivateKeyForJwt(privateKey, "PS256");
-                final SmartTokenClient client = new SmartTokenClient(
+                final SmartTokenClient client = registrar(new SmartTokenClient(
                                 TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
                                 new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "PS256");
+                                true, 30, "PS256"));
 
                 final String assertion = client.buildClientAssertion();
 
@@ -2224,13 +2246,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveIncluirKidNoHeaderQuandoConfigurado() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .keyId("minha-chave-1")
-                                .build();
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final String headerJson = new String(
@@ -2251,12 +2273,12 @@ class SmartTokenClientTest {
 
         @Test
         void naoDeveIncluirKidNoHeaderPorPadrao() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final String headerJson = new String(
@@ -2272,12 +2294,12 @@ class SmartTokenClientTest {
         void deveUsarRs384ComoAlgoritmoPadrao() throws Exception {
                 // Concern client-assertion-contexto-ig.md §3.2: alg DEVE ser
                 // RS384 ou ES384; o padrão do SDK é RS384 (issue #361).
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 assertThat(client.getJwtAlgorithm()).isEqualTo("RS384");
 
@@ -2301,13 +2323,13 @@ class SmartTokenClientTest {
         void deveIncluirHubCtxQuandoConfigurado() throws Exception {
                 // Concern client-assertion-contexto-ig.md §3.4: o claim
                 // hub_ctx declara o IG e a versão pretendidos.
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
                                 .hubContext("hemograma", "0.0.1")
-                                .build();
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final String payloadJson = new String(
@@ -2327,12 +2349,12 @@ class SmartTokenClientTest {
 
         @Test
         void naoDeveIncluirHubCtxPorPadrao() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final String payloadJson = new String(
@@ -2458,24 +2480,24 @@ class SmartTokenClientTest {
 
         @Test
         void devePermitirHttpParaLocalhost() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint("http://localhost:8080/auth/token")
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 assertThat(client.getTokenEndpoint()).isEqualTo("http://localhost:8080/auth/token");
         }
 
         @Test
         void closeDeveSerIdempotente() throws Exception {
-                final SmartTokenClient client = SmartTokenClient.builder()
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                 .tokenEndpoint(TOKEN_ENDPOINT)
                                 .clientId(CLIENT_ID)
                                 .privateKeyPem(keyFile)
                                 .certificatePem(certFile)
-                                .build();
+                                .build());
 
                 client.close();
                 // segunda chamada não deve lançar exceção
@@ -2504,13 +2526,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false)
-                                        .build();
+                                        .build());
 
                         client.obtainToken("system/Patient.rs");
 
@@ -2542,13 +2564,13 @@ class SmartTokenClientTest {
 
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false)
-                                        .build();
+                                        .build());
 
                         client.obtainToken("system/Patient.rs");
                         client.obtainToken("system/Patient.rs");
@@ -2579,14 +2601,14 @@ class SmartTokenClientTest {
                 final var appender = attachListAppender();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .enableTokenCache(false)
                                         .maxRetries(1)
-                                        .build();
+                                        .build());
 
                         assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
                                         .isInstanceOf(SmartTokenException.class)
@@ -2646,14 +2668,14 @@ class SmartTokenClientTest {
                 final var appender = attachListAppender();
                 try {
                         final int port = server.getAddress().getPort();
-                        final SmartTokenClient client = SmartTokenClient.builder()
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
                                         .tokenEndpoint("http://localhost:" + port + "/auth/token")
                                         .clientId(CLIENT_ID)
                                         .privateKeyPem(keyFile)
                                         .certificatePem(certFile)
                                         .requestTimeout(Duration.ofMillis(250))
                                         .maxRetries(2)
-                                        .build();
+                                        .build());
                         client.setSleeper(millis -> {
                         });
 
