@@ -201,7 +201,7 @@ class SslContextFactoryTest {
                 .hasMessageContaining("não contém certificado X.509");
     }
 
-    // ==================== validateCertificate(Path, Object) ====================
+    // ==================== validateCertificate(Path, PEMParser): tipos inválidos ====================
 
     @Test
     @DisplayName("validateCertificate(Path, Object): Deve validar X509CertificateHolder válido")
@@ -219,38 +219,19 @@ class SslContextFactoryTest {
     }
 
     @Test
-    @DisplayName("validateCertificate(Path, Object): Deve lançar exceção para objeto não-certificado")
-    void deveLancarExcecaoParaObjetoNaoCertificado() {
-        final Object objetoInvalido = "não é um certificado";
+    @DisplayName("validateCertificate(Path, PEMParser): Deve rejeitar chave pública sem certificado")
+    void deveLancarExcecaoParaObjetoNaoCertificado() throws IOException {
+        final StringWriter pem = new StringWriter();
+        try (JcaPEMWriter writer = new JcaPEMWriter(pem)) {
+            writer.writeObject(keyPair.getPublic());
+        }
+        final PEMParser parser = new PEMParser(new StringReader(pem.toString()));
         final Path dummyPath = tempDir.resolve("objeto.pem");
 
-        assertThatThrownBy(() -> {
-            if (objetoInvalido instanceof X509CertificateHolder holder) {
-                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-                SslContextFactory.validateCertificate(dummyPath, cert);
-                return;
-            }
-            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + dummyPath);
-        })
+        assertThatThrownBy(() -> SslContextFactory.validateCertificate(dummyPath, parser))
                 .isInstanceOf(SmartTokenException.class)
-                .hasMessageContaining("não contém certificado X.509");
-    }
-
-    @Test
-    @DisplayName("validateCertificate(Path, Object): Deve lançar exceção para objeto null")
-    void deveLancarExcecaoParaObjetoNull() {
-        final Path dummyPath = tempDir.resolve("null.pem");
-
-        assertThatThrownBy(() -> {
-            if ((Object) null instanceof X509CertificateHolder holder) {
-                final X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
-                SslContextFactory.validateCertificate(dummyPath, cert);
-                return;
-            }
-            throw new SmartTokenException("Arquivo PEM não contém certificado X.509: " + dummyPath);
-        })
-                .isInstanceOf(SmartTokenException.class)
-                .hasMessageContaining("não contém certificado X.509");
+                .hasMessageContaining("não contém certificado X.509")
+                .hasMessageContaining(dummyPath.toString());
     }
 
     // ==================== validateCertificate(Path, X509CertificateHolder) ====================
@@ -846,4 +827,3 @@ class SslContextFactoryTest {
         return builder.build(signer);
     }
 }
-
