@@ -20,11 +20,13 @@
 
 package br.gov.go.saude.hubsaude.client;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.jspecify.annotations.Nullable;
@@ -35,8 +37,8 @@ import br.gov.go.saude.hubsaude.client.SmartTokenClient.TokenResponse;
 
 /**
  * Cache de tokens por scope com lock striping para single-flight de
- * renovação: no máximo uma requisição HTTP em voo por scope, com memória
- * O(1) independentemente da quantidade de scopes distintos (issue #731).
+ * renovação: no máximo uma requisição HTTP em voo por scope e uma janela LRU
+ * limitada de tokens (issues #731 e #1804).
  *
  * <p>
  * Colaborador interno do {@link SmartTokenClient} (issue #1032): concentra a
@@ -75,8 +77,11 @@ final class TokenCacheStrategy {
     /** Identificador do cliente, usado nas mensagens de log. */
     private final String clientId;
 
-    /** Cache de tokens por scope. */
-    private final Map<String, CachedToken> tokenCache = new ConcurrentHashMap<>();
+    /** Fonte de tempo, substituível para testes determinísticos. */
+    private final Clock clock;
+
+    /** Cache LRU de tokens por scope, sincronizado e com teto exato. */
+    private final Map<String, CachedToken> tokenCache;
 
     /**
      * Locks (lock striping) para evitar múltiplas renovações simultâneas
@@ -102,9 +107,48 @@ final class TokenCacheStrategy {
      * @param clientId      identificador do cliente (para logs)
      */
     TokenCacheStrategy(final boolean enabled, final int marginSeconds, final String clientId) {
+        this(enabled, marginSeconds, clientId, SmartTokenClient.DEFAULT_TOKEN_CACHE_MAX_ENTRIES);
+    }
+
+    /**
+     * Cria a estratégia com capacidade configurável.
+     *
+     * @param enabled       se {@code true}, tokens são cacheados por scope
+     * @param marginSeconds margem em segundos antes da expiração
+     * @param clientId      identificador do cliente
+     * @param maxEntries    quantidade máxima de scopes retidos
+     */
+    TokenCacheStrategy(
+            final boolean enabled,
+            final int marginSeconds,
+            final String clientId,
+            final int maxEntries) {
+        this(enabled, marginSeconds, clientId, maxEntries, Clock.systemUTC());
+    }
+
+    /**
+     * Cria a estratégia com capacidade e relógio configuráveis.
+     *
+     * @param enabled       se {@code true}, tokens são cacheados por scope
+     * @param marginSeconds margem em segundos antes da expiração
+     * @param clientId      identificador do cliente
+     * @param maxEntries    quantidade máxima de scopes retidos
+     * @param clock         fonte de tempo
+     */
+    TokenCacheStrategy(
+            final boolean enabled,
+            final int marginSeconds,
+            final String clientId,
+            final int maxEntries,
+            final Clock clock) {
+        if (maxEntries <= 0) {
+            throw new IllegalArgumentException("maxEntries deve ser positivo: " + maxEntries);
+        }
         this.enabled = enabled;
         this.marginSeconds = marginSeconds;
         this.clientId = Objects.requireNonNull(clientId, "clientId não pode ser null");
+        this.clock = Objects.requireNonNull(clock, "clock não pode ser null");
+        this.tokenCache = Collections.synchronizedMap(new LruTokenCache(maxEntries));
         this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
         for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
             this.scopeLocks[i] = new ReentrantLock();
@@ -123,10 +167,13 @@ final class TokenCacheStrategy {
             return null;
         }
         final CachedToken cached = tokenCache.get(normalizedScope);
-        if (cached != null && cached.isValid(marginSeconds)) {
+        if (cached != null && cached.isValid(marginSeconds, clock.instant())) {
             LOG.debug("Retornando token em cache para clientId={} scope={}",
                     clientId, normalizedScope);
             return fromCache(cached);
+        }
+        if (cached != null) {
+            tokenCache.remove(normalizedScope, cached);
         }
         return null;
     }
@@ -155,7 +202,7 @@ final class TokenCacheStrategy {
         if (!enabled) {
             return;
         }
-        final Instant expiresAt = Instant.now().plusSeconds(tokenResponse.expiresIn());
+        final Instant expiresAt = clock.instant().plusSeconds(tokenResponse.expiresIn());
         tokenCache.put(normalizedScope, new CachedToken(tokenResponse.accessToken(), expiresAt));
         LOG.debug("Token cacheado para clientId={} scope={} expiresIn={}s",
                 clientId, normalizedScope, tokenResponse.expiresIn());
@@ -178,6 +225,15 @@ final class TokenCacheStrategy {
     }
 
     /**
+     * Retorna a quantidade de entradas retidas para testes do teto.
+     *
+     * @return tamanho atual do cache
+     */
+    int size() {
+        return tokenCache.size();
+    }
+
+    /**
      * Reconstrói uma {@link TokenResponse} a partir de um token em cache.
      * O corpo JSON original não é preservado em cache, portanto
      * {@code rawJson} é {@code null}.
@@ -185,8 +241,8 @@ final class TokenCacheStrategy {
      * @param cached token em cache
      * @return resposta reconstruída, sem o JSON cru
      */
-    private static TokenResponse fromCache(final CachedToken cached) {
-        final long remaining = Duration.between(Instant.now(), cached.expiresAt()).getSeconds();
+    private TokenResponse fromCache(final CachedToken cached) {
+        final long remaining = Duration.between(clock.instant(), cached.expiresAt()).getSeconds();
         return new TokenResponse(cached.accessToken(), (int) Math.max(0, remaining), null);
     }
 
@@ -198,13 +254,24 @@ final class TokenCacheStrategy {
      */
     record CachedToken(String accessToken, Instant expiresAt) {
         /**
-         * Verifica se o token ainda é válido considerando a margem.
+         * Verifica a validade usando o relógio do sistema.
          *
          * @param marginSeconds segundos de margem antes da expiração
          * @return true se o token ainda pode ser usado
          */
         boolean isValid(final int marginSeconds) {
-            return Instant.now().plusSeconds(marginSeconds).isBefore(expiresAt);
+            return isValid(marginSeconds, Instant.now());
+        }
+
+        /**
+         * Verifica se o token ainda é válido considerando a margem.
+         *
+         * @param marginSeconds segundos de margem antes da expiração
+         * @param now instante corrente
+         * @return true se o token ainda pode ser usado
+         */
+        boolean isValid(final int marginSeconds, final Instant now) {
+            return now.plusSeconds(marginSeconds).isBefore(expiresAt);
         }
 
         /**
@@ -216,6 +283,25 @@ final class TokenCacheStrategy {
         @Override
         public String toString() {
             return "CachedToken[accessToken=[REDACTED], expiresAt=" + expiresAt + "]";
+        }
+    }
+
+    /** Janela LRU de capacidade fixa. */
+    private static final class LruTokenCache extends LinkedHashMap<String, CachedToken> {
+
+        private static final long serialVersionUID = 1L;
+        private static final float LOAD_FACTOR = 0.75f;
+
+        private final int capacity;
+
+        LruTokenCache(final int capacity) {
+            super((int) (capacity / LOAD_FACTOR) + 1, LOAD_FACTOR, true);
+            this.capacity = capacity;
+        }
+
+        @Override
+        protected boolean removeEldestEntry(final Map.Entry<String, CachedToken> eldest) {
+            return size() > capacity;
         }
     }
 }

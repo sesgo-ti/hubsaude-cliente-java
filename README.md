@@ -139,6 +139,7 @@ var client = SmartTokenClient.builder()
         .assertionTtlSeconds(120)                     // TTL do JWT
         .enableTokenCache(true)
         .tokenCacheMarginSeconds(30)                  // margem de renovação
+        .tokenCacheMaxEntries(1_000)                 // teto LRU por scope
         .maxRetries(3)
         .jwtAlgorithm("RS384")                        // padrão: RS384 (HubSaúde aceita RS384/ES384)
         .keyId("minha-chave-2026")                    // kid no header do JWT (opcional)

@@ -38,7 +38,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.net.ssl.SSLContext;
 
@@ -302,6 +304,9 @@ public final class SmartTokenClient implements AutoCloseable {
     /** Margem padrão em segundos para renovar token antes da expiração. */
     public static final int DEFAULT_TOKEN_CACHE_MARGIN_SECONDS = 30;
 
+    /** Quantidade máxima padrão de scopes retidos no cache de tokens. */
+    public static final int DEFAULT_TOKEN_CACHE_MAX_ENTRIES = 1_000;
+
     /** Protocolo TLS padrão. */
     public static final String DEFAULT_TLS_PROTOCOL = SslContextFactory.DEFAULT_TLS_PROTOCOL;
 
@@ -350,6 +355,9 @@ public final class SmartTokenClient implements AutoCloseable {
 
     /** Indica se {@link #close()} já foi invocado (close idempotente). */
     private final AtomicBoolean closed = new AtomicBoolean();
+
+    /** Coordena operações em voo com o fechamento e a limpeza final do cache. */
+    private final ReentrantReadWriteLock lifecycleLock = new ReentrantReadWriteLock(true);
 
     /** Sleeper usado entre tentativas de retry (padrão: {@link Thread#sleep(long)}). */
     private volatile Sleeper sleeper = Thread::sleep;
@@ -508,6 +516,30 @@ public final class SmartTokenClient implements AutoCloseable {
         @Nullable String hubCtxIg,
         @Nullable String hubCtxVersao
     ) {
+        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
+                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds,
+                DEFAULT_TOKEN_CACHE_MAX_ENTRIES, jwtAlgorithm, keyId, hubCtxIg, hubCtxVersao);
+    }
+
+    /**
+     * Construtor interno usado pelo builder para configurar o teto do cache.
+     */
+    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
+    SmartTokenClient(
+        String tokenEndpoint,
+        String clientId,
+        SigningStrategy signingStrategy,
+        @Nullable X509Certificate certificate,
+        SSLContext sslContext,
+        FaultToleranceConfig faultToleranceConfig,
+        boolean enableTokenCache,
+        int tokenCacheMarginSeconds,
+        int tokenCacheMaxEntries,
+        @Nullable String jwtAlgorithm,
+        @Nullable String keyId,
+        @Nullable String hubCtxIg,
+        @Nullable String hubCtxVersao
+    ) {
         this.tokenEndpoint = Objects.requireNonNull(tokenEndpoint, "tokenEndpoint");
         this.clientId = Objects.requireNonNull(clientId, "clientId");
         this.signingStrategy = Objects.requireNonNull(signingStrategy, "signingStrategy");
@@ -527,7 +559,8 @@ public final class SmartTokenClient implements AutoCloseable {
                 tokenCacheMarginSeconds > 0
                         ? tokenCacheMarginSeconds
                         : DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
-                this.clientId);
+                this.clientId,
+                tokenCacheMaxEntries);
         if (certificate != null) {
             SslContextFactory.checkCertificateValidity(certificate,
                     certificate.getSubjectX500Principal().getName());
@@ -729,13 +762,20 @@ public final class SmartTokenClient implements AutoCloseable {
      */
     public TokenResponse obtainTokenResponse(final @Nullable String scope)
             throws IOException, InterruptedException {
-        final String normalizedScope = scope == null ? "" : scope.trim();
+        final Lock operationLock = lifecycleLock.readLock();
+        operationLock.lock();
+        try {
+            ensureOpen();
+            final String normalizedScope = scope == null ? "" : scope.trim();
 
-        final TokenResponse early = tokenCache.cachedResponseIfValid(normalizedScope);
-        if (early != null) {
-            return early;
+            final TokenResponse early = tokenCache.cachedResponseIfValid(normalizedScope);
+            if (early != null) {
+                return early;
+            }
+            return fetchTokenWithRetry(normalizedScope);
+        } finally {
+            operationLock.unlock();
         }
-        return fetchTokenWithRetry(normalizedScope);
     }
 
     /**
@@ -912,10 +952,31 @@ public final class SmartTokenClient implements AutoCloseable {
      */
     @Override
     public void close() {
-        if (closed.compareAndSet(false, true)) {
-            httpClient.close();
-            LOG.debug("SmartTokenClient fechado para clientId={}", clientId);
+        final Lock closeLock = lifecycleLock.writeLock();
+        closeLock.lock();
+        try {
+            if (closed.compareAndSet(false, true)) {
+                try {
+                    httpClient.close();
+                } finally {
+                    tokenCache.invalidateAll();
+                }
+                LOG.debug("SmartTokenClient fechado para clientId={}", clientId);
+            }
+        } finally {
+            closeLock.unlock();
         }
+    }
+
+    private void ensureOpen() {
+        if (closed.get()) {
+            throw new IllegalStateException("SmartTokenClient já foi fechado");
+        }
+    }
+
+    /** Retorna o tamanho do cache para testes determinísticos de lifecycle. */
+    int tokenCacheSize() {
+        return tokenCache.size();
     }
 
     /**

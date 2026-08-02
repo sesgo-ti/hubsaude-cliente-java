@@ -2502,6 +2502,66 @@ class SmartTokenClientTest {
                 client.close();
                 // segunda chamada não deve lançar exceção
                 assertThatNoException().isThrownBy(client::close);
+                assertThatThrownBy(() -> client.obtainToken("system/Patient.rs"))
+                                .isInstanceOf(IllegalStateException.class)
+                                .hasMessageContaining("fechado");
+        }
+
+        @Test
+        void closeEsperaRequestEmVooELimpaTokenArmazenado() throws Exception {
+                final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+                                new java.net.InetSocketAddress(0), 0);
+                final java.util.concurrent.CountDownLatch requestStarted =
+                                new java.util.concurrent.CountDownLatch(1);
+                final java.util.concurrent.CountDownLatch releaseResponse =
+                                new java.util.concurrent.CountDownLatch(1);
+                server.createContext("/auth/token", exchange -> {
+                        requestStarted.countDown();
+                        try {
+                                releaseResponse.await();
+                                final byte[] response = "{\"access_token\":\"token-em-voo\",\"expires_in\":3600}"
+                                                .getBytes(StandardCharsets.UTF_8);
+                                exchange.sendResponseHeaders(200, response.length);
+                                try (var output = exchange.getResponseBody()) {
+                                        output.write(response);
+                                }
+                        } catch (InterruptedException ex) {
+                                Thread.currentThread().interrupt();
+                        }
+                });
+                server.start();
+
+                try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                        final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                        .tokenEndpoint("http://localhost:" + server.getAddress().getPort()
+                                                        + "/auth/token")
+                                        .clientId(CLIENT_ID)
+                                        .privateKeyPem(keyFile)
+                                        .certificatePem(certFile)
+                                        .build());
+                        final java.util.concurrent.Future<String> token =
+                                        executor.submit(() -> client.obtainToken("system/Patient.rs"));
+                        assertThat(requestStarted.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+                        final java.util.concurrent.CountDownLatch closeStarted =
+                                        new java.util.concurrent.CountDownLatch(1);
+                        final java.util.concurrent.Future<?> close = executor.submit(() -> {
+                                closeStarted.countDown();
+                                client.close();
+                        });
+                        assertThat(closeStarted.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                        assertThatThrownBy(() -> close.get(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+                                        .isInstanceOf(java.util.concurrent.TimeoutException.class);
+
+                        releaseResponse.countDown();
+                        assertThat(token.get(10, java.util.concurrent.TimeUnit.SECONDS))
+                                        .isEqualTo("token-em-voo");
+                        close.get(10, java.util.concurrent.TimeUnit.SECONDS);
+                        assertThat(client.tokenCacheSize()).isZero();
+                } finally {
+                        releaseResponse.countDown();
+                        server.stop(0);
+                }
         }
 
         // ==================== Testes de traceparent (W3C Trace Context) ====================

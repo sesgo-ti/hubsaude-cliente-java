@@ -412,6 +412,7 @@ class SmartTokenClientBuilderTest {
         assertThat(builder.assertionTtlSeconds(300)).isSameAs(builder);
         assertThat(builder.enableTokenCache(true)).isSameAs(builder);
         assertThat(builder.tokenCacheMarginSeconds(30)).isSameAs(builder);
+        assertThat(builder.tokenCacheMaxEntries(1_000)).isSameAs(builder);
         assertThat(builder.maxRetries(3)).isSameAs(builder);
         assertThat(builder.serverTrustAnchor(certFile)).isSameAs(builder);
     }

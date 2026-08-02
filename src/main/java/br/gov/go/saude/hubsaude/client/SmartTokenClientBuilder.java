@@ -87,12 +87,14 @@ public final class SmartTokenClientBuilder {
         SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS,
         SmartTokenClient.DEFAULT_MAX_RETRIES
     );
-    // Os campos enableTokenCache e tokenCacheMarginSeconds podem ser finais, mas são mutáveis via métodos do builder.
+    // As opções do cache são mutáveis pelos métodos fluentes do builder.
     // Para evitar warnings, suprimimos a sugestão de torná-los finais.
     @SuppressWarnings({"PMD.ImmutableField", "java:S1104"})
     private boolean enableTokenCache = true;
     @SuppressWarnings({"PMD.ImmutableField", "java:S1104"})
     private int tokenCacheMarginSeconds = SmartTokenClient.DEFAULT_TOKEN_CACHE_MARGIN_SECONDS;
+    @SuppressWarnings({"PMD.ImmutableField", "java:S1104"})
+    private int tokenCacheMaxEntries = SmartTokenClient.DEFAULT_TOKEN_CACHE_MAX_ENTRIES;
 
     SmartTokenClientBuilder() {
         // Construtor package-private; instanciação via SmartTokenClient.builder().
@@ -473,6 +475,17 @@ public final class SmartTokenClientBuilder {
     }
 
     /**
+     * Define a quantidade máxima de scopes retidos no cache de tokens.
+     *
+     * @param tokenCacheMaxEntries teto positivo (padrão: 1.000)
+     * @return este builder
+     */
+    public SmartTokenClientBuilder tokenCacheMaxEntries(final int tokenCacheMaxEntries) {
+        this.tokenCacheMaxEntries = tokenCacheMaxEntries;
+        return this;
+    }
+
+    /**
      * Constrói a instância de {@link SmartTokenClient}.
      *
      * <p>
@@ -530,6 +543,7 @@ public final class SmartTokenClientBuilder {
                 faultToleranceConfig,
                 enableTokenCache,
                 tokenCacheMarginSeconds,
+                tokenCacheMaxEntries,
                 signing.getJwtAlgorithm(),
                 signing.getKeyId(),
                 hubCtxIg,

@@ -21,6 +21,14 @@
 package br.gov.go.saude.hubsaude.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -97,6 +105,75 @@ class TokenCacheStrategyTest {
 
             assertThat(cache.cachedResponseIfValid(SCOPE)).isNull();
             assertThat(cache.cachedResponseIfValid("outro/scope")).isNull();
+        }
+
+        @Test
+        @DisplayName("remove entrada quando o token não é mais válido")
+        void removeEntradaExpirada() {
+            final Clock clock = Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC);
+            final TokenCacheStrategy expiring =
+                    new TokenCacheStrategy(true, MARGIN_SECONDS, CLIENT_ID, 2, clock);
+            expiring.store(SCOPE, new TokenResponse("tok-expirado", 10, null));
+
+            assertThat(expiring.cachedResponseIfValid(SCOPE)).isNull();
+            assertThat(expiring.size()).isZero();
+        }
+
+        @Test
+        @DisplayName("não cresce além do teto e preserva a entrada mais recentemente acessada")
+        void limitaCachePorLru() {
+            final TokenCacheStrategy bounded =
+                    new TokenCacheStrategy(true, MARGIN_SECONDS, CLIENT_ID, 2);
+            bounded.store("scope-1", new TokenResponse("tok-1", 3600, null));
+            bounded.store("scope-2", new TokenResponse("tok-2", 3600, null));
+            bounded.cachedResponseIfValid("scope-1");
+
+            bounded.store("scope-3", new TokenResponse("tok-3", 3600, null));
+
+            assertThat(bounded.size()).isEqualTo(2);
+            assertThat(bounded.cachedResponseIfValid("scope-1")).isNotNull();
+            assertThat(bounded.cachedResponseIfValid("scope-2")).isNull();
+            assertThat(bounded.cachedResponseIfValid("scope-3")).isNotNull();
+        }
+
+        @Test
+        @DisplayName("mantém o teto sob inserções concorrentes")
+        void limitaCacheSobConcorrencia() throws InterruptedException {
+            final int capacity = 32;
+            final int threads = 8;
+            final TokenCacheStrategy bounded =
+                    new TokenCacheStrategy(true, MARGIN_SECONDS, CLIENT_ID, capacity);
+            final CountDownLatch start = new CountDownLatch(1);
+            final CountDownLatch done = new CountDownLatch(threads);
+            try (var executor = Executors.newFixedThreadPool(threads)) {
+                for (int thread = 0; thread < threads; thread++) {
+                    final int offset = thread * 100;
+                    executor.submit(() -> {
+                        try {
+                            start.await();
+                            for (int i = 0; i < 100; i++) {
+                                bounded.store("scope-" + (offset + i), new TokenResponse("tok", 3600, null));
+                            }
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
+                        } finally {
+                            done.countDown();
+                        }
+                    });
+                }
+                start.countDown();
+                assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+
+            assertThat(bounded.size()).isEqualTo(capacity);
+        }
+
+        @Test
+        @DisplayName("rejeita teto não positivo")
+        void rejeitaCapacidadeInvalida() {
+            assertThatThrownBy(() -> new TokenCacheStrategy(true, MARGIN_SECONDS, CLIENT_ID, 0))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("maxEntries");
         }
     }
 
