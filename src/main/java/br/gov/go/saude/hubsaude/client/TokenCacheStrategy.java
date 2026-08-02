@@ -23,9 +23,7 @@ package br.gov.go.saude.hubsaude.client;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -81,7 +79,7 @@ final class TokenCacheStrategy {
     private final Clock clock;
 
     /** Cache LRU de tokens por scope, sincronizado e com teto exato. */
-    private final Map<String, CachedToken> tokenCache;
+    private final LruTokenCache tokenCache;
 
     /**
      * Locks (lock striping) para evitar múltiplas renovações simultâneas
@@ -148,7 +146,7 @@ final class TokenCacheStrategy {
         this.marginSeconds = marginSeconds;
         this.clientId = Objects.requireNonNull(clientId, "clientId não pode ser null");
         this.clock = Objects.requireNonNull(clock, "clock não pode ser null");
-        this.tokenCache = Collections.synchronizedMap(new LruTokenCache(maxEntries));
+        this.tokenCache = new LruTokenCache(maxEntries);
         this.scopeLocks = new ReentrantLock[SCOPE_LOCK_STRIPES];
         for (int i = 0; i < SCOPE_LOCK_STRIPES; i++) {
             this.scopeLocks[i] = new ReentrantLock();
@@ -286,22 +284,58 @@ final class TokenCacheStrategy {
         }
     }
 
-    /** Janela LRU de capacidade fixa. */
-    private static final class LruTokenCache extends LinkedHashMap<String, CachedToken> {
+    /** Janela LRU thread-safe de capacidade fixa, implementada por composição. */
+    private static final class LruTokenCache {
 
-        private static final long serialVersionUID = 1L;
         private static final float LOAD_FACTOR = 0.75f;
 
         private final int capacity;
+        private final LinkedHashMap<String, CachedToken> entries;
 
         LruTokenCache(final int capacity) {
-            super((int) (capacity / LOAD_FACTOR) + 1, LOAD_FACTOR, true);
             this.capacity = capacity;
+            this.entries = new LinkedHashMap<>((int) (capacity / LOAD_FACTOR) + 1, LOAD_FACTOR, true);
         }
 
-        @Override
-        protected boolean removeEldestEntry(final Map.Entry<String, CachedToken> eldest) {
-            return size() > capacity;
+        @Nullable CachedToken get(final String scope) {
+            synchronized (entries) {
+                return entries.get(scope);
+            }
+        }
+
+        void put(final String scope, final CachedToken token) {
+            synchronized (entries) {
+                entries.put(scope, token);
+                if (entries.size() > capacity) {
+                    final var iterator = entries.entrySet().iterator();
+                    iterator.next();
+                    iterator.remove();
+                }
+            }
+        }
+
+        void remove(final String scope, final CachedToken token) {
+            synchronized (entries) {
+                entries.remove(scope, token);
+            }
+        }
+
+        void remove(final String scope) {
+            synchronized (entries) {
+                entries.remove(scope);
+            }
+        }
+
+        void clear() {
+            synchronized (entries) {
+                entries.clear();
+            }
+        }
+
+        int size() {
+            synchronized (entries) {
+                return entries.size();
+            }
         }
     }
 }

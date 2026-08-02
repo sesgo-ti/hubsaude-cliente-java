@@ -26,9 +26,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -137,34 +142,41 @@ class TokenCacheStrategyTest {
         }
 
         @Test
-        @DisplayName("mantém o teto sob inserções concorrentes")
-        void limitaCacheSobConcorrencia() throws InterruptedException {
+        @DisplayName("mantém o teto sob operações concorrentes")
+        void limitaCacheSobConcorrencia()
+                throws InterruptedException, ExecutionException, TimeoutException {
             final int capacity = 32;
             final int threads = 8;
             final TokenCacheStrategy bounded =
                     new TokenCacheStrategy(true, MARGIN_SECONDS, CLIENT_ID, capacity);
             final CountDownLatch start = new CountDownLatch(1);
-            final CountDownLatch done = new CountDownLatch(threads);
+            final List<Future<?>> tasks = new ArrayList<>();
             try (var executor = Executors.newFixedThreadPool(threads)) {
                 for (int thread = 0; thread < threads; thread++) {
                     final int offset = thread * 100;
-                    executor.submit(() -> {
-                        try {
-                            start.await();
-                            for (int i = 0; i < 100; i++) {
-                                bounded.store("scope-" + (offset + i), new TokenResponse("tok", 3600, null));
+                    tasks.add(executor.submit(() -> {
+                        start.await();
+                        for (int i = 0; i < 100; i++) {
+                            final String scope = "scope-" + (offset + i);
+                            bounded.store(scope, new TokenResponse("tok", 3600, null));
+                            bounded.cachedResponseIfValid(scope);
+                            if (i % 10 == 0) {
+                                bounded.invalidate(scope);
                             }
-                        } catch (InterruptedException ex) {
-                            Thread.currentThread().interrupt();
-                        } finally {
-                            done.countDown();
+                            assertThat(bounded.size()).isLessThanOrEqualTo(capacity);
                         }
-                    });
+                        return null;
+                    }));
                 }
                 start.countDown();
-                assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+                for (Future<?> task : tasks) {
+                    task.get(10, TimeUnit.SECONDS);
+                }
             }
 
+            for (int i = 0; i < capacity; i++) {
+                bounded.store("scope-final-" + i, new TokenResponse("tok", 3600, null));
+            }
             assertThat(bounded.size()).isEqualTo(capacity);
         }
 
