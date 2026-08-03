@@ -74,6 +74,9 @@
         <!-- Versoes das dependencias. -->
         <jjwt.version>0.12.6</jjwt.version>
         <bouncycastle.version>1.85</bouncycastle.version>
+        <!-- Jackson 2.x usado pelo JJWT nos testes; alinhado ao upper bound
+             homologado no hubsaude-dependencies. -->
+        <jackson-2.version>2.22.1</jackson-2.version>
         <jackson3.version>3.1.5</jackson3.version>
         <slf4j.version>2.0.18</slf4j.version>
         <!-- JSpecify: mesma versao governada pelo BOM hubsaude-dependencies
@@ -156,6 +159,15 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Jackson 2.x (test-scope via jjwt-jackson). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-2.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- JWT (test-scope; uso apenas em fixtures de teste) -->
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
@@ -366,6 +378,14 @@
             <artifactId>hubsaude-simulador</artifactId>
             <version>${hubsaude-simulador.version}</version>
             <scope>test</scope>
+            <!-- O teste inicia o fat JAR em outro processo; nenhuma transitiva
+                 do simulador é usada pelo classpath desta JVM. -->
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!--
