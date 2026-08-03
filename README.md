@@ -12,8 +12,8 @@ assinatura e a troca pelo *access token* no endpoint OAuth 2.0.
 
 O contrato comportamental está em [`ESPECIFICACAO.md`](ESPECIFICACAO.md)
 — requisitos normativos que refletem esta implementação e servem de
-referência para SDKs equivalentes em outras linguagens (Python,
-JavaScript/TypeScript, C#).
+referência para o portfólio oficial de SDKs: Java, TypeScript/Node.js
+(consumível também por JavaScript), C#/.NET e Python.
 
 ## Dependência Maven
 

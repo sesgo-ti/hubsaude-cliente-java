@@ -5,8 +5,8 @@
 > [SMART Backend Services](https://hl7.org/fhir/smart-app-launch/backend-services.html).
 > Os requisitos refletem o comportamento implementado pelo
 > `hubsaude-cliente-java` (implementação de referência) e servem de base
-> normativa para implementações equivalentes em outras linguagens
-> (Python, JavaScript/TypeScript, C#). Em caso de divergência aparente
+> normativa para as quatro implementações oficiais: Java,
+> TypeScript/Node.js, C#/.NET e Python. Em caso de divergência aparente
 > entre este documento e o [README](README.md), este documento prevalece.
 
 - **Status:** ativo; sincronizado com `hubsaude-cliente-java` 0.3.x.
@@ -40,6 +40,28 @@ aplicação integradora):
   integrador;
 - gestão do credenciamento (o `client_id` e o registro da chave pública
   são obtidos previamente via Ganesha).
+
+### 1.3 Portfólio oficial de SDKs
+
+O portfólio oficial do HubSaúde é composto pelas quatro implementações
+abaixo. Sua disponibilidade e evolução são rastreadas na
+[issue #462](https://github.com/FabricaDeSoftwareINF/server-hubsaude/issues/462).
+
+| Ecossistema | Projeto | Papel |
+|-------------|---------|-------|
+| Java | `hubsaude-cliente-java` | Implementação de referência |
+| TypeScript/Node.js | `hubsaude-cliente-js` | SDK servidor, consumível também por JavaScript |
+| C#/.NET | `hubsaude-cliente-csharp` | SDK para aplicações .NET |
+| Python | `hubsaude-cliente-python` | SDK para aplicações e automações Python |
+
+Todas as implementações DEVEM atender aos requisitos funcionais, não
+funcionais e casos de teste deste documento. A implementação Java é a
+referência de código, mas não prevalece sobre este contrato; cada SDK DEVE
+oferecer uma API idiomática conforme a [seção 9](#9-diretrizes-para-as-implementações-oficiais).
+
+O SDK TypeScript/Node.js DEVE executar somente em ambiente servidor.
+Aplicações em navegador ou dispositivos móveis NÃO DEVEM receber
+credenciais, certificados ou chaves privadas de SMART Backend Services.
 
 ## 2. Convenções
 
@@ -533,15 +555,15 @@ suportar (referência Java: CycloneDX).
 ³ Obrigatório apenas para mTLS via chave em memória e para a
 verificação RF-15.
 
-## 9. Diretrizes para implementações em outras linguagens
+## 9. Diretrizes para as implementações oficiais
 
 Esta seção é **informativa**: registra decisões idiomáticas
 recomendadas para manter paridade comportamental.
 
 ### 9.1 Mapeamento de nomes
 
-| Conceito | Java (referência) | Python | JavaScript/TypeScript | C# |
-|----------|-------------------|--------|-----------------------|----|
+| Conceito | Java (referência) | Python | TypeScript/Node.js | C#/.NET |
+|----------|-------------------|--------|--------------------|---------|
 | Cliente | `SmartTokenClient` | `SmartTokenClient` | `SmartTokenClient` | `SmartTokenClient` |
 | Obtenção | `obtainToken(scope)` | `obtain_token(scope)` | `obtainToken(scope)` (async) | `ObtainTokenAsync(scope)` |
 | Resposta completa | `obtainTokenResponse` | `obtain_token_response` | `obtainTokenResponse` | `ObtainTokenResponseAsync` |
@@ -551,8 +573,8 @@ recomendadas para manter paridade comportamental.
 
 ### 9.2 Criptografia e HTTP por plataforma
 
-| Capacidade | Python | JavaScript (Node) | C# (.NET) |
-|------------|--------|-------------------|-----------|
+| Capacidade | Python | TypeScript/Node.js | C#/.NET |
+|------------|--------|--------------------|---------|
 | Assinatura RSA/ECDSA | `cryptography` (hazmat) | `node:crypto` (`crypto.sign`) | `System.Security.Cryptography` (`RSA`, `ECDsa`) |
 | PEM (com senha) | `load_pem_private_key(..., password=...)` | `crypto.createPrivateKey({ key, passphrase })` | `ImportFromEncryptedPem` / `PemEncoding` |
 | PKCS#12 | `serialization.pkcs12` | conversão prévia via OpenSSL ou lib dedicada | `X509Certificate2(Load)` |
