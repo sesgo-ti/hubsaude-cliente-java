@@ -108,8 +108,12 @@ class SmartTokenClientTest {
 
         @Test
         void deveConstruirClientAssertionComCamposCorretos() throws Exception {
-                final SmartTokenClient client = registrar(
-                                new SmartTokenClient(TOKEN_ENDPOINT, CLIENT_ID, keyFile, certFile));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
 
@@ -127,20 +131,14 @@ class SmartTokenClientTest {
         }
 
         @Test
-        void deveFalharComArquivoChaveInexistente(@TempDir final Path tempDir) {
-                assertThatThrownBy(() -> new SmartTokenClient(TOKEN_ENDPOINT, CLIENT_ID,
-                                tempDir.resolve("nao-existe.pem"), certFile))
-                                .isInstanceOf(Exception.class);
-        }
-
-        @Test
         void deveConstruirClienteComCertificadoServidorCustomizado() throws Exception {
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT,
-                                CLIENT_ID,
-                                keyFile,
-                                certFile,
-                                certFile));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .serverTrustAnchor(certFile)
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 assertThat(assertion).isNotBlank();
@@ -149,23 +147,25 @@ class SmartTokenClientTest {
         @Test
         void deveFalharQuandoCertificadoServidorInvalido(@TempDir final Path tempDir) {
                 final Path inexistente = tempDir.resolve("server.pem");
-                assertThatThrownBy(() -> new SmartTokenClient(
-                                TOKEN_ENDPOINT,
-                                CLIENT_ID,
-                                keyFile,
-                                certFile,
-                                inexistente))
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .serverTrustAnchor(inexistente)
+                                .build())
                                 .isInstanceOf(SmartTokenException.class);
         }
 
         @Test
-        void devePermitirConstrutorComObjetos() throws Exception {
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT,
-                                CLIENT_ID,
-                                privateKey,
-                                clientCertificate,
-                                SSLContext.getDefault()));
+        void devePermitirEstrategiaDeAssinaturaEmMemoria() throws Exception {
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(SigningStrategyFactory.fromPrivateKey(privateKey))
+                                .certificatePem(certFile)
+                                .sslContext(SSLContext.getDefault())
+                                .build());
 
                 assertThat(client.buildClientAssertion()).isNotBlank();
         }
@@ -187,6 +187,11 @@ class SmartTokenClientTest {
         }
 
         @Test
+        void naoDeveExporConstrutoresPublicos() {
+                assertThat(SmartTokenClient.class.getConstructors()).isEmpty();
+        }
+
+        @Test
         void deveFalharQuandoChaveNaoCorrespondeAoCertificado(@TempDir final Path tempDir) throws Exception {
                 // Gera um par de chaves diferente
                 final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
@@ -198,15 +203,14 @@ class SmartTokenClientTest {
                 final String outroCertPem = generateSelfSignedCertPem(outroPar);
                 Files.writeString(outroCertFile, outroCertPem, StandardCharsets.UTF_8);
 
-                final X509Certificate outroCert = SslContextFactory.validateCertificate(outroCertFile);
-
                 // Tenta criar cliente com chave privada original + certificado de outro par
-                assertThatThrownBy(() -> new SmartTokenClient(
-                                TOKEN_ENDPOINT,
-                                CLIENT_ID,
-                                privateKey,
-                                outroCert,
-                                SSLContext.getDefault()))
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(SigningStrategyFactory.fromPrivateKey(privateKey))
+                                .certificatePem(outroCertFile)
+                                .sslContext(SSLContext.getDefault())
+                                .build())
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("não corresponde");
         }
@@ -1109,28 +1113,6 @@ class SmartTokenClientTest {
                                 .hasMessageContaining("ainda não é válido");
         }
 
-        @Test
-        void deveFalharConstrutorEmMemoriaComCertificadoExpirado() throws Exception {
-                final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-                gen.initialize(2048);
-                final KeyPair pair = gen.generateKeyPair();
-
-                final String certPem = generateExpiredCertPem(pair);
-                final java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory
-                                .getInstance("X.509");
-                final X509Certificate certExpirado = (X509Certificate) cf.generateCertificate(
-                                new java.io.ByteArrayInputStream(
-                                                certPem.getBytes(StandardCharsets.UTF_8)));
-                final SSLContext ssl = SslContextFactory.buildSslContext((Path) null, "TLSv1.3");
-
-                // Certificado fornecido já em memória também é validado (fail-fast)
-                assertThatThrownBy(() -> new SmartTokenClient(
-                                "https://auth.example/token", CLIENT_ID,
-                                pair.getPrivate(), certExpirado, ssl))
-                                .isInstanceOf(SmartTokenException.class)
-                                .hasMessageContaining("Certificado expirado");
-        }
-
         // ---------- Teste do Algoritmo Dinâmico ----------
 
         @Test
@@ -1177,16 +1159,17 @@ class SmartTokenClientTest {
                                 .hasMessageContaining("Tipo de chave não suportado");
         }
 
-        // ==================== Testes de valores padrão do construtor ====================
+        // ==================== Testes de valores padrão do builder ====================
 
         @Test
         void deveUsarAssertionTtlSecondsQuandoValorPositivo() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 120, 3),
-                                true, 30));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .assertionTtlSeconds(120)
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -1201,12 +1184,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveUsarAssertionTtlPadraoQuandoValorZero() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 0, 3),
-                                true, 30));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .assertionTtlSeconds(0)
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -1221,12 +1205,13 @@ class SmartTokenClientTest {
 
         @Test
         void deveUsarAssertionTtlPadraoQuandoValorNegativo() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), -10, 3),
-                                true, 30));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .privateKeyPem(keyFile)
+                                .certificatePem(certFile)
+                                .assertionTtlSeconds(-10)
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
                 final Claims claims = Jwts.parser()
@@ -1237,102 +1222,6 @@ class SmartTokenClientTest {
 
                 final long ttlSeconds = (claims.getExpiration().getTime() - claims.getIssuedAt().getTime()) / 1000;
                 assertThat(ttlSeconds).isEqualTo(SmartTokenClient.DEFAULT_ASSERTION_TTL_SECONDS);
-        }
-
-        @Test
-        void deveUsarTokenCacheMarginSecondsQuandoValorPositivo() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 45));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveUsarTokenCacheMarginPadraoQuandoValorZero() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 0));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveUsarTokenCacheMarginPadraoQuandoValorNegativo() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, -15));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveUsarMaxRetriesQuandoValorPositivo() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 5),
-                                true, 30));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveUsarMaxRetriesPadraoQuandoValorZero() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 0),
-                                true, 30));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveUsarMaxRetriesPadraoQuandoValorNegativo() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, -2),
-                                true, 30));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveAceitarEnableTokenCacheTrue() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30));
-
-                assertThat(client).isNotNull();
-        }
-
-        @Test
-        void deveAceitarEnableTokenCacheFalse() throws Exception {
-                final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
-
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                false, 30));
-
-                assertThat(client).isNotNull();
         }
 
         // ==================== Testes de obtainToken - normalização de scope ====================
@@ -2200,10 +2089,13 @@ class SmartTokenClientTest {
 
                 final SigningStrategy strategy = SigningStrategyFactory
                                 .fromPrivateKeyForJwt(ecPair.getPrivate(), "ES256");
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, null, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "ES256"));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(strategy)
+                                .sslContext(SSLContext.getDefault())
+                                .jwtAlgorithm("ES256")
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
 
@@ -2222,10 +2114,14 @@ class SmartTokenClientTest {
         void deveAssinarClientAssertionComPs256ValidadoPorJjwt() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory
                                 .fromPrivateKeyForJwt(privateKey, "PS256");
-                final SmartTokenClient client = registrar(new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "PS256"));
+                final SmartTokenClient client = registrar(SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(strategy)
+                                .certificatePem(certFile)
+                                .sslContext(SSLContext.getDefault())
+                                .jwtAlgorithm("PS256")
+                                .build());
 
                 final String assertion = client.buildClientAssertion();
 
@@ -2392,7 +2288,7 @@ class SmartTokenClientTest {
         }
 
         @Test
-        void deveFalharConstrutorComChaveECertificadoIncompativeis() throws Exception {
+        void deveFalharBuilderComChaveECertificadoIncompativeis() throws Exception {
                 // Chave recém-gerada, diferente da chave do clientCertificate
                 final KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
                 gen.initialize(2048);
@@ -2400,34 +2296,44 @@ class SmartTokenClientTest {
                 final SigningStrategy strategy = SigningStrategyFactory
                                 .fromPrivateKey(outroPar.getPrivate());
 
-                assertThatThrownBy(() -> new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "RS256"))
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(strategy)
+                                .certificatePem(certFile)
+                                .sslContext(SSLContext.getDefault())
+                                .jwtAlgorithm("RS256")
+                                .build())
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("não corresponde");
         }
 
         @Test
-        void deveFalharConstrutorComAlgoritmoNone() throws Exception {
+        void deveFalharBuilderComAlgoritmoNone() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                assertThatThrownBy(() -> new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "none"))
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(strategy)
+                                .sslContext(SSLContext.getDefault())
+                                .jwtAlgorithm("none")
+                                .build())
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("não suportado");
         }
 
         @Test
-        void deveFalharConstrutorComAlgoritmoHs256() throws Exception {
+        void deveFalharBuilderComAlgoritmoHs256() throws Exception {
                 final SigningStrategy strategy = SigningStrategyFactory.fromPrivateKey(privateKey);
 
-                assertThatThrownBy(() -> new SmartTokenClient(
-                                TOKEN_ENDPOINT, CLIENT_ID, strategy, clientCertificate, SSLContext.getDefault(),
-                                new FaultToleranceConfig(Duration.ofSeconds(10), Duration.ofSeconds(30), 60, 3),
-                                true, 30, "HS256"))
+                assertThatThrownBy(() -> SmartTokenClient.builder()
+                                .tokenEndpoint(TOKEN_ENDPOINT)
+                                .clientId(CLIENT_ID)
+                                .signingStrategy(strategy)
+                                .sslContext(SSLContext.getDefault())
+                                .jwtAlgorithm("HS256")
+                                .build())
                                 .isInstanceOf(SmartTokenException.class)
                                 .hasMessageContaining("não suportado");
         }

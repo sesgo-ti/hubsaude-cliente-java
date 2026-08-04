@@ -78,11 +78,12 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
 
 ## Política de versionamento
 
-[Semantic Versioning 2.0.0](https://semver.org/lang/pt-BR/) estrito:
+[Semantic Versioning 2.0.0](https://semver.org/lang/pt-BR/):
 
-- **MAJOR**: quebras de compatibilidade na API pública
-- **MINOR**: features compatíveis
-- **PATCH**: correções compatíveis
+- durante a série `0.x`, **MINOR** pode incluir mudanças incompatíveis e
+  **PATCH** preserva compatibilidade;
+- a partir de `1.0.0`, **MAJOR** indica quebra na API pública, **MINOR**
+  adiciona funcionalidade compatível e **PATCH** contém correções compatíveis.
 
 Apenas a MAJOR mais recente recebe correções de segurança
 (ver [SECURITY.md](SECURITY.md)).

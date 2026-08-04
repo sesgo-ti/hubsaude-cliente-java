@@ -27,7 +27,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
@@ -219,166 +218,10 @@ public final class SmartTokenClient implements AutoCloseable {
     private volatile Sleeper sleeper = Thread::sleep;
 
     /**
-     * Cria o cliente carregando chave privada e certificado de arquivos PEM.
+     * Construtor interno usado exclusivamente pelo builder.
      *
-     * <p>
-     * O {@link SSLContext} é configurado automaticamente com a chave privada
-     * e o certificado do cliente como {@code KeyManager}, habilitando mTLS
-     * quando o servidor solicitar autenticação mútua. Quando o servidor não
-     * exige certificado do cliente, a conexão se comporta como TLS
-     * unidirecional — totalmente retrocompatível.
-     * </p>
-     *
-     * @param tokenEndpoint  URL do endpoint /auth/token do servidor de autorização
-     * @param clientId       identificador do cliente (fornecido pelo Ganesha no
-     *                       credenciamento)
-     * @param privateKeyPem  caminho para o arquivo PEM da chave privada
-     * @param certificatePem caminho para o arquivo PEM do certificado do cliente
-     */
-    public SmartTokenClient(
-            final String tokenEndpoint,
-            final String clientId,
-            final Path privateKeyPem,
-            final Path certificatePem) throws IOException {
-        this(tokenEndpoint, clientId,
-                loadFromPem(privateKeyPem, certificatePem, null, DEFAULT_TLS_PROTOCOL),
-                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT,
-                        DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
-                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
-    }
-
-    /**
-     * Versão avançada que aceita um certificado público do servidor para ser
-     * utilizado como trust anchor, permitindo validação TLS específica quando
-     * o chamador possui a cadeia correta.
-     *
-     * <p>
-     * O {@link SSLContext} é configurado automaticamente com a chave privada
-     * e o certificado do cliente como {@code KeyManager}, habilitando mTLS
-     * quando o servidor solicitar autenticação mútua.
-     * </p>
-     *
-     * @param tokenEndpoint     URL do endpoint /auth/token do servidor de
-     *                          autorização
-     * @param clientId          identificador do cliente (fornecido pelo Ganesha no
-     *                          credenciamento)
-     * @param privateKeyPem     caminho para o arquivo PEM da chave privada
-     * @param certificatePem    caminho para o arquivo PEM do certificado do
-     *                          cliente
-     * @param serverTrustAnchor certificado X.509 confiável do servidor; quando
-     *                          {@code null}, usa-se o trust store padrão da JVM
-     */
-    public SmartTokenClient(
-            final String tokenEndpoint,
-            final String clientId,
-            final Path privateKeyPem,
-            final Path certificatePem,
-            final @Nullable Path serverTrustAnchor) throws IOException {
-        this(tokenEndpoint, clientId,
-                loadFromPem(privateKeyPem, certificatePem, serverTrustAnchor, DEFAULT_TLS_PROTOCOL),
-                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT,
-                        DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
-                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
-    }
-
-    /**
-     * Construtor privado que delega a partir do contexto de inicialização PEM.
-     */
-    private SmartTokenClient(
-            final String tokenEndpoint,
-            final String clientId,
-            final PemInitContext init,
-            final FaultToleranceConfig faultToleranceConfig,
-            final boolean enableTokenCache,
-            final int tokenCacheMarginSeconds) {
-        this(tokenEndpoint, clientId,
-                init.signingStrategy(), init.certificate(), init.sslContext(),
-                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds);
-    }
-
-    /**
-     * Construtor de baixo nível para cenários em que os artefatos criptográficos
-     * já foram carregados (ex: Vault, Secret Manager).
-     *
-     * @param tokenEndpoint URL do endpoint /auth/token do servidor de autorização
-     * @param clientId      identificador do cliente (fornecido pelo Ganesha no
-     *                      credenciamento)
-     * @param privateKey    chave privada previamente carregada
-     * @param certificate   certificado X.509 correspondente à chave
-     * @param sslContext    contexto SSL a ser utilizado pelo {@link HttpClient}
-     */
-    public SmartTokenClient(
-            final String tokenEndpoint,
-            final String clientId,
-            final PrivateKey privateKey,
-            final X509Certificate certificate,
-            final SSLContext sslContext) {
-        this(tokenEndpoint, clientId,
-                createValidatedSigningStrategy(privateKey, certificate),
-                certificate, sslContext,
-                new FaultToleranceConfig(DEFAULT_CONNECT_TIMEOUT, DEFAULT_REQUEST_TIMEOUT,
-                        DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES),
-                true, DEFAULT_TOKEN_CACHE_MARGIN_SECONDS);
-    }
-
-    // === Construtor principal ===
-    /**
-     * Construtor principal de baixo nível.
-     *
-     * <p>Validações fail-fast executadas na construção:</p>
-     * <ul>
-     * <li>{@code jwtAlgorithm} é validado contra a allowlist de algoritmos
-     * suportados (famílias RS, PS e ES); valores como {@code none} ou
-     * {@code HS256} são rejeitados com {@link SmartTokenException};</li>
-     * <li>quando {@code certificate} não é {@code null}, a consistência entre
-     * a estratégia de assinatura e a chave pública do certificado é
-     * verificada (mesma semântica de
-     * {@link #verifyKeyPairConsistency(PrivateKey, X509Certificate)});</li>
-     * <li>quando o contexto de IG é fornecido, {@code hubCtxIg} e
-     * {@code hubCtxVersao} são validados contra os formatos do concern
-     * client-assertion-contexto-ig.md §3.4.</li>
-     * </ul>
-     *
-     * @param tokenEndpoint           URL do endpoint /auth/token
-     * @param clientId                identificador do cliente
-     * @param signingStrategy         estratégia de assinatura JWT
-     * @param certificate             certificado X.509 do cliente
-     * @param sslContext              contexto SSL para o {@link HttpClient}
-     * @param faultToleranceConfig    configuração de resiliência
-     * @param enableTokenCache        se {@code true}, habilita cache de tokens
-     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
-     * @param jwtAlgorithm            algoritmo JWT (ex: RS384, ES384)
-     * @param keyId                   identificador da chave ({@code kid} do
-     *                                header JWT); {@code null} para omitir
-     * @param hubCtxIg                alias do Guia de Implementação para o
-     *                                claim {@code hub_ctx.ig}; {@code null}
-     *                                para omitir o claim
-     * @param hubCtxVersao            versão SemVer do Guia de Implementação
-     *                                para o claim {@code hub_ctx.versao};
-     *                                {@code null} para omitir o claim
-     */
-    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
-    public SmartTokenClient(
-        String tokenEndpoint,
-        String clientId,
-        SigningStrategy signingStrategy,
-        @Nullable X509Certificate certificate,
-        SSLContext sslContext,
-        FaultToleranceConfig faultToleranceConfig,
-        boolean enableTokenCache,
-        int tokenCacheMarginSeconds,
-        @Nullable String jwtAlgorithm,
-        @Nullable String keyId,
-        @Nullable String hubCtxIg,
-        @Nullable String hubCtxVersao
-    ) {
-        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
-                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds,
-                DEFAULT_TOKEN_CACHE_MAX_ENTRIES, jwtAlgorithm, keyId, hubCtxIg, hubCtxVersao);
-    }
-
-    /**
-     * Construtor interno usado pelo builder para configurar o teto do cache.
+     * <p>Centraliza as validações fail-fast da configuração e mantém a
+     * construção pública restrita a {@link #builder()}.</p>
      */
     @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
     SmartTokenClient(
@@ -428,106 +271,6 @@ public final class SmartTokenClient implements AutoCloseable {
                 .build();
         LOG.debug("SmartTokenClient inicializado para clientId={} endpoint={} cache={} maxRetries={} alg={}",
                 clientId, tokenEndpoint, enableTokenCache, faultToleranceConfig.maxRetries(), this.jwtAlgorithm);
-    }
-
-    /**
-     * Construtor de compatibilidade (sem contexto de IG).
-     *
-     * @param tokenEndpoint           URL do endpoint /auth/token
-     * @param clientId                identificador do cliente
-     * @param signingStrategy         estratégia de assinatura JWT
-     * @param certificate             certificado X.509 do cliente
-     * @param sslContext              contexto SSL para o {@link HttpClient}
-     * @param faultToleranceConfig    configuração de resiliência
-     * @param enableTokenCache        se {@code true}, habilita cache de tokens
-     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
-     * @param jwtAlgorithm            algoritmo JWT (ex: RS384, ES384)
-     * @param keyId                   identificador da chave ({@code kid} do
-     *                                header JWT); {@code null} para omitir
-     */
-    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
-    public SmartTokenClient(
-        String tokenEndpoint,
-        String clientId,
-        SigningStrategy signingStrategy,
-        @Nullable X509Certificate certificate,
-        SSLContext sslContext,
-        FaultToleranceConfig faultToleranceConfig,
-        boolean enableTokenCache,
-        int tokenCacheMarginSeconds,
-        @Nullable String jwtAlgorithm,
-        @Nullable String keyId
-    ) {
-        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
-                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds,
-                jwtAlgorithm, keyId, null, null);
-    }
-
-    /**
-     * Construtor de compatibilidade (sem {@code keyId}).
-     *
-     * @param tokenEndpoint           URL do endpoint /auth/token
-     * @param clientId                identificador do cliente
-     * @param signingStrategy         estratégia de assinatura JWT
-     * @param certificate             certificado X.509 do cliente
-     * @param sslContext              contexto SSL para o {@link HttpClient}
-     * @param faultToleranceConfig    configuração de resiliência
-     * @param enableTokenCache        se {@code true}, habilita cache de tokens
-     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
-     * @param jwtAlgorithm            algoritmo JWT (ex: RS384, ES384)
-     */
-    @SuppressWarnings({"checkstyle:ParameterNumber", "PMD.ExcessiveParameterList"})
-    public SmartTokenClient(
-        String tokenEndpoint,
-        String clientId,
-        SigningStrategy signingStrategy,
-        @Nullable X509Certificate certificate,
-        SSLContext sslContext,
-        FaultToleranceConfig faultToleranceConfig,
-        boolean enableTokenCache,
-        int tokenCacheMarginSeconds,
-        @Nullable String jwtAlgorithm
-    ) {
-        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
-                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds,
-                jwtAlgorithm, null);
-    }
-
-    /**
-     * Construtor de compatibilidade (sem jwtAlgorithm).
-     *
-     * @param tokenEndpoint           URL do endpoint /auth/token
-     * @param clientId                identificador do cliente
-     * @param signingStrategy         estratégia de assinatura JWT
-     * @param certificate             certificado X.509 do cliente
-     * @param sslContext              contexto SSL para o {@link HttpClient}
-     * @param faultToleranceConfig    configuração de resiliência
-     * @param enableTokenCache        se {@code true}, habilita cache de tokens
-     * @param tokenCacheMarginSeconds margem em segundos antes da expiração
-     */
-    @SuppressWarnings("checkstyle:ParameterNumber")
-    public SmartTokenClient(
-        String tokenEndpoint,
-        String clientId,
-        SigningStrategy signingStrategy,
-        @Nullable X509Certificate certificate,
-        SSLContext sslContext,
-        FaultToleranceConfig faultToleranceConfig,
-        boolean enableTokenCache,
-        int tokenCacheMarginSeconds
-    ) {
-        this(tokenEndpoint, clientId, signingStrategy, certificate, sslContext,
-                faultToleranceConfig, enableTokenCache, tokenCacheMarginSeconds, DEFAULT_JWT_ALGORITHM);
-    }
-
-    /**
-     * Cria SigningStrategy validando a consistência entre chave e certificado.
-     */
-    private static SigningStrategy createValidatedSigningStrategy(
-            final PrivateKey privateKey,
-            final X509Certificate certificate) {
-        verifyKeyPairConsistency(privateKey, certificate);
-        return SigningStrategyFactory.fromPrivateKey(privateKey);
     }
 
     /**
@@ -1026,10 +769,9 @@ public final class SmartTokenClient implements AutoCloseable {
      * <p>
      * Realiza uma assinatura de teste com a chave privada e a verifica com a
      * chave pública extraída do certificado, detectando erros de configuração
-     * (arquivos trocados, chave corrompida, certificado regenerado) na
-     * inicialização — antes de qualquer tentativa de obter tokens. Executada
-     * automaticamente na construção do {@link SmartTokenClient} quando são
-     * fornecidos {@link PrivateKey} e {@link X509Certificate} diretamente.
+     * (arquivos trocados, chave corrompida, certificado regenerado) antes da
+     * primeira tentativa de obter tokens. O builder executa verificação
+     * equivalente quando recebe uma estratégia de assinatura e um certificado.
      * </p>
      *
      * @param privateKey  chave privada a validar
@@ -1041,51 +783,6 @@ public final class SmartTokenClient implements AutoCloseable {
             final PrivateKey privateKey,
             final X509Certificate certificate) {
         KeyCertificateConsistency.verifyKeyPair(privateKey, certificate);
-    }
-
-    /**
-     * Carrega material criptográfico de arquivos PEM e constrói o contexto
-     * de inicialização com suporte a mTLS.
-     *
-     * <p>
-     * A chave privada é carregada uma única vez e reutilizada tanto para a
-     * {@link SigningStrategy} (assinatura do JWT) quanto para o
-     * {@link javax.net.ssl.KeyManager} (apresentação do certificado no TLS).
-     * </p>
-     *
-     * @param privateKeyPem     caminho para a chave privada PEM
-     * @param certificatePem    caminho para o certificado PEM do cliente
-     * @param serverTrustAnchor trust anchor do servidor (null = JVM default)
-     * @param tlsProtocol       protocolo TLS
-     * @return contexto de inicialização com signing strategy, certificado e SSLContext
-     * @throws IOException se os arquivos não puderem ser lidos
-     */
-    private static PemInitContext loadFromPem(
-            final Path privateKeyPem,
-            final Path certificatePem,
-            final @Nullable Path serverTrustAnchor,
-            final String tlsProtocol) throws IOException {
-        final PrivateKey key = PemLoader.loadPrivateKey(privateKeyPem);
-        final X509Certificate cert = SslContextFactory.validateCertificate(certificatePem);
-        final SSLContext ssl = SslContextFactory.buildSslContext(
-                serverTrustAnchor, tlsProtocol, key, cert);
-        return new PemInitContext(
-                SigningStrategyFactory.fromPrivateKey(key), cert, ssl);
-    }
-
-    /**
-     * Contexto de inicialização a partir de arquivos PEM.
-     *
-     * <p>
-     * Agrupa os artefatos construídos a partir de PEM (signing strategy,
-     * certificado validado e SSLContext com mTLS) para passagem eficiente
-     * entre métodos estáticos e construtores.
-     * </p>
-     */
-    private record PemInitContext(
-            SigningStrategy signingStrategy,
-            X509Certificate certificate,
-            SSLContext sslContext) {
     }
 
     /**

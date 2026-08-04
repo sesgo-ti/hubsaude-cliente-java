@@ -61,7 +61,7 @@
     </ciManagement>
 
     <properties>
-        <revision>0.3.30-SNAPSHOT</revision>
+        <revision>0.4.0-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.outputTimestamp>2026-06-25T16:35:39Z</project.build.outputTimestamp>
@@ -788,10 +788,10 @@
                         <version>${maven-javadoc-plugin.version}</version>
                         <configuration>
                             <locale>pt_BR</locale>
-                            <doclint>none</doclint>
                             <source>21</source>
                             <quiet>true</quiet>
                             <failOnError>true</failOnError>
+                            <failOnWarnings>true</failOnWarnings>
                         </configuration>
                         <executions>
                             <execution>
@@ -944,6 +944,27 @@
                                 <phase>verify</phase>
                                 <goals>
                                     <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <locale>pt_BR</locale>
+                            <source>21</source>
+                            <quiet>true</quiet>
+                            <failOnError>true</failOnError>
+                            <failOnWarnings>true</failOnWarnings>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>quality-javadoc</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>javadoc</goal>
                                 </goals>
                             </execution>
                         </executions>

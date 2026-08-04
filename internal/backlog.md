@@ -65,22 +65,20 @@ Para manter este documento sincronizado com o código:
 
 ## 7. Documentar política de compatibilidade de API — **A**
 
-**Status: Parcial** — SemVer estrito já documentado no
-`CONTRIBUTING.md` (seção de versionamento). Pendente: declarar API
-pública vs. interna e estabilizar assinaturas antes do corte.
-A formalização completa (documento de compatibilidade, verificação
-automatizada) fica condicionada ao destravamento do Maven Central;
-enquanto a distribuição for interna, basta a declaração no
-`README.md`.
+**Status: Parcial** — A política pré e pós-`1.0.0`, bem como a fronteira
+entre API pública e detalhes internos, estão declaradas no `README.md`.
+A construção do `SmartTokenClient` foi consolidada exclusivamente no
+builder (#1959). Permanecem a estabilização das demais assinaturas
+públicas antes do corte e a verificação automatizada de compatibilidade,
+condicionada ao destravamento do Maven Central.
 
 Hoje o projeto está em `0.x` deliberadamente (API ainda em
 consolidação). Antes do `1.0.0`:
 
-- declarar explicitamente no `README.md` (ou em `COMPATIBILITY.md`) o
-  que é considerado API pública vs. interna;
-- definir política de versionamento pós-`1.0` (SemVer estrito);
-- estabilizar nomes e assinaturas dos métodos do `SmartTokenClient` e
-  do `SmartTokenClientBuilder` antes do corte.
+- manter explícito no `README.md` o que é API pública vs. interna;
+- preservar a política de SemVer estrito após `1.0.0`;
+- concluir a estabilização dos métodos públicos de `SmartTokenClient`
+  e `SmartTokenClientBuilder` antes do corte.
 
 ## 8. Encapsulamento do pacote e `Automatic-Module-Name` — **A**
 

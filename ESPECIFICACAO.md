@@ -586,6 +586,10 @@ recomendadas para manter paridade comportamental.
 | Estratégia | `SigningStrategy` (interface funcional) | `Callable[[bytes], bytes]` ou protocolo | `(data: Uint8Array) => Uint8Array \| Promise<...>` | `Func<byte[], byte[]>` ou interface |
 | Erros | `SmartTokenException`, `SigningException` | `SmartTokenError`, `SigningError` | `SmartTokenError`, `SigningError` | `SmartTokenException`, `SigningException` |
 
+Na implementação Java, `SmartTokenClient` não expõe construtores
+públicos. O builder é a única entrada suportada para construção e
+centraliza validações, defaults e resolução dos materiais criptográficos.
+
 ### 9.2 Criptografia e HTTP por plataforma
 
 | Capacidade | Python | TypeScript/Node.js | C#/.NET |

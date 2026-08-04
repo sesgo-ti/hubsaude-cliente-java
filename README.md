@@ -31,8 +31,24 @@ Autenticação requerida mesmo para leitura: configure `~/.m2/settings.xml`
 com um Personal Access Token (escopo `read:packages`).
 
 `0.3.29` é a última versão estável publicada. O `pom.xml` da branch
-`develop` usa `0.3.30-SNAPSHOT` para o próximo ciclo de desenvolvimento;
-esse snapshot não substitui a versão estável do snippet acima.
+`develop` usa `0.4.0-SNAPSHOT` para o próximo ciclo de desenvolvimento,
+que consolida a API de construção; esse snapshot não substitui a versão
+estável do snippet acima.
+
+## Política da API pública
+
+Enquanto a biblioteca estiver na série `0.x`, sua API é provisória:
+versões `MINOR` podem introduzir mudanças incompatíveis e versões `PATCH`
+preservam compatibilidade. A partir de `1.0.0`, a evolução seguirá
+estritamente o
+[Versionamento Semântico 2.0.0](https://semver.org/lang/pt-BR/).
+
+Todos os tipos e membros declarados como `public` no pacote
+`br.gov.go.saude.hubsaude.client` integram a API pública. Tipos e membros
+com visibilidade de pacote ou `private` são detalhes internos e podem
+mudar sem aviso. A criação de `SmartTokenClient` é feita
+**exclusivamente** por `SmartTokenClient.builder()`; a classe não expõe
+construtores públicos.
 
 ## Uso básico
 
@@ -306,8 +322,9 @@ mvn verify     # unitários + integração (sobe o hubsaude-simulador)
 
 ### Configurações de qualidade (perfil `quality`)
 
-O perfil `quality` (`mvn -P quality verify`) executa Checkstyle, PMD e
-SpotBugs (com FindSecBugs). Desde a issue #1603, as configurações de
+O perfil `quality` (`mvn -P quality verify`) executa Checkstyle, PMD,
+SpotBugs (com FindSecBugs) e JavaDoc com doclint e avisos bloqueantes.
+Desde a issue #1603, as configurações de
 Checkstyle (`checkstyle/checkstyle.xml`, `checkstyle/checkstyle-tests.xml`)
 e o ruleset do PMD (`pmd/pmd-rules.xml`) são as **centrais** do
 [`hubsaude-build-tools`](../hubsaude-build-tools/), resolvidas do
