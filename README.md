@@ -1,6 +1,6 @@
 # hubsaude-cliente-java
 
-[![Version](https://img.shields.io/badge/Version-0.3.29-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/cliente-java-v0.3.29/hubsaude/projetos/hubsaude-cliente-java)
+[![Version](https://img.shields.io/badge/Version-0.4.0-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/cliente-java-v0.4.0/hubsaude/projetos/hubsaude-cliente-java)
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
@@ -21,7 +21,7 @@ referência para o portfólio oficial de SDKs: Java, TypeScript/Node.js
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.3.29</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -30,10 +30,9 @@ Publicado no GitHub Packages
 Autenticação requerida mesmo para leitura: configure `~/.m2/settings.xml`
 com um Personal Access Token (escopo `read:packages`).
 
-`0.3.29` é a última versão estável publicada. O `pom.xml` da branch
-`develop` usa `0.4.0-SNAPSHOT` para o próximo ciclo de desenvolvimento,
-que consolida a API de construção; esse snapshot não substitui a versão
-estável do snippet acima.
+`0.4.0` é a última versão estável publicada. O `pom.xml` da branch
+`develop` usa `0.4.1-SNAPSHOT` para o próximo ciclo de desenvolvimento;
+esse snapshot não substitui a versão estável do snippet acima.
 
 ## Política da API pública
 

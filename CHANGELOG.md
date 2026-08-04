@@ -7,14 +7,17 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-04
+
 ### Removido
 - **Mudança incompatível:** os sete construtores públicos de
   `SmartTokenClient` foram removidos. A criação do cliente passa a ocorrer
   exclusivamente por `SmartTokenClient.builder()` (#1959).
 
 ### Alterado
-- Próximo ciclo elevado para `0.4.0-SNAPSHOT`, coerente com a mudança
-  incompatível durante a fase pré-`1.0.0` (#1959).
+- Série promovida para `0.4.0` devido à mudança incompatível durante a fase
+  pré-`1.0.0`; próximo ciclo avançado para `0.4.1-SNAPSHOT` após a release
+  (#1959, #1962).
 - JavaDoc passou a integrar o perfil `quality`, com doclint ativo e qualquer
   aviso tratado como falha; o mesmo gate foi aplicado aos artefatos de release
   (#1959).
