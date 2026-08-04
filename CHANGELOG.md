@@ -7,66 +7,161 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
-### Alterado
-- Checkstyle e PMD do perfil `quality` passam a consumir as
-  configurações centrais do `hubsaude-build-tools` (versão pinada,
-  resolvida do classpath), eliminando as cópias locais
-  `checkstyle.xml`, `checkstyle-tests.xml` e `pmd-rules.xml` e o risco
-  de drift silencioso (#1603). Permanecem locais, por decisão
-  deliberada documentada no README: `checkstyle-formatacao.xml` (novo;
-  módulos de formatação que a REC-28 removeu do central por redundância
-  com o Spotless, não usado aqui) e `spotbugs-exclude.xml` (filtro
-  curado mais estrito que o central). Sem impacto para consumidores da
-  biblioteca.
-
 ### Corrigido
-- `SslContextFactory.buildKeyManagers(KeyStore, String, char[])` não
-  ignora mais o parâmetro `keyAlias` (alerta CodeQL #48): quando não
-  nulo, o alias é validado de forma fail-fast (deve existir e ser
-  entrada de chave, senão `SmartTokenException` com mensagem
-  acionável) e sua seleção é forçada no handshake mTLS por um wrapper
-  `X509ExtendedKeyManager` que delega as demais operações ao
-  KeyManager original — em KeyStores com múltiplos aliases (PKCS#12
-  institucional, tokens PKCS#11) o cliente apresentava certificado
-  escolhido arbitrariamente pela JVM; chaves em dispositivo continuam
-  sem sair do hardware. Alias nulo preserva o comportamento padrão
-  (#1411).
+- Versão estável do README alinhada à tag mais recente e distinção entre
+  release publicada e o próximo `-SNAPSHOT` explicitada.
+- Contratos de lifecycle, cache LRU, defaults tolerantes e erros
+  sincronizados entre README, especificação e JavaDoc (#1956).
+- Cabeçalho de `package-info.java`, limite de linhas para contribuição e
+  caminho do plano de publicação alinhados às fontes normativas (#1956).
 
 ### Adicionado
-- Emissão do header `traceparent` (W3C Trace Context) em todas as
-  requisições HTTP da biblioteca — token endpoint e descoberta via
-  `.well-known/smart-configuration` (#1298). O trace-id (16 bytes) e o
-  span-id (8 bytes) são gerados criptograficamente (`SecureRandom`)
-  por requisição (cada retry usa um par novo), no formato
-  `00-<trace-id>-<parent-id>-00` com flag `sampled=00` (a lib não
-  grava spans), sem dependência do SDK OpenTelemetry. O trace-id
-  enviado é exposto nos logs de erro/retry e nas mensagens de exceção
-  (`traceId=...`), permitindo ao suporte correlacionar o log do
-  integrador com o `correlation-id` da plataforma — que deriva a
-  correlação exclusivamente do contexto de trace W3C.
+- Guia de integração enterprise para ownership, fechamento, circuit
+  breaker, métricas e observabilidade, retirando tutoriais de frameworks
+  do JavaDoc da classe principal (#1956).
+
+## [0.3.29] - 2026-08-04
+
+### Alterado
+- Dependências fora dos blocos soberanos Spring Boot/HAPI FHIR
+  atualizadas após reconciliação dos alertas de segurança (#1937).
+- Portfólio oficial de SDKs registrado, mantendo Java como implementação
+  de referência do contrato comportamental (#1939).
+
+## [0.3.28] - 2026-08-03
+
+### Alterado
+- `org.slf4j:slf4j-api` atualizado para 2.0.18 (#1891).
+
+## [0.3.27] - 2026-08-03
+
+### Alterado
+- Release técnica de versionamento, sem alteração funcional em relação à
+  0.3.26 (#1887).
+
+## [0.3.26] - 2026-08-02
+
+### Corrigido
+- Cache LRU interno deixou de herdar comportamento de clonagem de
+  `LinkedHashMap`, reduzindo superfície e estado desnecessários (#1871).
+
+## [0.3.25] - 2026-08-02
+
+### Adicionado
+- Teto configurável do cache por scope (`tokenCacheMaxEntries`, padrão
+  1.000) com descarte LRU, limitando memória em aplicações long-lived
+  (#1843).
+
+### Corrigido
+- `close()` passou a coordenar operações em voo, invalidar o cache e
+  rejeitar novas obtenções após o fechamento (#1843).
+- Gates de rastreabilidade e testes deixaram de aceitar relatórios
+  ausentes ou corrompidos como sucesso (#1846).
+
+## [0.3.24] - 2026-08-02
+
+### Alterado
+- Gates de arquitetura, Checkstyle, PMD e plugins de build atualizados
+  para os degraus de qualidade vigentes (#1712, #1749, #1788, #1796,
+  #1797, #1801).
+- Fixtures e clientes HTTP dos testes passaram a ser encerrados
+  deterministicamente; charset, locale e filtros de artefatos foram
+  tornados portáveis entre Linux e Windows (#1810, #1814).
+
+## [0.3.23] - 2026-07-24
+
+### Alterado
+- Checkstyle e PMD do perfil `quality` passaram a consumir as
+  configurações centrais do `hubsaude-build-tools`, eliminando cópias
+  locais sujeitas a drift (#1603, #1638).
+- `SmartTokenClient` foi decomposto em colaboradores internos para
+  reduzir complexidade sem alterar a API pública (#1032, #1655).
+- Workflows passaram a reutilizar pipelines comuns de CI, mutação e
+  quarentena (#1653, #1656).
 
 ### Segurança
-- Zeroização de senhas consistente e sem efeito colateral no chamador
-  (#726): `SigningStrategyFactory.fromPkcs11`/`fromKeyStore` agora fazem
-  cópia defensiva da senha/PIN e zeram apenas a cópia — o array do
-  chamador permanece intacto, permitindo reutilizar o mesmo PIN (ex.: em
-  `clientKeyStore(...)` para mTLS); semântica de ownership documentada em
-  JavaDoc. `SmartTokenClientBuilder.build()` além de zerar as senhas
-  descarta as referências dos campos (`privateKeyPassword` e
-  `clientKeyPassword`) após a construção.
+- `tools.jackson.core:jackson-databind` atualizado para 3.1.5 (#1633).
+
+## [0.3.22] - 2026-07-21
+
+### Alterado
+- Bouncy Castle e Checkstyle atualizados; regras locais de PMD,
+  Checkstyle e SpotBugs sincronizadas antes da centralização posterior
+  (#1524, #1525, #1607, #1636).
+
+## [0.3.21] - 2026-07-20
+
+### Alterado
+- Testes classificados pela convenção `@TesteN0` a `@TesteN5`, com
+  relatório de orçamento por nível (#1404, #1459).
+
+## [0.3.20] - 2026-07-15
+
+### Adicionado
+- Emissão de `traceparent` W3C no token endpoint e na descoberta
+  `.well-known`, com novo trace-id por tentativa e correlação nos erros
+  (#1298, #1377).
+
+### Corrigido
+- `keyAlias` passou a selecionar deterministicamente o certificado no
+  handshake mTLS, inclusive em KeyStores com múltiplas entradas (#1411,
+  #1418).
+
+## [0.3.19] - 2026-07-12
 
 ### Segurança
-- O PEM da chave privada não é mais materializado como `String` imutável:
-  `PemLoader.loadPrivateKey` lê o arquivo como `byte[]`, decodifica para
-  `char[]` e o novo `loadPrivateKeyFromChars` zera os buffers em `finally`
-  em todos os caminhos (sucesso e erro), permitindo zeroização do material
-  de chave em memória (#728).
+- Chaves RSA menores que 2048 bits e EC menores que P-256 passaram a ser
+  rejeitadas conforme NIST SP 800-57 (#727, #1318).
+- PEM de chave privada deixou de ser materializado como `String`; buffers
+  temporários passaram a ser zerados em todos os caminhos (#728, #1321).
+- Senhas e PINs passaram a usar cópias defensivas internas, zeradas sem
+  modificar o array pertencente ao chamador (#726, #1323).
+
+### Corrigido
+- `expires_in` passou a ser validado e o corpo da resposta do token
+  endpoint recebeu limite seguro para diagnóstico (#1325).
+
+## [0.3.18] - 2026-07-12
+
+### Alterado
+- Release técnica de versionamento, sem alteração funcional em relação à
+  0.3.17 (#1306).
+
+## [0.3.17] - 2026-07-11
 
 ### Segurança
-- Chaves privadas fracas passam a ser rejeitadas (fail-fast,
-  `IllegalArgumentException`) no carregamento (`PemLoader`) e na
-  construção de `PrivateKeySigningStrategy`: RSA exige módulo ≥ 2048
-  bits e EC exige curva ≥ P-256 (NIST SP 800-57) (#727).
+- Actions externas dos workflows foram fixadas por SHA (#1000).
+
+### Alterado
+- Testes flaky passaram a usar quarentena explícita no merge gate
+  (#1149, #1166).
+
+## [0.3.16] - 2026-07-10
+
+### Alterado
+- Release técnica de versionamento, sem alteração funcional em relação à
+  0.3.15.
+
+## [0.3.15] - 2026-07-10
+
+### Adicionado
+- Claim `hub_ctx`, algoritmo padrão RS384, suporte a ES384/chaves EC e
+  seleção opcional por `kid` no client assertion (#1109).
+- Guia multi-plataforma de troubleshooting TLS (#1142).
+
+### Corrigido
+- Semântica normativa do `kid` alinhada entre especificação e
+  implementação (#1147).
+
+## [0.3.14] - 2026-07-09
+
+### Corrigido
+- Links, exemplos e inconsistências documentais de baixo risco
+  corrigidos após revisão do projeto (#1006).
+
+### Alterado
+- Workflows de teste passaram a cancelar execuções sobrepostas; dívida de
+  classes extensas foi registrada no backlog (#1021, #1037).
 
 ## [0.3.13] - 2026-07-07
 
@@ -219,4 +314,3 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 - [Repositório](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
 - [Documentação SMART Backend Services](https://hl7.org/fhir/smart-app-launch/backend-services.html)
-

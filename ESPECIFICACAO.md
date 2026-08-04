@@ -235,6 +235,10 @@ sequenceDiagram
    (não é retido em cache).
 5. O token DEVE ser armazenado no cache imediatamente após obtenção
    bem-sucedida.
+6. O cache DEVE ter capacidade máxima configurável por quantidade de
+   scopes (padrão **1.000**). Ao atingir o teto, a inclusão de um novo
+   scope DEVE remover a entrada menos recentemente usada (LRU), sem
+   afetar os locks de single-flight.
 
 #### RF-05 — *Single-flight* por scope
 
@@ -430,22 +434,30 @@ O SDK DEVE expor, com nomes idiomáticos da linguagem
 | `getTokenEndpoint() -> string` | Endpoint efetivo (inclusive descoberto) |
 | `getJwtAlgorithm() -> string` | Algoritmo `alg` configurado |
 | `builder()` / construção fluente | Configuração legível e validada |
+| `close()` / `dispose()` | Libera recursos internos e invalida o cache; operação idempotente |
 
 `obtainToken` DEVE delegar a `obtainTokenResponse` (mesma semântica
 de cache, single-flight e resiliência).
 
+Quando a plataforma possuir recursos explícitos de I/O, a operação de
+fechamento DEVE seguir o idioma da linguagem (`AutoCloseable` no Java,
+`IDisposable` no .NET ou equivalente). Após o fechamento, novas
+operações de token DEVEM falhar explicitamente.
+
 #### RF-18 — Validações de configuração
 
-Na construção, o SDK DEVE falhar com erro explícito quando:
+Na construção, o SDK DEVE aplicar as seguintes validações:
 
-1. `tokenEndpoint` e `fhirBase` forem ambos definidos, ou nenhum;
-2. `clientId` estiver ausente;
-3. estratégia de assinatura e chave PEM forem ambas definidas, ou
-   nenhuma;
-4. valores não positivos forem informados para TTL do assertion,
-   `maxRetries` ou margem do cache — nestes casos o SDK DEVE
-   substituí-los pelos padrões (comportamento tolerante), enquanto
-   timeouts nulos DEVEM ser rejeitados.
+1. falhar com erro explícito quando `tokenEndpoint` e `fhirBase` forem
+   ambos definidos, ou nenhum;
+2. falhar com erro explícito quando `clientId` estiver ausente;
+3. falhar com erro explícito quando estratégia de assinatura e chave PEM
+   forem ambas definidas, ou nenhuma;
+4. substituir pelos padrões os valores não positivos de TTL do
+   assertion, `maxRetries` ou margem do cache (comportamento tolerante);
+5. falhar com erro explícito quando `tokenCacheMaxEntries` for menor ou
+   igual a zero;
+6. falhar com erro explícito quando timeouts nulos forem informados.
 
 O certificado do cliente DEVE ser opcional quando a estratégia de
 assinatura é fornecida diretamente (sem certificado não há mTLS).
@@ -470,7 +482,9 @@ assinatura é fornecida diretamente (sem certificado não há mTLS).
 
 A instância do cliente DEVE ser thread-safe (ou *task-safe* no modelo
 assíncrono da plataforma) e reutilizável pelo ciclo de vida da
-aplicação; a documentação DEVE recomendar instância única.
+aplicação; a documentação DEVE recomendar instância única e fechamento
+explícito no encerramento. O fechamento DEVE ser idempotente, aguardar
+operações em voo e invalidar o cache antes de liberar os recursos.
 
 #### RNF-02 — Sanitização de logs e mensagens de erro
 
@@ -549,6 +563,7 @@ suportar (referência Java: CycloneDX).
 | `maxRetries` | não | 3 | Tentativas totais; ≤ 0 → padrão |
 | `enableTokenCache` | não | `true` | |
 | `tokenCacheMarginSeconds` | não | 30 | ≤ 0 → padrão |
+| `tokenCacheMaxEntries` | não | 1.000 | Deve ser positivo; descarte LRU por scope |
 
 ¹ Exatamente um entre `tokenEndpoint` e `fhirBase`.
 ² Exatamente um entre `privateKeyPem` e `signingStrategy`.

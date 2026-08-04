@@ -39,7 +39,7 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
 
 1. **Issue primeiro**: abra ou comente em uma issue descrevendo o problema
    ou a feature.
-2. **Fork e branch**: trabalhe em branch dedicado a partir de `main`.
+2. **Fork e branch**: trabalhe em branch dedicado a partir de `develop`.
    Nome sugerido: `feat/curto-descritivo`, `fix/issue-123`, `docs/...`.
 3. **Conventional Commits**:
    - `feat:` nova funcionalidade
@@ -65,7 +65,8 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
 ## Padrões técnicos
 
 - **Java 21** (LTS). Build com **Maven 3.9+**.
-- **Linhas**: preferencialmente até 80 caracteres, máximo 100.
+- **Linhas**: preferencialmente curtas, máximo de 120 caracteres
+  conforme o Checkstyle central.
 - **JavaDoc** em pt-BR para a API pública.
 - **Sem `System.out.println`**: use SLF4J.
 - **Imutabilidade** preferida (records, `final`, coleções imutáveis).

@@ -72,19 +72,7 @@ import tools.jackson.databind.node.ObjectNode;
  * ao HubSaúde utilizando o fluxo SMART Backend Services.
  * </p>
  *
- * <h2>Exemplo de uso:</h2>
- *
- * <pre>{@code
- * var tokenClient = new SmartTokenClient(
- *         "https://localhost:8443/auth/token",
- *         "my-backend-app",
- *         Path.of("client-key.pem"),
- *         Path.of("client-cert.pem"));
- *
- * String accessToken = tokenClient.obtainToken("system/Patient.rs");
- * }</pre>
- *
- * <h2>Uso avançado com Builder:</h2>
+ * <h2>Exemplo com builder</h2>
  *
  * <pre>{@code
  * var tokenClient = SmartTokenClient.builder()
@@ -99,9 +87,10 @@ import tools.jackson.databind.node.ObjectNode;
  *         .tokenCacheMarginSeconds(30)
  *         .maxRetries(3)
  *         .build();
+ * String accessToken = tokenClient.obtainToken("system/Patient.rs");
  * }</pre>
  *
- * <h2>Recursos Enterprise:</h2>
+ * <h2>Recursos enterprise</h2>
  * <ul>
  * <li><strong>Cache de tokens:</strong> Tokens são cacheados e reutilizados até
  * próximo
@@ -121,152 +110,19 @@ import tools.jackson.databind.node.ObjectNode;
  * <li><strong>Logs sanitizados:</strong> Tokens nunca são expostos em logs</li>
  * </ul>
  *
- * <h2>Integração com Infraestrutura Enterprise</h2>
+ * <p>A instância é thread-safe e deve ser mantida durante o ciclo de vida
+ * da aplicação. O método {@link #close()} é idempotente, encerra o cliente
+ * HTTP interno e invalida o cache; obtenções posteriores falham
+ * explicitamente.</p>
  *
- * <p>
- * Esta classe implementa resiliência básica (retry com backoff) internamente.
- * Para cenários
- * de produção com requisitos avançados de observabilidade e tolerância a
- * falhas, recomenda-se
- * integrar com frameworks especializados <strong>na camada de
- * orquestração</strong>, não
- * diretamente nesta classe. Isso mantém a separação de responsabilidades e
- * permite configuração
- * centralizada.
- * </p>
- *
- * <h3>Circuit Breaker (Resilience4j)</h3>
- *
- * <p>
- * Para proteger o sistema contra falhas em cascata quando o authorization
- * server estiver
- * degradado, decore as chamadas ao {@link #obtainToken(String)} com um Circuit
- * Breaker:
- * </p>
- *
- * <pre>{@code
- * // Configuração do Circuit Breaker
- * CircuitBreakerConfig config = CircuitBreakerConfig.custom()
- *         .failureRateThreshold(50)
- *         .waitDurationInOpenState(Duration.ofSeconds(30))
- *         .slidingWindowSize(10)
- *         .permittedNumberOfCallsInHalfOpenState(3)
- *         .build();
- *
- * CircuitBreaker circuitBreaker = CircuitBreaker.of("smartToken", config);
- *
- * // Uso decorado
- * Supplier<String> decoratedSupplier = CircuitBreaker
- *         .decorateSupplier(circuitBreaker, () -> {
- *             try {
- *                 return tokenClient.obtainToken(scope);
- *             } catch (Exception e) {
- *                 throw new RuntimeException(e);
- *             }
- *         });
- *
- * String token = Try.ofSupplier(decoratedSupplier)
- *         .recover(CallNotPermittedException.class, e -> handleCircuitOpen())
- *         .get();
- * }</pre>
- *
- * <h3>Métricas (Micrometer)</h3>
- *
- * <p>
- * Para monitoramento em tempo real da obtenção de tokens, instrumente as
- * chamadas com
- * Micrometer. Métricas recomendadas:
- * </p>
- *
- * <ul>
- * <li>{@code smart.token.requests} — contador de requisições (tags: status,
- * scope)</li>
- * <li>{@code smart.token.latency} — histograma de latência</li>
- * <li>{@code smart.token.cache.hits} — taxa de acerto do cache</li>
- * <li>{@code smart.token.retries} — contador de retries</li>
- * </ul>
- *
- * <pre>{@code
- * // Wrapper com métricas
- * public class InstrumentedTokenClient {
- *     private final SmartTokenClient delegate;
- *     private final MeterRegistry registry;
- *     private final Timer tokenTimer;
- *     private final Counter cacheHits;
- *     private final Counter cacheMisses;
- *
- *     public String obtainToken(String scope) throws IOException, InterruptedException {
- *         return tokenTimer.record(() -> {
- *             try {
- *                 return delegate.obtainToken(scope);
- *             } catch (Exception e) {
- *                 registry.counter("smart.token.errors", "type", e.getClass().getSimpleName()).increment();
- *                 throw e;
- *             }
- *         });
- *     }
- * }
- * }</pre>
- *
- * <h3>Distributed Tracing e correlação (traceparent W3C)</h3>
- *
- * <p>
- * Por padrão, <strong>toda requisição HTTP desta biblioteca</strong> (token
- * endpoint e descoberta via {@code .well-known/smart-configuration}) carrega
- * o header {@code traceparent} do
- * <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>, com
- * trace-id (16 bytes) e span-id (8 bytes) gerados criptograficamente por
- * requisição — sem dependência do SDK OpenTelemetry. A flag {@code sampled}
- * é {@code 00} (a biblioteca não grava spans). O HubSaúde deriva o
- * identificador de correlação exclusivamente desse header; o trace-id é
- * registrado nos logs de erro/retry e nas mensagens de exceção
- * ({@code traceId=...}) — informe-o ao suporte para correlacionar o log
- * local do integrador com o {@code correlation-id} da plataforma.
- * </p>
- *
- * <p>
- * Aplicações instrumentadas com o OpenTelemetry Java Agent
- * ({@code -javaagent:opentelemetry-javaagent.jar}) continuam funcionando:
- * a instrumentação automática do {@link java.net.http.HttpClient} substitui
- * o header pelo contexto do span ativo, e o trace-id efetivo passa a ser o
- * do agente.
- * </p>
- *
- * <h3>Arquitetura Recomendada</h3>
- *
- * <p>
- * Para aplicações Spring Boot, encapsule o {@link SmartTokenClient} em um
- * {@code @Service}
- * que centraliza as integrações enterprise:
- * </p>
- *
- * <pre>{@code
- * {@literal @Service}
- * public class TokenService {
- *     private final SmartTokenClient tokenClient;
- *     private final CircuitBreaker circuitBreaker;
- *     private final MeterRegistry meterRegistry;
- *
- *     @Timed("smart.token.obtain")
- *     public String getToken(String scope) {
- *         return circuitBreaker.executeSupplier(() -> {
- *             try {
- *                 return tokenClient.obtainToken(scope);
- *             } catch (Exception e) {
- *                 throw new TokenServiceException("Falha ao obter token", e);
- *             }
- *         });
- *     }
- * }
- * }</pre>
+ * <p>Integrações com circuit breaker, métricas e contêineres de aplicação
+ * pertencem à camada de orquestração. Consulte o guia de integração
+ * enterprise para exemplos sem acoplar esta biblioteca a frameworks.</p>
  *
  * @see <a href=
- *      "https://resilience4j.readme.io/docs/circuitbreaker">Resilience4j
- *      Circuit Breaker</a>
- * @see <a href="https://micrometer.io/docs">Micrometer Documentation</a>
- * @see <a href=
- *      "https://opentelemetry.io/docs/instrumentation/java/">OpenTelemetry
- *      Java</a>
+ *      "https://github.com/FabricaDeSoftwareINF/server-hubsaude/blob/develop/hubsaude/projetos/hubsaude-cliente-java/docs/integracao-enterprise.md">
+ *      Guia de integração enterprise</a>
+ * @see <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>
  */
 // Suppress: classe responsável por integração completa SMART Backend Services
 // DeclarationOrder: agrupamento por papel lógico em vez de modificador de acesso.

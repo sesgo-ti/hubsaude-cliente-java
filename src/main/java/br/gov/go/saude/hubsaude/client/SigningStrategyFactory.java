@@ -42,9 +42,13 @@ import org.jspecify.annotations.Nullable;
  *
  * <h2>Fontes Suportadas</h2>
  * <ul>
- *   <li>{@link #fromPrivateKey(PrivateKey)} — chave já carregada em memória</li>
+ *   <li>{@link #fromPrivateKey(PrivateKey)} e
+ *       {@link #fromPrivateKeyForJwt(PrivateKey, String)} — chave já carregada
+ *       em memória</li>
  *   <li>{@link #fromPemFile(Path)} — arquivo PEM sem senha</li>
  *   <li>{@link #fromPemFile(Path, char[])} — arquivo PEM com senha</li>
+ *   <li>{@link #fromPemString(String, char[])} — PEM já carregado em memória</li>
+ *   <li>{@link #fromKeyStore(KeyStore, String, char[])} — JKS ou PKCS#12</li>
  *   <li>{@link #fromPkcs11(Provider, String, char[])} — HSM/Smart Token</li>
  * </ul>
  *
@@ -91,7 +95,9 @@ public final class SigningStrategyFactory {
      * Útil quando a chave foi obtida de outra fonte (ex: KeyStore, Vault API).
      * </p>
      *
-     * @param privateKey chave privada RSA
+     * @param privateKey chave privada RSA; para seleção explícita por algoritmo
+     *                   JWA, inclusive EC, use
+     *                   {@link #fromPrivateKeyForJwt(PrivateKey, String)}
      * @return estratégia de assinatura configurada
      * @throws NullPointerException se privateKey for null
      */
@@ -175,7 +181,7 @@ public final class SigningStrategyFactory {
      * {@link PrivateKey} obtido é um handle que delega operações ao dispositivo.
      * </p>
      *
-     * <h3>Configuração do Provider PKCS#11</h3>
+     * <h4>Configuração do Provider PKCS#11</h4>
      * <pre>{@code
      * // Via arquivo de configuração
      * String config = "--name=MyHSM\\nlibrary=/usr/lib/pkcs11/libsofthsm2.so";
@@ -306,8 +312,9 @@ public final class SigningStrategyFactory {
     /**
      * Converte um algoritmo JWT (JWA) para o nome do algoritmo de assinatura Java (JCA).
      *
-     * <h3>Mapeamentos Suportados</h3>
+     * <h4>Mapeamentos Suportados</h4>
      * <table>
+     *   <caption>Mapeamento de algoritmos JWA para JCA</caption>
      *   <tr><th>JWT (JWA)</th><th>Java (JCA)</th><th>Descrição</th></tr>
      *   <tr><td>RS256</td><td>SHA256withRSA</td><td>RSA PKCS#1 v1.5 + SHA-256</td></tr>
      *   <tr><td>RS384</td><td>SHA384withRSA</td><td>RSA PKCS#1 v1.5 + SHA-384</td></tr>

@@ -1,6 +1,6 @@
 # hubsaude-cliente-java
 
-[![Version](https://img.shields.io/badge/Version-0.3.29-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
+[![Version](https://img.shields.io/badge/Version-0.3.29-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/cliente-java-v0.3.29/hubsaude/projetos/hubsaude-cliente-java)
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
@@ -21,7 +21,7 @@ referência para o portfólio oficial de SDKs: Java, TypeScript/Node.js
 <dependency>
     <groupId>br.gov.go.saude.hubsaude</groupId>
     <artifactId>hubsaude-cliente-java</artifactId>
-    <version>0.3.13</version>
+    <version>0.3.29</version>
 </dependency>
 ```
 
@@ -29,6 +29,10 @@ Publicado no GitHub Packages
 (`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`).
 Autenticação requerida mesmo para leitura: configure `~/.m2/settings.xml`
 com um Personal Access Token (escopo `read:packages`).
+
+`0.3.29` é a última versão estável publicada. O `pom.xml` da branch
+`develop` usa `0.3.30-SNAPSHOT` para o próximo ciclo de desenvolvimento;
+esse snapshot não substitui a versão estável do snippet acima.
 
 ## Uso básico
 
@@ -45,7 +49,39 @@ String token = client.obtainToken("system/Patient.rs");
 
 A instância é **thread-safe**, mantém cache do token (renovado conforme
 margem de expiração) e executa *retries* com *backoff* exponencial.
-Reutilize a mesma instância pelo ciclo de vida da aplicação.
+Reutilize a mesma instância pelo ciclo de vida da aplicação e invoque
+`close()` uma única vez no encerramento da aplicação.
+
+## Ciclo de vida, cache e erros
+
+`SmartTokenClient` implementa `AutoCloseable`. Seu `close()` é
+idempotente, aguarda operações em voo, encerra o `HttpClient` interno e
+invalida todo o cache. Após o fechamento, novas obtenções de token falham
+com `IllegalStateException`. Em aplicações long-lived, registre a
+instância como singleton no mecanismo de lifecycle do contêiner; use
+*try-with-resources* apenas em CLIs, jobs curtos e testes.
+
+As operações de token podem propagar:
+
+| Tipo | Situação |
+|------|----------|
+| `IOException` | Falha de rede não recuperada pelos retries internos |
+| `InterruptedException` | Interrupção durante requisição ou backoff; propague-a ou restaure o estado de interrupção |
+| `SmartTokenException` | Configuração criptográfica inválida, resposta HTTP/JSON inválida ou algoritmo não suportado |
+| `SigningException` | Falha da estratégia criptográfica ao assinar o `client_assertion` |
+
+Após receber `401` ao usar um token em um endpoint FHIR, invalide a
+entrada antes de obter um novo token:
+
+```java
+client.invalidateCache("system/Patient.rs");
+String renewedToken = client.obtainToken("system/Patient.rs");
+```
+
+Não repita indefinidamente após um novo `401`: trate a recorrência como
+falha de credencial, consentimento ou autorização. Consulte o
+[guia de integração enterprise](docs/integracao-enterprise.md) para
+lifecycle, circuit breaker, métricas e observabilidade.
 
 ## Fontes de chave (`SigningStrategy`)
 
@@ -150,6 +186,12 @@ var client = SmartTokenClient.builder()
 O endpoint deve usar `https`; o esquema `http` é aceito apenas para
 `localhost`/`127.0.0.1` (desenvolvimento e testes locais).
 
+Valores menores ou iguais a zero em `assertionTtlSeconds`, `maxRetries`
+e `tokenCacheMarginSeconds` são substituídos pelos padrões de 60 s, 3
+tentativas totais e 30 s, respectivamente. `tokenCacheMaxEntries` deve
+ser positivo; valor inválido faz `build()` falhar com
+`IllegalArgumentException`.
+
 ### Contexto de Guia de Implementação (`hub_ctx`)
 
 O claim proprietário `hub_ctx` declara o Guia de Implementação (IG) e a
@@ -205,17 +247,10 @@ openssl pkcs8 -topk8 -v2 aes-256-cbc -in chave-privada.pem -out chave-encrypted.
 
 A biblioteca já cobre cache de token + *retries* com *backoff*. Para
 proteção adicional contra falhas prolongadas do AS, combine com um
-*circuit breaker* externo (ex.: Resilience4j):
-
-```java
-CircuitBreaker cb = CircuitBreaker.of("hubsaude", CircuitBreakerConfig.custom()
-        .failureRateThreshold(50)
-        .waitDurationInOpenState(Duration.ofSeconds(30))
-        .slidingWindowSize(10)
-        .build());
-
-String token = cb.executeSupplier(() -> client.obtainToken(scope));
-```
+*circuit breaker* externo na camada de orquestração. O
+[guia de integração enterprise](docs/integracao-enterprise.md) descreve
+ownership, composição de resiliência e métricas sem acoplar o SDK a um
+framework.
 
 ## Correlação e observabilidade (`traceparent`)
 
@@ -325,6 +360,10 @@ javadoc e SBOM CycloneDX.
 | [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) | OAuth 2.0 (`client_credentials`) |
 | [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) | JSON Web Token (JWT) |
 | [RFC 7521](https://datatracker.ietf.org/doc/html/rfc7521) / [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523) | Assertion Framework e JWT Bearer Assertion |
+
+O [guia de integração enterprise](docs/integracao-enterprise.md)
+complementa essas referências com lifecycle, resiliência, métricas e
+integração com contêineres.
 
 ## Licença e contribuição
 

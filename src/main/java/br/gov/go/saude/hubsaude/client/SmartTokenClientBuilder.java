@@ -294,7 +294,7 @@ public final class SmartTokenClientBuilder {
      * <p>
      * O Servidor de Autorização do HubSaúde aceita apenas <strong>RS384</strong>
      * e <strong>ES384</strong> (concern client-assertion-contexto-ig.md §3.2).
-     * Algoritmos suportados pelo SDK:
+     * Algoritmos suportados pelo SDK:</p>
      * <ul>
      *   <li><strong>RS384</strong> (padrão) — RSA PKCS#1 v1.5 + SHA-384</li>
      *   <li><strong>ES384</strong> — ECDSA + SHA-384 (P-384)</li>
@@ -302,7 +302,6 @@ public final class SmartTokenClientBuilder {
      *   SDK para uso com outros servidores de autorização, mas rejeitados
      *   pelo HubSaúde</li>
      * </ul>
-     * </p>
      *
      * <p>
      * <strong>Nota:</strong> O algoritmo configurado define o valor do campo
@@ -418,7 +417,8 @@ public final class SmartTokenClientBuilder {
     /**
      * Define o TTL do client_assertion JWT em segundos.
      *
-     * @param assertionTtlSeconds valor positivo
+     * @param assertionTtlSeconds valor em segundos; menor ou igual a zero
+     *                            usa o padrão de 60 segundos
      * @return este builder
      */
     public SmartTokenClientBuilder assertionTtlSeconds(final int assertionTtlSeconds) {
@@ -439,7 +439,8 @@ public final class SmartTokenClientBuilder {
      * O retry usa backoff exponencial (1s, 2s, 4s...).
      * </p>
      *
-     * @param maxRetries número positivo (padrão: 3)
+     * @param maxRetries número total de tentativas; menor ou igual a zero
+     *                   usa o padrão de 3 tentativas
      * @return este builder
      */
     public SmartTokenClientBuilder maxRetries(final int maxRetries) {
@@ -466,7 +467,8 @@ public final class SmartTokenClientBuilder {
     /**
      * Define a margem em segundos para renovar token antes de expirar.
      *
-     * @param tokenCacheMarginSeconds margem positiva (padrão: 30s)
+     * @param tokenCacheMarginSeconds margem em segundos; menor ou igual a
+     *                                zero usa o padrão de 30 segundos
      * @return este builder
      */
     public SmartTokenClientBuilder tokenCacheMarginSeconds(final int tokenCacheMarginSeconds) {
@@ -477,7 +479,8 @@ public final class SmartTokenClientBuilder {
     /**
      * Define a quantidade máxima de scopes retidos no cache de tokens.
      *
-     * @param tokenCacheMaxEntries teto positivo (padrão: 1.000)
+     * @param tokenCacheMaxEntries teto positivo (padrão: 1.000); valor
+     *                             inválido faz {@link #build()} falhar
      * @return este builder
      */
     public SmartTokenClientBuilder tokenCacheMaxEntries(final int tokenCacheMaxEntries) {
@@ -498,9 +501,10 @@ public final class SmartTokenClientBuilder {
      * </p>
      *
      * @return cliente configurado
-     * @throws IOException           se os arquivos PEM não puderem ser lidos
-     * @throws IllegalStateException se nem privateKeyPem nem signingStrategy forem
-     *                               definidos
+     * @throws IOException              se os arquivos PEM não puderem ser lidos
+     * @throws IllegalArgumentException se o teto do cache não for positivo
+     * @throws IllegalStateException    se nem privateKeyPem nem signingStrategy forem
+     *                                  definidos
      */
     public SmartTokenClient build() throws IOException {
         try {
