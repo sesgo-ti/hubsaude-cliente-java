@@ -61,7 +61,7 @@
     </ciManagement>
 
     <properties>
-        <revision>0.3.29-SNAPSHOT</revision>
+        <revision>0.3.30-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <project.build.outputTimestamp>2026-06-25T16:35:39Z</project.build.outputTimestamp>
@@ -97,7 +97,7 @@
         <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
         <pitest.skip>true</pitest.skip>
 
-        <hubsaude-simulador.version>0.1.31</hubsaude-simulador.version>
+        <hubsaude-simulador.version>0.1.32</hubsaude-simulador.version>
 
         <maven.deploy.skip>false</maven.deploy.skip>
 
