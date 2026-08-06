@@ -13,7 +13,7 @@
 - **Público-alvo:** desenvolvedores de SDKs do HubSaúde e revisores.
 - **Identificadores:** `RF-xx` (funcionais) e `RNF-xx` (não funcionais)
   são locais a este documento; não confundir com os requisitos centrais
-  do HubSaúde em [`docs/especificacao/requisitos.md`](../../docs/especificacao/requisitos.md).
+  da plataforma HubSaúde.
 
 ## 1. Introdução
 
@@ -43,9 +43,8 @@ aplicação integradora):
 
 ### 1.3 Portfólio oficial de SDKs
 
-O portfólio oficial do HubSaúde é composto pelas quatro implementações
-abaixo. Sua disponibilidade e evolução são rastreadas na
-[issue #462](https://github.com/FabricaDeSoftwareINF/server-hubsaude/issues/462).
+O portfólio planejado do HubSaúde é composto pelas quatro implementações
+abaixo.
 
 | Ecossistema | Projeto | Papel |
 |-------------|---------|-------|
@@ -81,7 +80,6 @@ As palavras-chave **DEVE**, **NÃO DEVE**, **DEVERIA**, **PODE** e
 | [RFC 7521](https://datatracker.ietf.org/doc/html/rfc7521) / [RFC 7523](https://datatracker.ietf.org/doc/html/rfc7523) | Assertion Framework e JWT profile |
 | [SMART clinical scopes (STU2)](http://hl7.org/fhir/smart-app-launch/STU2/scopes-and-launch-context.html#clinical-scope-syntax) | Sintaxe dos scopes (`system/Recurso.ações`) |
 | [W3C Trace Context](https://www.w3.org/TR/trace-context/) | Header `traceparent` (correlação com a plataforma) |
-| [`hubsaude-simulador/ESPECIFICACAO.md`](../hubsaude-simulador/ESPECIFICACAO.md) | Contrato do servidor (validações do `client_assertion`) |
 
 ## 4. Terminologia
 
@@ -520,8 +518,9 @@ DEVE ter memória constante (RF-05.3).
 
 #### RNF-06 — Testes e cobertura
 
-1. O SDK DEVE ter testes unitários independentes de serviços externos
-   e testes de integração contra o `hubsaude-simulador`.
+1. O SDK DEVE ter testes automatizados independentes de serviços externos.
+   Testes ponta a ponta contra ambientes externos PODEM complementar o gate,
+   mas NÃO DEVEM ser necessários para compilar e validar o projeto.
 2. Cobertura mínima de linha: **85%**, aplicada como *gate* no
    release (referência Java: JaCoCo).
 3. Os casos mínimos de conformidade de [§11](#11-casos-de-teste-mínimos-de-conformidade)
@@ -687,13 +686,13 @@ Uma implementação DEVE cobrir, no mínimo:
 13. **Algoritmos**: mapeamento dos 9 valores de RF-16; valor inválido
     rejeitado; case-insensitive.
 14. **Validações de construção**: cada regra de RF-18.
-15. **Integração** (com `hubsaude-simulador`): fluxo completo de
-    obtenção de token, incluindo TLS com trust anchor do simulador.
+15. **Integração**: fluxo completo de obtenção de token e TLS com trust
+    anchor em ambiente de teste, executado fora do gate público quando exigir
+    infraestrutura externa.
 
 ## 12. Evolução prevista
 
-Itens rastreados no [backlog interno](internal/backlog.md) que PODEM
-alterar este contrato em versões futuras (sem efeito normativo hoje):
-*jitter* no backoff (item 11), robustez adicional das claims JWT
+Evoluções futuras PODEM alterar este contrato conforme Versionamento
+Semântico, incluindo *jitter* no backoff e robustez adicional das claims JWT
 (item 10), observabilidade opcional (item 12) e política formal de
 compatibilidade de API (item 7).

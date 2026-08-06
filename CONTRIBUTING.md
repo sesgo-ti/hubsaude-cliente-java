@@ -95,5 +95,5 @@ Vulnerabilidades **não** devem ser reportadas como issues públicas. Veja
 
 ## Dúvidas
 
-Abra uma [Discussion](https://github.com/FabricaDeSoftwareINF/server-hubsaude/discussions)
+Abra uma [Discussion](https://github.com/sesgo-ti/hubsaude-cliente-java/discussions)
 ou contate os mantenedores via issue.

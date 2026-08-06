@@ -54,7 +54,7 @@ Ao configurar a política:
 ## Métricas
 
 Instrumente a fachada da aplicação, não o SDK. Para Prometheus, siga a
-ADR-40:
+Convenção de métricas:
 
 | Finalidade | Nome recomendado |
 |------------|------------------|
@@ -69,7 +69,7 @@ cardinalidade não limitada; tokens e dados pessoais também violam o
 contrato de segredo e a LGPD.
 
 Os labels de identidade de serviço e ambiente devem ser `service` e
-`env`, conforme ADR-58.
+`env`.
 
 ## Trace e diagnóstico
 
@@ -86,6 +86,4 @@ PIN ou o corpo bruto não sanitizado de uma resposta.
 
 - [README do SDK](../README.md)
 - [Contrato comportamental](../ESPECIFICACAO.md)
-- [ADR-40 — naming de métricas](../../../docs/design/adrs/adr-40-naming-metricas-observabilidade.md)
-- [ADR-58 — labels canônicos](../../../docs/design/adrs/adr-58-labels-canonicos-observabilidade.md)
 - [W3C Trace Context](https://www.w3.org/TR/trace-context/)

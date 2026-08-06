@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<ruleset name="HubSaude Cliente Java"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>Regras bloqueantes de corretude e segurança do SDK público.</description>
+    <exclude-pattern>.*/target/.*</exclude-pattern>
+    <exclude-pattern>.*/src/test/.*</exclude-pattern>
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"><priority>2</priority></rule>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"><priority>2</priority></rule>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"><priority>2</priority></rule>
+    <rule ref="category/java/bestpractices.xml/PreserveStackTrace"><priority>2</priority></rule>
+    <rule ref="category/java/bestpractices.xml/UseTryWithResources"><priority>2</priority></rule>
+    <rule ref="category/java/bestpractices.xml/UseStandardCharsets"><priority>2</priority></rule>
+    <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace"><priority>2</priority></rule>
+    <rule ref="category/java/errorprone.xml/AvoidCatchingThrowable"><priority>2</priority></rule>
+    <rule ref="category/java/errorprone.xml/CloseResource"><priority>2</priority></rule>
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock"><priority>2</priority></rule>
+    <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock"><priority>2</priority></rule>
+    <rule ref="category/java/security.xml"><priority>2</priority></rule>
+</ruleset>

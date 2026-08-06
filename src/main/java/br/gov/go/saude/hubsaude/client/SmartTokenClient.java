@@ -1,21 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright 2025-2026 Estado de Goiás — Secretaria de Estado da Saúde (SES-GO).
- * Copyright 2025-2026 Universidade Federal de Goiás (UFG) —
- *     Instituto de Informática / Fábrica de Software.
- *
- * Licenciado sob a Apache License, Version 2.0 (a "Licença");
- * você só pode usar este arquivo em conformidade com a Licença.
- * Você pode obter uma cópia da Licença em
- *
- *     https://www.apache.org/licenses/LICENSE-2.0
- *
- * A menos que exigido por lei aplicável ou acordado por escrito,
- * o software distribuído sob a Licença é distribuído "NO ESTADO
- * EM QUE SE ENCONTRA", SEM GARANTIAS OU CONDIÇÕES DE QUALQUER
- * TIPO, expressas ou implícitas. Consulte a Licença para o
- * idioma específico que rege permissões e limitações sob a
- * Licença.
+ * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
 package br.gov.go.saude.hubsaude.client;
@@ -119,7 +104,7 @@ import tools.jackson.databind.node.ObjectNode;
  * enterprise para exemplos sem acoplar esta biblioteca a frameworks.</p>
  *
  * @see <a href=
- *      "https://github.com/FabricaDeSoftwareINF/server-hubsaude/blob/develop/hubsaude/projetos/hubsaude-cliente-java/docs/integracao-enterprise.md">
+ *      "https://github.com/sesgo-ti/hubsaude-cliente-java/blob/develop/docs/integracao-enterprise.md">
  *      Guia de integração enterprise</a>
  * @see <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>
  */

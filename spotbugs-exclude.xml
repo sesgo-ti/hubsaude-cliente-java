@@ -7,8 +7,7 @@
     <!--
       Filtro SpotBugs LOCAL, deliberadamente curado para esta biblioteca —
       NÃO é cópia do filtro central spotbugs/exclude-filter.xml do
-      hubsaude-build-tools e não está sujeito a paridade com ele
-      (issue #1603). Filtros de exclusão têm semântica aditiva (cada entrada
+      Filtros de exclusão têm semântica aditiva (cada entrada
       REDUZ a cobertura); consumir o filtro central importaria exclusões
       inaplicáveis aqui e ENFRAQUECERIA o gate de segurança.
 

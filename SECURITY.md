@@ -2,7 +2,7 @@
 
 ## Versões suportadas
 
-Apenas a versão **MAJOR mais recente** publicada no GitHub Packages recebe
+Apenas a versão **MAJOR mais recente** publicada recebe
 correções de segurança. Versões anteriores são consideradas fim-de-vida
 (EOL) a partir do lançamento de uma nova MAJOR.
 
@@ -20,7 +20,7 @@ vulnerabilidades de segurança. Use um dos canais abaixo.
 
 Abra um *private security advisory* em:
 
-<https://github.com/FabricaDeSoftwareINF/server-hubsaude/security/advisories/new>
+<https://github.com/sesgo-ti/hubsaude-cliente-java/security/advisories/new>
 
 Vantagens:
 - Histórico privado, com auditoria
@@ -60,5 +60,4 @@ anonimato.
 ## Escopo
 
 Este documento cobre o artefato publicado como
-`br.gov.go.saude.hubsaude:hubsaude-cliente-java` no GitHub Packages
-(`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`).
+`br.gov.go.saude.hubsaude:hubsaude-cliente-java`.

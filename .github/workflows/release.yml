@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Validar tag e construir artefatos
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          case "$VERSION" in
+            *-SNAPSHOT|*[!0-9.]*|.*|*.) exit 1 ;;
+          esac
+          mvn -B -ntp clean verify -Pquality,release -Drevision="$VERSION"
+      - name: Publicar GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            target/hubsaude-cliente-java-*.jar \
+            target/hubsaude-cliente-java-*-cyclonedx.json \
+            --generate-notes \
+            --verify-tag

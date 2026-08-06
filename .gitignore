@@ -24,11 +24,13 @@ nbdist/
 Thumbs.db
 
 # Maven
+.flattened-pom.xml
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
 pom.xml.next
 release.properties
+dependency-reduced-pom.xml
 
 # Logs
 *.log
@@ -41,4 +43,3 @@ release.properties
 # Ignore local environment files
 .env
 .env.local
-

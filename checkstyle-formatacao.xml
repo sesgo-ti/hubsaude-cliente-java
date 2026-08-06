@@ -6,9 +6,8 @@
     Verificação de formatação de arquivo — configuração LOCAL deste projeto.
 
     As demais regras Checkstyle vêm da configuração central do
-    hubsaude-build-tools, resolvida do classpath (ver pom.xml, issue #1603).
-    Os módulos abaixo foram removidos da configuração central pela REC-28
-    (issue #644) por redundância com o Spotless (palantir-java-format);
+    Os módulos abaixo complementam o gate principal com verificações de
+    whitespace e final de arquivo;
     este projeto NÃO usa Spotless, então a verificação é mantida aqui.
 
     Não é cópia de arquivo central: não está sujeita a drift.

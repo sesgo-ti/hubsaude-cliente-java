@@ -287,7 +287,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `SmartTokenClient` refatorado para usar `FaultToleranceConfig`
 - `SmartTokenClientBuilder` atualizado para construir `FaultToleranceConfig`
 - Cabeçalho de licença dos arquivos `.java` alinhado ao Apache-2.0
-  (SPDX-License-Identifier + texto Apache)
+  (identificador SPDX e atribuição de copyright)
 
 ## [0.0.0-SNAPSHOT] - 2026-03-07
 
@@ -329,5 +329,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## Links
 
-- [Repositório](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
+- [Repositório](https://github.com/sesgo-ti/hubsaude-cliente-java)
 - [Documentação SMART Backend Services](https://hl7.org/fhir/smart-app-launch/backend-services.html)
