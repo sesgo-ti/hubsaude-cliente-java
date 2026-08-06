@@ -287,7 +287,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - `SmartTokenClient` refatorado para usar `FaultToleranceConfig`
 - `SmartTokenClientBuilder` atualizado para construir `FaultToleranceConfig`
 - Cabeçalho de licença dos arquivos `.java` alinhado ao Apache-2.0
-  (SPDX-License-Identifier + texto Apache)
+  (identificador SPDX e atribuição de copyright)
 
 ## [0.0.0-SNAPSHOT] - 2026-03-07
 

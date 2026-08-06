@@ -384,7 +384,7 @@ integração com contêineres.
 ## Licença e contribuição
 
 Apache License 2.0 — ver [`LICENSE`](LICENSE) e [`NOTICE`](NOTICE).
-Copyright 2025 Estado de Goiás (SES-GO).
+Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — fluxo e DCO
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1

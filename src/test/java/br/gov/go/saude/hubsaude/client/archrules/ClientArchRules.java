@@ -1,14 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright 2025-2026 Estado de Goiás — Secretaria de Estado da Saúde (SES-GO).
- * Copyright 2025-2026 Universidade Federal de Goiás (UFG) —
- *     Instituto de Informática / Fábrica de Software.
- *
- * Licenciado sob a Apache License, Version 2.0 (a "Licença");
- * você só pode usar este arquivo em conformidade com a Licença.
- * Você pode obter uma cópia da Licença em
- *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * Copyright 2025-2026 Estado de Goiás (SES-GO) e Universidade Federal de Goiás (UFG).
  */
 
 package br.gov.go.saude.hubsaude.client.archrules;
