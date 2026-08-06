@@ -10,7 +10,7 @@
 
     <name>HubSaúde Cliente Java</name>
     <description>Cliente Java para facilitar a obtenção de tokens de acesso ao HubSaúde via SMART Backend Services (SMART-on-FHIR), o fluxo de autenticação máquina-a-máquina (M2M) exigido pela plataforma. Encapsula a montagem do JWT de client assertion, a assinatura com a chave privada do credenciado e a requisição ao endpoint de token, expondo uma API simples para que aplicações consumidoras obtenham e renovem tokens sem reimplementar o protocolo.</description>
-    <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude</url>
+    <url>https://github.com/sesgo-ti/hubsaude-cliente-java</url>
     <inceptionYear>2025</inceptionYear>
 
     <organization>
@@ -44,20 +44,20 @@
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/FabricaDeSoftwareINF/server-hubsaude.git</connection>
-        <developerConnection>scm:git:git@github.com:FabricaDeSoftwareINF/server-hubsaude.git</developerConnection>
-        <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/main/hubsaude/projetos/hubsaude-cliente-java</url>
+        <connection>scm:git:https://github.com/sesgo-ti/hubsaude-cliente-java.git</connection>
+        <developerConnection>scm:git:git@github.com:sesgo-ti/hubsaude-cliente-java.git</developerConnection>
+        <url>https://github.com/sesgo-ti/hubsaude-cliente-java</url>
         <tag>HEAD</tag>
     </scm>
 
     <issueManagement>
         <system>GitHub Issues</system>
-        <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude/issues</url>
+        <url>https://github.com/sesgo-ti/hubsaude-cliente-java/issues</url>
     </issueManagement>
 
     <ciManagement>
         <system>GitHub Actions</system>
-        <url>https://github.com/FabricaDeSoftwareINF/server-hubsaude/actions</url>
+        <url>https://github.com/sesgo-ti/hubsaude-cliente-java/actions</url>
     </ciManagement>
 
     <properties>
@@ -97,8 +97,6 @@
         <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
         <pitest.skip>true</pitest.skip>
 
-        <hubsaude-simulador.version>0.1.32</hubsaude-simulador.version>
-
         <maven.deploy.skip>false</maven.deploy.skip>
 
         <!-- Plugins. -->
@@ -115,23 +113,14 @@
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
-        <!-- FindSecBugs: SAST de seguranca no SpotBugs (perfil `quality`).
-             Mesma versao usada no hubsaude-parent (issue #736): este projeto
-             e standalone (sem <parent>) e nao herda aquela configuracao. -->
+        <!-- FindSecBugs: SAST de seguranca no SpotBugs (perfil `quality`). -->
         <findsecbugs.version>1.14.0</findsecbugs.version>
 
         <!-- Plugins do perfil `quality` (verificacoes estaticas) -->
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
-        <!-- 13.9.0 remove o modulo JavadocStyle (checkstyle#20610);
-             exige o ruleset do hubsaude-build-tools >= 0.3.20. -->
+        <!-- Checkstyle usado pelas regras locais em config/. -->
         <checkstyle.version>13.9.0</checkstyle.version>
-        <!-- Configuracoes centrais de qualidade (issue #1603): Checkstyle e
-             PMD sao resolvidos do classpath do hubsaude-build-tools em vez
-             de copias locais, eliminando drift silencioso. Mesma versao
-             pinada pelo hubsaude-parent; bumps automaticos via Renovate. -->
-        <hubsaude-build-tools.version>0.3.21</hubsaude-build-tools.version>
-
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
         <!-- OWASP Dependency-Check: desligavel via -DdependencyCheckSkip=true -->
@@ -145,17 +134,6 @@
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <cyclonedx-maven-plugin.version>2.9.1</cyclonedx-maven-plugin.version>
     </properties>
-
-    <distributionManagement>
-        <repository>
-            <id>github-hubsaude</id>
-            <url>https://maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude</url>
-        </repository>
-        <snapshotRepository>
-            <id>github-hubsaude</id>
-            <url>https://maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude</url>
-        </snapshotRepository>
-    </distributionManagement>
 
     <dependencyManagement>
         <dependencies>
@@ -372,22 +350,6 @@
         </dependency>
 
 
-        <!-- Simulador SMART on FHIR para testes de integracao. -->
-        <dependency>
-            <groupId>br.gov.go.saude.hubsaude</groupId>
-            <artifactId>hubsaude-simulador</artifactId>
-            <version>${hubsaude-simulador.version}</version>
-            <scope>test</scope>
-            <!-- O teste inicia o fat JAR em outro processo; nenhuma transitiva
-                 do simulador é usada pelo classpath desta JVM. -->
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
         <!--
             Fitness functions arquiteturais (ArchUnit).
             As regras são replicadas localmente em
@@ -476,12 +438,6 @@
                     <artifactId>spotbugs-maven-plugin</artifactId>
                     <version>${spotbugs-maven-plugin.version}</version>
                 </plugin>
-                <!-- Checkstyle: configuracao central resolvida do classpath
-                     do hubsaude-build-tools (issue #1603), como nos demais
-                     modulos. A verificacao de formatacao (nao coberta pelo
-                     central desde a REC-28, pois este projeto nao usa
-                     Spotless) fica na execucao `checkstyle-formatacao` do
-                     perfil `quality`, com config local. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
@@ -492,14 +448,9 @@
                             <artifactId>checkstyle</artifactId>
                             <version>${checkstyle.version}</version>
                         </dependency>
-                        <dependency>
-                            <groupId>br.gov.go.saude.hubsaude</groupId>
-                            <artifactId>hubsaude-build-tools</artifactId>
-                            <version>${hubsaude-build-tools.version}</version>
-                        </dependency>
                     </dependencies>
                     <configuration>
-                        <configLocation>checkstyle/checkstyle.xml</configLocation>
+                        <configLocation>config/checkstyle.xml</configLocation>
                         <consoleOutput>true</consoleOutput>
                         <failsOnError>true</failsOnError>
                         <failOnViolation>true</failOnViolation>
@@ -507,22 +458,13 @@
                         <linkXRef>false</linkXRef>
                     </configuration>
                 </plugin>
-                <!-- PMD: ruleset central resolvido do classpath do
-                     hubsaude-build-tools (issue #1603). -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-pmd-plugin</artifactId>
                     <version>${maven-pmd-plugin.version}</version>
-                    <dependencies>
-                        <dependency>
-                            <groupId>br.gov.go.saude.hubsaude</groupId>
-                            <artifactId>hubsaude-build-tools</artifactId>
-                            <version>${hubsaude-build-tools.version}</version>
-                        </dependency>
-                    </dependencies>
                     <configuration>
                         <rulesets>
-                            <ruleset>pmd/pmd-rules.xml</ruleset>
+                            <ruleset>config/pmd-rules.xml</ruleset>
                         </rulesets>
                         <!--
                             Paridade com o hubsaude-parent (issue #332):
@@ -683,48 +625,6 @@
                 </executions>
             </plugin>
             
-            <!-- Copia o JAR do simulador para target/simulator (necessário para Testcontainers) -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <configuration>
-                    <!--
-                        Dependencias consumidas em runtime ou via
-                        annotation processor, invisiveis ao goal
-                        analyze (false positives).
-                    -->
-                    <usedDependencies>
-                        <dependency>br.gov.go.saude.hubsaude:hubsaude-simulador</dependency>
-                        <dependency>io.jsonwebtoken:jjwt-impl</dependency>
-                        <dependency>io.jsonwebtoken:jjwt-jackson</dependency>
-                        <dependency>ch.qos.logback:logback-classic</dependency>
-                        <dependency>org.junit.jupiter:junit-jupiter</dependency>
-                        <dependency>com.tngtech.archunit:archunit-junit5</dependency>
-                    </usedDependencies>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>copy-simulator</id>
-                        <phase>pre-integration-test</phase>
-                        <goals>
-                            <goal>copy</goal>
-                        </goals>
-                        <configuration>
-                            <artifactItems>
-                                <artifactItem>
-                                    <groupId>br.gov.go.saude.hubsaude</groupId>
-                                    <artifactId>hubsaude-simulador</artifactId>
-                                    <version>${hubsaude-simulador.version}</version>
-                                    <type>jar</type>
-                                    <destFileName>hubsaude-simulador.jar</destFileName>
-                                </artifactItem>
-                            </artifactItems>
-                            <outputDirectory>${project.build.directory}/simulator</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
             <!-- Configuração para testes unitários (exclui testes de integração
                  e a quarentena de testes flaky, M3.7–M3.9 / issue #1149) -->
             <plugin>
@@ -735,28 +635,6 @@
                 </configuration>
             </plugin>
             
-            <!-- Configuração para testes de integração (requer simulador em execução) -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <configuration>
-                    <groups>integration</groups>
-                    <!-- Quarentena de testes flaky fora do gate (M3.7–M3.9) -->
-                    <excludedGroups>quarentena</excludedGroups>
-                    <includes>
-                        <include>**/*IT.java</include>
-                    </includes>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
         </plugins>
     </build>
 
@@ -854,14 +732,8 @@
             </build>
         </profile>
 
-        <!-- Perfil `quality`: verificacoes estaticas de qualidade (CI/CD).
-             Replica o perfil homonimo do hubsaude-parent. Checkstyle e PMD
-             consomem as configuracoes centrais do hubsaude-build-tools
-             (issue #1603); permanecem locais apenas checkstyle-formatacao.xml
-             (formatacao, ausente do central desde a REC-28 pois este projeto
-             nao usa Spotless) e spotbugs-exclude.xml (curadoria propria,
-             mais estrita que o filtro central).
-             Uso: `mvn -P quality verify`. -->
+        <!-- Perfil `quality`: verificacoes estaticas autocontidas para CI/CD.
+             Uso: `mvn -Pquality verify`. -->
         <profile>
             <id>quality</id>
             <build>
@@ -876,22 +748,6 @@
                                 <goals>
                                     <goal>check</goal>
                                 </goals>
-                            </execution>
-                            <!-- REC-27 (issue #584): convenção de asserção
-                                 única (AssertJ) aplicada como erro ao
-                                 código de teste. -->
-                            <execution>
-                                <id>checkstyle-tests</id>
-                                <phase>validate</phase>
-                                <goals>
-                                    <goal>check</goal>
-                                </goals>
-                                <configuration>
-                                    <configLocation>checkstyle/checkstyle-tests.xml</configLocation>
-                                    <sourceDirectories>
-                                        <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
-                                    </sourceDirectories>
-                                </configuration>
                             </execution>
                             <!-- Formatação (FileTabCharacter,
                                  NewlineAtEndOfFile, trailing whitespace):
@@ -974,11 +830,7 @@
         </profile>
 
         <!-- Perfil `security`: analise de vulnerabilidades em dependencias
-             (OWASP Dependency-Check). Replica o perfil homonimo do
-             hubsaude-parent, porem auto-suficiente: usa o arquivo local
-             owasp-suppression.xml em vez de desempacota-lo do
-             hubsaude-build-tools (este projeto e publicado publicamente e
-             nao herda do parent).
+             (OWASP Dependency-Check), usando supressoes locais.
              Uso: `mvn -P security verify` (requer NVD_API_KEY no ambiente).
              Pular: `-DdependencyCheckSkip=true`. -->
         <profile>
