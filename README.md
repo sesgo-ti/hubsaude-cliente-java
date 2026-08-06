@@ -321,7 +321,7 @@ mvn -B -ntp clean verify -Pquality
 ### Configurações de qualidade (perfil `quality`)
 
 O perfil `quality` executa Checkstyle, PMD, SpotBugs com FindSecBugs e
-JavaDoc. As regras estão em `config/`, permitindo build sem acesso ao
+Javadoc. As regras estão em `config/`, permitindo build sem acesso ao
 monorepo ou a registries privados. Testes de integração contra ambientes
 externos não fazem parte do gate público; o contrato de token, TLS, assinatura,
 cache e descoberta permanece coberto pelos testes locais.
@@ -337,7 +337,7 @@ git push origin v0.5.0
 ```
 
 O workflow deriva a versão da tag, executa os gates e publica JAR, sources,
-JavaDoc e SBOM CycloneDX na GitHub Release.
+Javadoc e SBOM CycloneDX na GitHub Release.
 
 ## Referências
 
