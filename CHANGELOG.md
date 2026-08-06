@@ -329,5 +329,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## Links
 
-- [Repositório](https://github.com/FabricaDeSoftwareINF/server-hubsaude)
+- [Repositório](https://github.com/sesgo-ti/hubsaude-cliente-java)
 - [Documentação SMART Backend Services](https://hl7.org/fhir/smart-app-launch/backend-services.html)

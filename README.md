@@ -1,6 +1,6 @@
 # hubsaude-cliente-java
 
-[![Version](https://img.shields.io/badge/Version-0.4.0-yellow)](https://github.com/FabricaDeSoftwareINF/server-hubsaude/tree/cliente-java-v0.4.0/hubsaude/projetos/hubsaude-cliente-java)
+[![Version](https://img.shields.io/badge/Version-0.4.0-yellow)](https://github.com/sesgo-ti/hubsaude-cliente-java/releases/tag/v0.4.0)
 [![Java 21+](https://img.shields.io/badge/Java-21%2B-blue)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange)](https://maven.apache.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
@@ -25,10 +25,9 @@ referência para o portfólio oficial de SDKs: Java, TypeScript/Node.js
 </dependency>
 ```
 
-Publicado no GitHub Packages
-(`maven.pkg.github.com/FabricaDeSoftwareINF/server-hubsaude`).
-Autenticação requerida mesmo para leitura: configure `~/.m2/settings.xml`
-com um Personal Access Token (escopo `read:packages`).
+A release `0.4.0` permanece disponível, somente para leitura, no GitHub
+Packages legado. Novas versões serão promovidas pelo repositório atual; até a
+publicação no Maven Central, consulte a documentação da release correspondente.
 
 `0.4.0` é a última versão estável publicada. O `pom.xml` da branch
 `develop` usa `0.4.1-SNAPSHOT` para o próximo ciclo de desenvolvimento;
@@ -310,63 +309,35 @@ snippets em Java, C#, Node.js e OpenSSL), consulte o
 
 Para experimentar o fluxo completo localmente sem ambiente de
 homologação, use a ferramenta irmã
-[`hubsaude-cliente-cli`](../hubsaude-cliente-cli/).
+[`hubsaude-cliente-cli`](https://github.com/sesgo-ti/hubsaude-cliente-cli).
 
 ## Build e testes
 
 ```bash
-mvn test       # unitários
-mvn verify     # unitários + integração (sobe o hubsaude-simulador)
+mvn -B -ntp clean verify
+mvn -B -ntp clean verify -Pquality
 ```
 
 ### Configurações de qualidade (perfil `quality`)
 
-O perfil `quality` (`mvn -P quality verify`) executa Checkstyle, PMD,
-SpotBugs (com FindSecBugs) e JavaDoc com doclint e avisos bloqueantes.
-Desde a issue #1603, as configurações de
-Checkstyle (`checkstyle/checkstyle.xml`, `checkstyle/checkstyle-tests.xml`)
-e o ruleset do PMD (`pmd/pmd-rules.xml`) são as **centrais** do
-[`hubsaude-build-tools`](../hubsaude-build-tools/), resolvidas do
-classpath da versão pinada em `hubsaude-build-tools.version` no
-`pom.xml` — não há mais cópias locais sujeitas a drift silencioso. O
-projeto já resolvia artefatos internos do GitHub Packages
-(`hubsaude-simulador`, escopo de teste), portanto essa dependência não
-altera os pré-requisitos de build. Bumps da versão pinada chegam
-automaticamente via Renovate.
-
-Permanecem locais, **por decisão deliberada** (não são cópias e não
-estão sujeitos a paridade com o central):
-
-- [`checkstyle-formatacao.xml`](checkstyle-formatacao.xml) — módulos de
-  formatação (tabs, newline final, trailing whitespace) removidos da
-  configuração central pela REC-28 por redundância com o Spotless, que
-  este projeto não usa;
-- [`spotbugs-exclude.xml`](spotbugs-exclude.xml) — filtro de exclusão
-  curado para esta biblioteca. Filtros SpotBugs têm semântica aditiva
-  (cada exclusão reduz a cobertura); o filtro central importaria
-  exclusões inaplicáveis aqui (ex.: `CRLF_INJECTION_LOGS`,
-  `SPRING_ENDPOINT`) e enfraqueceria o gate de segurança.
-
-Divergência deliberada futura em relação às configurações centrais deve
-ser implementada em arquivo local próprio (não em cópia editada do
-central), com racional registrado no próprio arquivo, nesta seção e no
-`CHANGELOG.md`.
+O perfil `quality` executa Checkstyle, PMD, SpotBugs com FindSecBugs e
+JavaDoc. As regras estão em `config/`, permitindo build sem acesso ao
+monorepo ou a registries privados. Testes de integração contra ambientes
+externos não fazem parte do gate público; o contrato de token, TLS, assinatura,
+cache e descoberta permanece coberto pelos testes locais.
 
 ## Publicação de nova versão (release)
 
-Publicação no GitHub Packages é disparada **exclusivamente por tag**
-(ADR-36), no padrão `cliente-java-v<MAJOR>.<MINOR>.<PATCH>` (ADR-33):
+O workflow [`release.yml`](.github/workflows/release.yml) é disparado por tag
+no padrão `v<MAJOR>.<MINOR>.<PATCH>`:
 
 ```bash
-git tag -a cliente-java-v0.1.8 -m "hubsaude-cliente-java 0.1.8"
-git push origin cliente-java-v0.1.8
+git tag -a v0.5.0 -m "hubsaude-cliente-java 0.5.0"
+git push origin v0.5.0
 ```
 
-O workflow [`hubsaude-cliente-java-release.yml`](../../../.github/workflows/hubsaude-cliente-java-release.yml)
-deriva a versão da tag (`versions:set`, sem commit) e executa
-`mvn clean deploy -P release`, que só publica se Surefire, Failsafe e
-JaCoCo (cobertura ≥ 85%) passarem. O perfil `release` agrega sources,
-javadoc e SBOM CycloneDX.
+O workflow deriva a versão da tag, executa os gates e publica JAR, sources,
+JavaDoc e SBOM CycloneDX na GitHub Release.
 
 ## Referências
 

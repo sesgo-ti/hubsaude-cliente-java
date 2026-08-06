@@ -1,15 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   Arquivo de supressão do OWASP Dependency Check específico do
-  hubsaude-cliente-java. Este projeto é standalone (não herda do
-  hubsaude-parent) e usa este arquivo local via perfil "security"
-  (ver pom.xml), em vez do arquivo compartilhado desempacotado do
-  hubsaude-build-tools.
+  hubsaude-cliente-java. Este projeto usa este arquivo local via perfil
+  "security" (ver pom.xml).
 
   Política:
   - Somente supressões aplicáveis às dependências declaradas no pom.xml
-    deste projeto (BouncyCastle, Jackson 3, SLF4J; jjwt, logback,
-    hubsaude-simulador e demais libs de escopo test).
+    deste projeto (BouncyCastle, Jackson 3, SLF4J, jjwt e logback).
   - Falsos positivos comprovados (CPE/Package mismatch).
   - CVEs aceitos temporariamente quando NÃO há release upstream com
     correção e/ou existe mitigação efetiva verificável NESTE projeto.
@@ -26,8 +23,7 @@
          Falsos positivos
          ================================================================ -->
 
-    <!-- groupId br.gov.go.saude.hubsaude casa com CPE "go:go" do Go lang.
-         Aplica-se a este artefato e ao hubsaude-simulador (escopo test). -->
+    <!-- groupId br.gov.go.saude.hubsaude casa com CPE "go:go" do Go lang. -->
     <suppress>
         <notes><![CDATA[
         False positive: CPE "go:go" é incorretamente associado ao groupId

@@ -104,7 +104,7 @@ import tools.jackson.databind.node.ObjectNode;
  * enterprise para exemplos sem acoplar esta biblioteca a frameworks.</p>
  *
  * @see <a href=
- *      "https://github.com/FabricaDeSoftwareINF/server-hubsaude/blob/develop/hubsaude/projetos/hubsaude-cliente-java/docs/integracao-enterprise.md">
+ *      "https://github.com/sesgo-ti/hubsaude-cliente-java/blob/develop/docs/integracao-enterprise.md">
  *      Guia de integração enterprise</a>
  * @see <a href="https://www.w3.org/TR/trace-context/">W3C Trace Context</a>
  */
