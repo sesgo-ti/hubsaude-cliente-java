@@ -122,7 +122,7 @@
         <!-- Checkstyle usado pelas regras locais em config/. -->
         <checkstyle.version>13.9.0</checkstyle.version>
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
-        <dependency-check-maven.version>12.2.2</dependency-check-maven.version>
+        <dependency-check-maven.version>13.0.0</dependency-check-maven.version>
         <!-- OWASP Dependency-Check: desligavel via -DdependencyCheckSkip=true -->
         <dependencyCheckSkip>false</dependencyCheckSkip>
         <!-- CVSS minimo para falhar o build (default 7).
