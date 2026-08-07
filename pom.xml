@@ -72,7 +72,7 @@
         <maven.compiler.release>${java.version}</maven.compiler.release>
 
         <!-- Versoes das dependencias. -->
-        <jjwt.version>0.12.6</jjwt.version>
+        <jjwt.version>0.13.0</jjwt.version>
         <bouncycastle.version>1.85</bouncycastle.version>
         <!-- Jackson 2.x usado pelo JJWT nos testes; alinhado ao upper bound
              homologado no hubsaude-dependencies. -->
