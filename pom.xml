@@ -77,7 +77,7 @@
         <!-- Jackson 2.x usado pelo JJWT nos testes; alinhado ao upper bound
              homologado no hubsaude-dependencies. -->
         <jackson-2.version>2.22.1</jackson-2.version>
-        <jackson3.version>3.1.5</jackson3.version>
+        <jackson3.version>3.2.1</jackson3.version>
         <slf4j.version>2.0.18</slf4j.version>
         <!-- JSpecify: mesma versao governada pelo BOM hubsaude-dependencies
              (jspecify 1.0.0); declarada localmente porque este projeto e
