@@ -93,7 +93,7 @@
              pelo hubsaude-parent — este projeto e standalone (sem <parent>)
              e nao herda aquela configuracao. Desligado por padrao; o perfil
              `mutation` liga (uso: mvn test -Pmutation). -->
-        <pitest-maven-plugin.version>1.25.8</pitest-maven-plugin.version>
+        <pitest-maven-plugin.version>1.25.9</pitest-maven-plugin.version>
         <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
         <pitest.skip>true</pitest.skip>
 
