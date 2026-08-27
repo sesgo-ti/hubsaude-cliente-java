@@ -120,7 +120,7 @@
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <!-- Checkstyle usado pelas regras locais em config/. -->
-        <checkstyle.version>13.9.0</checkstyle.version>
+        <checkstyle.version>14.0.0</checkstyle.version>
         <!-- Plugin do perfil `security` (analise de vulnerabilidades) -->
         <dependency-check-maven.version>13.0.0</dependency-check-maven.version>
         <!-- OWASP Dependency-Check: desligavel via -DdependencyCheckSkip=true -->
