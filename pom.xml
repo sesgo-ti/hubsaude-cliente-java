@@ -60,6 +60,17 @@
         <url>https://github.com/sesgo-ti/hubsaude-cliente-java/actions</url>
     </ciManagement>
 
+    <distributionManagement>
+        <repository>
+            <id>github-sesgo-ti</id>
+            <url>https://maven.pkg.github.com/sesgo-ti/hubsaude-maven</url>
+        </repository>
+        <snapshotRepository>
+            <id>github-sesgo-ti</id>
+            <url>https://maven.pkg.github.com/sesgo-ti/hubsaude-maven</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <properties>
         <revision>0.4.1-SNAPSHOT</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
