@@ -17,13 +17,18 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Validar tag e construir artefatos
+          server-id: github-sesgo-ti
+          server-username: GITHUB_ACTOR
+          server-password: HUBSAUDE_MAVEN_PUBLISH_TOKEN
+      - name: Validar tag, construir e publicar no registry sesgo-ti
+        env:
+          HUBSAUDE_MAVEN_PUBLISH_TOKEN: ${{ secrets.HUBSAUDE_MAVEN_PUBLISH_TOKEN }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           case "$VERSION" in
             *-SNAPSHOT|*[!0-9.]*|.*|*.) exit 1 ;;
           esac
-          mvn -B -ntp clean verify -Pquality,release -Drevision="$VERSION"
+          mvn -B -ntp clean deploy -Pquality,release -Drevision="$VERSION"
       - name: Publicar GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
