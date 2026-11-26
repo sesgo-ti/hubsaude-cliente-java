@@ -19,10 +19,10 @@ jobs:
           cache: maven
           server-id: github-sesgo-ti
           server-username: GITHUB_ACTOR
-          server-password: HUBSAUDE_MAVEN_PUBLISH_TOKEN
+          server-password: HUBSAUDE_MAVEN_WRITE_TOKEN
       - name: Validar tag, construir e publicar no registry sesgo-ti
         env:
-          HUBSAUDE_MAVEN_PUBLISH_TOKEN: ${{ secrets.HUBSAUDE_MAVEN_PUBLISH_TOKEN }}
+          HUBSAUDE_MAVEN_WRITE_TOKEN: ${{ secrets.HUBSAUDE_MAVEN_WRITE_TOKEN }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           case "$VERSION" in
